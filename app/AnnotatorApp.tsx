@@ -391,14 +391,12 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         privacyReviewStatus: record.privacy_review_status,
         languageReviewStatus: record.language_review_status,
         releaseEligible: csvBoolean(record.release_eligible),
-        doNotRelease: csvBoolean(record.do_not_release),
       }));
       const releasable = mapped.filter(
         (row) =>
           row.episodeId &&
           row.transcript &&
           row.releaseEligible &&
-          !row.doNotRelease &&
           row.privacyReviewStatus === "approved" &&
           row.languageReviewStatus !== "pending_manual_review",
       );
@@ -553,7 +551,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           <section className="empty-state">
             <div className="empty-icon">✓</div>
             <h1>{episodes.length ? "No episodes match these filters" : "Your review workspace is ready"}</h1>
-            <p>{episodes.length ? "Change a filter or return to My queue." : "Import the approved blinded dataset to begin. Rows still marked do_not_release are safely rejected."}</p>
+            <p>{episodes.length ? "Change a filter or return to My queue." : "Import the approved blinded dataset to begin."}</p>
             {!episodes.length && <button className="primary-button" onClick={() => fileInput.current?.click()}>Import approved CSV</button>}
           </section>
         ) : (

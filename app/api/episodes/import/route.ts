@@ -11,7 +11,6 @@ type ImportEpisode = {
   privacyReviewStatus?: string;
   languageReviewStatus?: string;
   releaseEligible?: boolean;
-  doNotRelease?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -41,7 +40,6 @@ export async function POST(request: Request) {
       continue;
     }
     if (
-      row.doNotRelease !== false ||
       row.releaseEligible !== true ||
       row.privacyReviewStatus !== "approved" ||
       row.languageReviewStatus === "pending_manual_review"
@@ -59,7 +57,6 @@ export async function POST(request: Request) {
       privacyReviewStatus: row.privacyReviewStatus,
       languageReviewStatus: row.languageReviewStatus || "not_required",
       releaseEligible: true,
-      doNotRelease: false,
     });
   }
 
