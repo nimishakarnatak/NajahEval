@@ -90,7 +90,7 @@ export async function verifyPassword(password: string, storedHash: string): Prom
 
 /** Return a user-facing password validation message, or null when acceptable. */
 export function passwordValidationError(password: string): string | null {
-  if (password.length < 12) return "Use at least 12 characters for your password.";
+  if (password.length < 6) return "Use at least 6 characters for your password.";
   if (password.length > 128) return "Password must be 128 characters or fewer.";
   return null;
 }

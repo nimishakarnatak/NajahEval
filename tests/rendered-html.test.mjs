@@ -58,7 +58,7 @@ test("provides open account creation and independent server sessions", async () 
     readFile(registerRoutePath, "utf8"),
   ]);
   assert.match(authScreen, /Create account/);
-  assert.match(authScreen, /At least 12 characters/);
+  assert.match(authScreen, /At least 6 characters/);
   assert.doesNotMatch(`${authScreen}\n${registerRoute}`, /invitation code|invitationCode|MAX_RATER_ACCOUNTS/);
   assert.match(serverAuth, /auth_sessions/);
   assert.match(serverAuth, /readSessionToken/);

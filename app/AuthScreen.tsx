@@ -133,9 +133,9 @@ export function AuthScreen() {
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder={mode === "register" ? "At least 12 characters" : "Your password"}
+                placeholder={mode === "register" ? "At least 6 characters" : "Your password"}
                 required
-                minLength={mode === "register" ? 12 : undefined}
+                minLength={mode === "register" ? 6 : undefined}
                 maxLength={128}
               />
             </label>
@@ -150,7 +150,7 @@ export function AuthScreen() {
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     placeholder="Repeat your password"
                     required
-                    minLength={12}
+                    minLength={6}
                     maxLength={128}
                   />
                 </label>

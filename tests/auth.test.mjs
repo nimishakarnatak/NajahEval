@@ -20,9 +20,9 @@ test("hashes passwords with unique salts and verifies the correct password", asy
   assert.equal(await verifyPassword("the wrong password", first), false);
 });
 
-test("requires a twelve-character password", () => {
-  assert.match(passwordValidationError("too-short") ?? "", /at least 12/i);
-  assert.equal(passwordValidationError("long enough password"), null);
+test("requires a six-character password", () => {
+  assert.match(passwordValidationError("short") ?? "", /at least 6/i);
+  assert.equal(passwordValidationError("sixsix"), null);
 });
 
 test("creates opaque sessions and stores only a stable digest", async () => {
