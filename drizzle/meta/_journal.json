@@ -15,6 +15,13 @@
       "when": 1787055287814,
       "tag": "0001_sharp_carlie_cooper",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787059315065,
+      "tag": "0002_dizzy_spacker_dave",
+      "breakpoints": true
     }
   ]
 }

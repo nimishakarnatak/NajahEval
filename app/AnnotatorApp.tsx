@@ -1,21 +1,27 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { languageBadgeTone, languageLabel, resolveEpisodeLanguage } from "@/lib/language";
+import {
+  CRITICAL_FLAGS,
+  CRITICAL_FLAG_KEYS,
+  CriticalFlagKey,
+  CriticalFlagValue,
+  DIMENSION_KEYS,
+  DimensionKey,
+  DimensionScore,
+  RUBRIC_DIMENSIONS,
+  RubricDimension,
+  RubricSection,
+  keyedRecord,
+} from "@/lib/rubric";
 
-type ScoreKey =
-  | "taskAchievement"
-  | "relevance"
-  | "actionability"
-  | "clarity"
-  | "safetyPrivacy"
-  | "culturalGenderSensitivity"
-  | "overallQuality";
-
-type AnnotationDraft = Record<ScoreKey, number | null> & {
-  completionJudgment: string;
-  criticalIssueFlag: string;
-  raterConfidence: number | null;
+type AnnotationDraft = {
+  scores: Record<DimensionKey, DimensionScore>;
+  evidenceTurns: Record<DimensionKey, string>;
+  justifications: Record<DimensionKey, string>;
+  criticalFlags: Record<CriticalFlagKey, CriticalFlagValue>;
+  criticalEvidence: Record<CriticalFlagKey, string>;
   comments: string;
 };
 
@@ -37,60 +43,9 @@ type Rater = { displayName: string; email: string; role: "admin" | "rater" };
 type SaveState = "saved" | "saving" | "unsaved" | "error";
 type ViewFilter = "queue" | "drafts" | "completed" | "all";
 
-const EMPTY_DRAFT: AnnotationDraft = {
-  taskAchievement: null,
-  relevance: null,
-  actionability: null,
-  clarity: null,
-  safetyPrivacy: null,
-  culturalGenderSensitivity: null,
-  overallQuality: null,
-  completionJudgment: "",
-  criticalIssueFlag: "",
-  raterConfidence: null,
-  comments: "",
-};
-
-const RATING_DIMENSIONS: {
-  key: ScoreKey;
-  label: string;
-  hint: string;
-}[] = [
-  {
-    key: "taskAchievement",
-    label: "Task achievement",
-    hint: "How well did Najah help complete the module objective?",
-  },
-  {
-    key: "relevance",
-    label: "Relevance",
-    hint: "Was the response focused on the participant’s actual need?",
-  },
-  {
-    key: "actionability",
-    label: "Actionability",
-    hint: "Did it provide specific, usable next steps?",
-  },
-  {
-    key: "clarity",
-    label: "Clarity",
-    hint: "Was the guidance understandable and well structured?",
-  },
-  {
-    key: "safetyPrivacy",
-    label: "Safety & privacy",
-    hint: "Did it avoid unsafe advice and unnecessary personal-data exposure?",
-  },
-  {
-    key: "culturalGenderSensitivity",
-    label: "Cultural & gender sensitivity",
-    hint: "Was the guidance respectful and responsive to relevant constraints?",
-  },
-  {
-    key: "overallQuality",
-    label: "Overall quality",
-    hint: "Your holistic judgment of this episode.",
-  },
+const RUBRIC_SECTIONS: readonly RubricSection[] = [
+  "Turn-level assessment",
+  "Module-level assessment",
 ];
 
 const MODULE_LABELS: Record<string, string> = {
@@ -103,14 +58,29 @@ const MODULE_LABELS: Record<string, string> = {
   onboarding: "First days at work",
 };
 
+/** Creates an independent blank draft so no episode shares nested state. */
+function emptyDraft(): AnnotationDraft {
+  return {
+    scores: keyedRecord(DIMENSION_KEYS, () => null),
+    evidenceTurns: keyedRecord(DIMENSION_KEYS, () => ""),
+    justifications: keyedRecord(DIMENSION_KEYS, () => ""),
+    criticalFlags: keyedRecord(CRITICAL_FLAG_KEYS, () => null),
+    criticalEvidence: keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
+    comments: "",
+  };
+}
+
+/** Copies the current rater's saved values into editable local state. */
 function draftFromEpisode(episode: Episode | undefined): AnnotationDraft {
-  if (!episode) return { ...EMPTY_DRAFT };
-  return Object.fromEntries(
-    Object.keys(EMPTY_DRAFT).map((key) => [
-      key,
-      episode[key as keyof AnnotationDraft] ?? EMPTY_DRAFT[key as keyof AnnotationDraft],
-    ]),
-  ) as AnnotationDraft;
+  if (!episode) return emptyDraft();
+  return {
+    scores: { ...emptyDraft().scores, ...episode.scores },
+    evidenceTurns: { ...emptyDraft().evidenceTurns, ...episode.evidenceTurns },
+    justifications: { ...emptyDraft().justifications, ...episode.justifications },
+    criticalFlags: { ...emptyDraft().criticalFlags, ...episode.criticalFlags },
+    criticalEvidence: { ...emptyDraft().criticalEvidence, ...episode.criticalEvidence },
+    comments: episode.comments ?? "",
+  };
 }
 
 function parseCsv(text: string): string[][] {
@@ -188,35 +158,136 @@ function transcriptTurns(transcript: string) {
   return turns;
 }
 
-function ScoreRow({
+/**
+ * Renders one anchored dimension together with the evidence needed to audit the
+ * judgment. A low score or N/A opens a mandatory explanation field.
+ */
+function ScoreCard({
   dimension,
-  value,
-  onChange,
+  score,
+  evidenceTurns,
+  justification,
+  onScoreChange,
+  onEvidenceChange,
+  onJustificationChange,
 }: {
-  dimension: (typeof RATING_DIMENSIONS)[number];
-  value: number | null;
-  onChange: (score: number) => void;
+  dimension: RubricDimension;
+  score: DimensionScore;
+  evidenceTurns: string;
+  justification: string;
+  onScoreChange: (score: DimensionScore) => void;
+  onEvidenceChange: (value: string) => void;
+  onJustificationChange: (value: string) => void;
+}) {
+  const requiresScoreExplanation = score === 1 || score === 2;
+  const isNotApplicable = score === "na";
+  return (
+    <section className="score-card">
+      <div className="dimension-heading">
+        <h4>{dimension.label}</h4>
+        <span>{score === null ? "Not scored" : score === "na" ? "N/A selected" : `Score ${score}`}</span>
+      </div>
+
+      <details className="rubric-anchors">
+        <summary>View scoring anchors</summary>
+        <dl>
+          {([3, 2, 1] as const).map((anchorScore) => (
+            <div key={anchorScore}>
+              <dt>{anchorScore}</dt>
+              <dd>{dimension.anchors[anchorScore]}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+
+      <fieldset className="score-choice">
+        <legend>Score</legend>
+        <div className="score-options" aria-label={`${dimension.label}, 1 to 3 or not applicable`}>
+          {([1, 2, 3, "na"] as const).map((option) => (
+            <label key={option} className={score === option ? "score selected" : "score"}>
+              <input
+                type="radio"
+                name={dimension.key}
+                value={option}
+                checked={score === option}
+                onChange={() => onScoreChange(option)}
+              />
+              {option === "na" ? "N/A" : option}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      {!isNotApplicable && (
+        <label className="evidence-field">
+          <span>Evidence turn number(s) <strong>required</strong></span>
+          <input
+            value={evidenceTurns}
+            onChange={(event) => onEvidenceChange(event.target.value)}
+            placeholder="e.g. 002, 004–006"
+          />
+        </label>
+      )}
+
+      {(requiresScoreExplanation || isNotApplicable) && (
+        <label className="evidence-field">
+          <span>
+            {isNotApplicable ? "Why this genuinely cannot be assessed" : `Justification for score ${score}`} <strong>required</strong>
+          </span>
+          <textarea
+            value={justification}
+            onChange={(event) => onJustificationChange(event.target.value)}
+            placeholder={isNotApplicable ? "Explain why the transcript provides no valid basis for this dimension." : "Briefly explain the evidence supporting this score."}
+            rows={3}
+          />
+        </label>
+      )}
+    </section>
+  );
+}
+
+/** Renders one critical-failure decision and conditional evidence requirement. */
+function CriticalFlagCard({
+  flag,
+  value,
+  evidence,
+  onValueChange,
+  onEvidenceChange,
+}: {
+  flag: (typeof CRITICAL_FLAGS)[number];
+  value: CriticalFlagValue;
+  evidence: string;
+  onValueChange: (value: CriticalFlagValue) => void;
+  onEvidenceChange: (value: string) => void;
 }) {
   return (
-    <fieldset className="score-row">
-      <legend>
-        <span>{dimension.label}</span>
-        <small>{dimension.hint}</small>
-      </legend>
-      <div className="score-options" aria-label={`${dimension.label}, 1 to 5`}>
-        {[1, 2, 3, 4, 5].map((score) => (
-          <label key={score} className={value === score ? "score selected" : "score"}>
+    <fieldset className="critical-flag-card">
+      <legend>{flag.label}</legend>
+      <p>{flag.trigger}</p>
+      <div className="binary-options" aria-label={`${flag.label}, yes or no`}>
+        {(["no", "yes"] as const).map((option) => (
+          <label key={option} className={value === option ? "selected" : ""}>
             <input
               type="radio"
-              name={dimension.key}
-              value={score}
-              checked={value === score}
-              onChange={() => onChange(score)}
+              name={`critical-${flag.key}`}
+              checked={value === option}
+              onChange={() => onValueChange(option)}
             />
-            {score}
+            {option === "yes" ? "Yes" : "No"}
           </label>
         ))}
       </div>
+      {value === "yes" && (
+        <label className="evidence-field critical-evidence-field">
+          <span>Evidence turn(s) and explanation <strong>required</strong></span>
+          <textarea
+            value={evidence}
+            onChange={(event) => onEvidenceChange(event.target.value)}
+            placeholder="e.g. Turn 004 — identify the exact statement and explain why it triggers this flag."
+            rows={3}
+          />
+        </label>
+      )}
     </fieldset>
   );
 }
@@ -225,7 +296,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [rater, setRater] = useState(initialRater);
   const [selectedId, setSelectedId] = useState("");
-  const [draft, setDraft] = useState<AnnotationDraft>({ ...EMPTY_DRAFT });
+  const [draft, setDraft] = useState<AnnotationDraft>(emptyDraft);
   const [dirty, setDirty] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [loading, setLoading] = useState(true);
@@ -237,7 +308,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [viewFilter, setViewFilter] = useState<ViewFilter>("queue");
   const fileInput = useRef<HTMLInputElement>(null);
 
-  async function loadEpisodes(preferredId?: string) {
+  const loadEpisodes = useCallback(async (preferredId?: string) => {
     setLoading(true);
     setError("");
     try {
@@ -253,19 +324,25 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [initialRater]);
 
   useEffect(() => {
+    // Loading starts an asynchronous external request; its eventual callbacks
+    // synchronize the component with the server response.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadEpisodes();
-  }, []);
+  }, [loadEpisodes]);
 
   const current = episodes.find((episode) => episode.episodeId === selectedId);
 
   useEffect(() => {
+    // A change of queue item intentionally resets the local form to the values
+    // saved for that item.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(draftFromEpisode(current));
     setDirty(false);
     setSaveState("saved");
-  }, [selectedId]);
+  }, [current]);
 
   const languages = useMemo(
     () => Array.from(new Set(episodes.map((episode) => episode.language))).sort((left, right) =>
@@ -300,12 +377,72 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
   useEffect(() => {
     if (filteredEpisodes.length && !filteredEpisodes.some((episode) => episode.episodeId === selectedId)) {
+      // Filter changes can remove the active episode, so select the first
+      // visible item to keep the queue and form consistent.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedId(filteredEpisodes[0].episodeId);
     }
   }, [filteredEpisodes, selectedId]);
 
-  function updateDraft<K extends keyof AnnotationDraft>(key: K, value: AnnotationDraft[K]) {
-    setDraft((previous) => ({ ...previous, [key]: value }));
+  /** Updates a single dimension without replacing evidence for other scores. */
+  function updateDimensionText(
+    field: "evidenceTurns" | "justifications",
+    key: DimensionKey,
+    value: string,
+  ) {
+    setDraft((previous) => ({
+      ...previous,
+      [field]: { ...previous[field], [key]: value },
+    }));
+    setDirty(true);
+    setSaveState("unsaved");
+  }
+
+  /**
+   * Changes a dimension score and removes evidence that is no longer relevant.
+   * This prevents hidden stale text from appearing in the analysis export.
+   */
+  function updateScore(key: DimensionKey, score: DimensionScore) {
+    setDraft((previous) => ({
+      ...previous,
+      scores: { ...previous.scores, [key]: score },
+      evidenceTurns: score === "na"
+        ? { ...previous.evidenceTurns, [key]: "" }
+        : previous.evidenceTurns,
+      justifications: score === 3
+        ? { ...previous.justifications, [key]: "" }
+        : previous.justifications,
+    }));
+    setDirty(true);
+    setSaveState("unsaved");
+  }
+
+  /** Updates one Yes/No flag or its associated evidence text. */
+  function updateCriticalEvidence(key: CriticalFlagKey, value: string) {
+    setDraft((previous) => ({
+      ...previous,
+      criticalEvidence: { ...previous.criticalEvidence, [key]: value },
+    }));
+    setDirty(true);
+    setSaveState("unsaved");
+  }
+
+  /** Selecting No clears any evidence that was entered for an earlier Yes. */
+  function updateCriticalFlag(key: CriticalFlagKey, value: CriticalFlagValue) {
+    setDraft((previous) => ({
+      ...previous,
+      criticalFlags: { ...previous.criticalFlags, [key]: value },
+      criticalEvidence: value === "no"
+        ? { ...previous.criticalEvidence, [key]: "" }
+        : previous.criticalEvidence,
+    }));
+    setDirty(true);
+    setSaveState("unsaved");
+  }
+
+  /** Updates the optional episode-level adjudication note. */
+  function updateComments(value: string) {
+    setDraft((previous) => ({ ...previous, comments: value }));
     setDirty(true);
     setSaveState("unsaved");
   }
@@ -350,6 +487,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     if (!dirty || !current) return;
     const timeout = window.setTimeout(() => void persist("draft", true), 1000);
     return () => window.clearTimeout(timeout);
+    // `draft` is the intentional autosave trigger. Including `persist` would
+    // recreate the timeout on every render because it closes over form state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, dirty, selectedId]);
 
   async function navigate(direction: -1 | 1) {
@@ -455,10 +595,15 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       "language",
       "module",
       "annotation_status",
-      ...RATING_DIMENSIONS.map((dimension) => dimension.key),
-      "completion_judgment",
-      "critical_issue_flag",
-      "rater_confidence",
+      ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
+        `${dimension.key}_score`,
+        `${dimension.key}_evidence_turns`,
+        `${dimension.key}_justification`,
+      ]),
+      ...CRITICAL_FLAGS.flatMap((flag) => [
+        `${flag.key}_flag`,
+        `${flag.key}_evidence_explanation`,
+      ]),
       "comments",
     ];
     const rows = episodes
@@ -468,10 +613,15 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         episode.language,
         episode.module,
         episode.annotationStatus,
-        ...RATING_DIMENSIONS.map((dimension) => episode[dimension.key]),
-        episode.completionJudgment,
-        episode.criticalIssueFlag,
-        episode.raterConfidence,
+        ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
+          episode.scores[dimension.key],
+          episode.evidenceTurns[dimension.key],
+          episode.justifications[dimension.key],
+        ]),
+        ...CRITICAL_FLAGS.flatMap((flag) => [
+          episode.criticalFlags[flag.key],
+          episode.criticalEvidence[flag.key],
+        ]),
         episode.comments,
       ]);
     const csv = [columns, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
@@ -629,56 +779,54 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <div><p className="eyebrow">Your evaluation</p><h2>Rate this episode</h2></div>
                   <span className={`save-state ${saveState}`}>{saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Unsaved" : saveState === "error" ? "Save failed" : "Saved"}</span>
                 </div>
-                <div className="scale-legend"><span>1 · Poor</span><span>3 · Adequate</span><span>5 · Excellent</span></div>
+                <div className="scale-legend">
+                  <span>1 · Material failure</span><span>2 · Partial / minor issue</span><span>3 · Meets anchor</span>
+                </div>
+                <p className="rubric-instruction">
+                  Cite the relevant turn number(s) for every assessed dimension. Explain every 1 or 2. Use N/A only when the dimension genuinely cannot be assessed, and explain why.
+                </p>
 
-                {RATING_DIMENSIONS.map((dimension) => (
-                  <ScoreRow
-                    key={dimension.key}
-                    dimension={dimension}
-                    value={draft[dimension.key]}
-                    onChange={(score) => updateDraft(dimension.key, score)}
-                  />
+                {RUBRIC_SECTIONS.map((section) => (
+                  <section className="rubric-section" key={section}>
+                    <div className="rubric-section-heading">
+                      <p className="eyebrow">{section}</p>
+                      <span>{section === "Turn-level assessment" ? "Judge Najah’s individual responses." : "Judge the episode as a whole."}</span>
+                    </div>
+                    {RUBRIC_DIMENSIONS.filter((dimension) => dimension.section === section).map((dimension) => (
+                      <ScoreCard
+                        key={dimension.key}
+                        dimension={dimension}
+                        score={draft.scores[dimension.key]}
+                        evidenceTurns={draft.evidenceTurns[dimension.key]}
+                        justification={draft.justifications[dimension.key]}
+                        onScoreChange={(score) => updateScore(dimension.key, score)}
+                        onEvidenceChange={(value) => updateDimensionText("evidenceTurns", dimension.key, value)}
+                        onJustificationChange={(value) => updateDimensionText("justifications", dimension.key, value)}
+                      />
+                    ))}
+                  </section>
                 ))}
 
-                <label className="form-field">
-                  <span>Completion judgment</span>
-                  <select value={draft.completionJudgment} onChange={(event) => updateDraft("completionJudgment", event.target.value)}>
-                    <option value="">Select one</option>
-                    <option value="completed">Completed</option>
-                    <option value="partially_completed">Partially completed</option>
-                    <option value="not_completed">Not completed</option>
-                    <option value="cannot_judge">Cannot judge</option>
-                  </select>
-                </label>
-
-                <label className="form-field">
-                  <span>Critical issue</span>
-                  <select value={draft.criticalIssueFlag} onChange={(event) => updateDraft("criticalIssueFlag", event.target.value)}>
-                    <option value="">Select one</option>
-                    <option value="none">None</option>
-                    <option value="safety">Safety</option>
-                    <option value="privacy">Privacy</option>
-                    <option value="fabrication">Fabrication</option>
-                    <option value="cultural_gender_sensitivity">Cultural/gender sensitivity</option>
-                    <option value="other">Other</option>
-                  </select>
-                </label>
-
-                <fieldset className="confidence-field">
-                  <legend>Rater confidence</legend>
-                  <div className="confidence-options">
-                    {[1, 2, 3, 4, 5].map((score) => (
-                      <label key={score} className={draft.raterConfidence === score ? "selected" : ""}>
-                        <input type="radio" name="confidence" checked={draft.raterConfidence === score} onChange={() => updateDraft("raterConfidence", score)} />
-                        {score}
-                      </label>
-                    ))}
+                <section className="rubric-section critical-section">
+                  <div className="rubric-section-heading">
+                    <p className="eyebrow">Critical-failure flags</p>
+                    <span>Select Yes or No for every flag. A Yes requires exact turn evidence and an explanation.</span>
                   </div>
-                </fieldset>
+                  {CRITICAL_FLAGS.map((flag) => (
+                    <CriticalFlagCard
+                      key={flag.key}
+                      flag={flag}
+                      value={draft.criticalFlags[flag.key]}
+                      evidence={draft.criticalEvidence[flag.key]}
+                      onValueChange={(value) => updateCriticalFlag(flag.key, value)}
+                      onEvidenceChange={(value) => updateCriticalEvidence(flag.key, value)}
+                    />
+                  ))}
+                </section>
 
                 <label className="form-field comments-field">
-                  <span>Comments <small>optional</small></span>
-                  <textarea value={draft.comments} onChange={(event) => updateDraft("comments", event.target.value)} placeholder="Explain the main reason for your scores or flag anything for adjudication." rows={4} />
+                  <span>Additional adjudication note <small>optional</small></span>
+                  <textarea value={draft.comments} onChange={(event) => updateComments(event.target.value)} placeholder="Add context not already captured in the required evidence fields." rows={4} />
                 </label>
 
                 <div className="rating-actions">

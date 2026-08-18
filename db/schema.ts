@@ -87,3 +87,37 @@ export const annotations = sqliteTable(
     index("idx_annotations_rater_status").on(table.raterId, table.status),
   ],
 );
+
+/**
+ * Evidence-based rubric annotations are stored separately from the original
+ * 1–5 pilot ratings. This preserves the historical pilot data and prevents two
+ * different instruments from being mixed under the same primary key.
+ *
+ * Scores, evidence, explanations, and flags are JSON objects keyed by the
+ * stable identifiers in `lib/rubric.ts`. The CSV export expands these objects
+ * into ordinary columns for straightforward analysis.
+ */
+export const rubricAnnotations = sqliteTable(
+  "rubric_annotations",
+  {
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.episodeId, { onDelete: "cascade" }),
+    raterId: text("rater_id").notNull(),
+    raterEmail: text("rater_email").notNull(),
+    scoresJson: text("scores_json").notNull().default("{}"),
+    evidenceTurnsJson: text("evidence_turns_json").notNull().default("{}"),
+    justificationsJson: text("justifications_json").notNull().default("{}"),
+    criticalFlagsJson: text("critical_flags_json").notNull().default("{}"),
+    criticalEvidenceJson: text("critical_evidence_json").notNull().default("{}"),
+    comments: text("comments").notNull().default(""),
+    rubricVersion: text("rubric_version").notNull(),
+    status: text("status").notNull().default("draft"),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.episodeId, table.raterId] }),
+    index("idx_rubric_annotations_episode_status").on(table.episodeId, table.status),
+    index("idx_rubric_annotations_rater_status").on(table.raterId, table.status),
+  ],
+);

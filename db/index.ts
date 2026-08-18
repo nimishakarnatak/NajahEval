@@ -66,6 +66,23 @@ export async function ensureNajahSchema(db: D1Database): Promise<void> {
       )
     `),
     db.prepare(`
+      CREATE TABLE IF NOT EXISTS rubric_annotations (
+        episode_id TEXT NOT NULL REFERENCES episodes(episode_id) ON DELETE CASCADE,
+        rater_id TEXT NOT NULL,
+        rater_email TEXT NOT NULL,
+        scores_json TEXT NOT NULL DEFAULT '{}',
+        evidence_turns_json TEXT NOT NULL DEFAULT '{}',
+        justifications_json TEXT NOT NULL DEFAULT '{}',
+        critical_flags_json TEXT NOT NULL DEFAULT '{}',
+        critical_evidence_json TEXT NOT NULL DEFAULT '{}',
+        comments TEXT NOT NULL DEFAULT '',
+        rubric_version TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (episode_id, rater_id)
+      )
+    `),
+    db.prepare(`
       CREATE INDEX IF NOT EXISTS idx_episodes_language_module
       ON episodes(language, module)
     `),
@@ -76,6 +93,14 @@ export async function ensureNajahSchema(db: D1Database): Promise<void> {
     db.prepare(`
       CREATE INDEX IF NOT EXISTS idx_annotations_rater_status
       ON annotations(rater_id, status)
+    `),
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_rubric_annotations_episode_status
+      ON rubric_annotations(episode_id, status)
+    `),
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_rubric_annotations_rater_status
+      ON rubric_annotations(rater_id, status)
     `),
     db.prepare(`
       CREATE INDEX IF NOT EXISTS idx_auth_sessions_user

@@ -1,5 +1,12 @@
 import { ensureNajahSchema, getD1 } from "@/db";
 import { resolveEpisodeLanguage } from "@/lib/language";
+import {
+  CRITICAL_FLAG_KEYS,
+  DIMENSION_KEYS,
+  CriticalFlagValue,
+  DimensionScore,
+  keyedRecord,
+} from "@/lib/rubric";
 import { getRaterIdentity } from "@/lib/server-auth";
 
 const LOCAL_DEMO_EPISODES = [
@@ -63,6 +70,33 @@ async function seedLocalPreview(db: D1Database, request: Request) {
   );
 }
 
+/**
+ * Reads a JSON object stored in D1 while providing every expected key. A bad or
+ * old value becomes a blank draft instead of breaking the annotator queue.
+ */
+function parseKeyedJson<T, K extends readonly string[]>(
+  value: unknown,
+  keys: K,
+  defaultValue: () => T,
+): Record<K[number], T> {
+  let parsed: Record<string, unknown> = {};
+  if (typeof value === "string" && value) {
+    try {
+      const candidate = JSON.parse(value) as unknown;
+      if (typeof candidate === "object" && candidate !== null && !Array.isArray(candidate)) {
+        parsed = candidate as Record<string, unknown>;
+      }
+    } catch {
+      // The keyed defaults below intentionally recover malformed legacy data.
+    }
+  }
+  const result = keyedRecord(keys, defaultValue);
+  for (const key of keys) {
+    if (Object.hasOwn(parsed, key)) result[key] = parsed[key] as T;
+  }
+  return result;
+}
+
 export async function GET(request: Request) {
   const rater = await getRaterIdentity(request);
   if (!rater) {
@@ -85,25 +119,21 @@ export async function GET(request: Request) {
         e.privacy_review_status AS privacyReviewStatus,
         e.language_review_status AS languageReviewStatus,
         (
-          SELECT COUNT(*) FROM annotations completed
+          SELECT COUNT(*) FROM rubric_annotations completed
           WHERE completed.episode_id = e.episode_id
             AND completed.status = 'complete'
         ) AS completedRaterCount,
-        current.task_achievement AS taskAchievement,
-        current.relevance,
-        current.actionability,
-        current.clarity,
-        current.safety_privacy AS safetyPrivacy,
-        current.cultural_gender_sensitivity AS culturalGenderSensitivity,
-        current.overall_quality AS overallQuality,
-        current.completion_judgment AS completionJudgment,
-        current.critical_issue_flag AS criticalIssueFlag,
-        current.rater_confidence AS raterConfidence,
+        current.scores_json AS scoresJson,
+        current.evidence_turns_json AS evidenceTurnsJson,
+        current.justifications_json AS justificationsJson,
+        current.critical_flags_json AS criticalFlagsJson,
+        current.critical_evidence_json AS criticalEvidenceJson,
         current.comments,
+        current.rubric_version AS rubricVersion,
         current.status AS annotationStatus,
         current.updated_at AS annotationUpdatedAt
       FROM episodes e
-      LEFT JOIN annotations current
+      LEFT JOIN rubric_annotations current
         ON current.episode_id = e.episode_id
        AND current.rater_id = ?
       ORDER BY
@@ -121,6 +151,11 @@ export async function GET(request: Request) {
     const episode = row as Record<string, unknown>;
     return {
       ...episode,
+      scores: parseKeyedJson<DimensionScore>(episode.scoresJson, DIMENSION_KEYS, () => null),
+      evidenceTurns: parseKeyedJson<string>(episode.evidenceTurnsJson, DIMENSION_KEYS, () => ""),
+      justifications: parseKeyedJson<string>(episode.justificationsJson, DIMENSION_KEYS, () => ""),
+      criticalFlags: parseKeyedJson<CriticalFlagValue>(episode.criticalFlagsJson, CRITICAL_FLAG_KEYS, () => null),
+      criticalEvidence: parseKeyedJson<string>(episode.criticalEvidenceJson, CRITICAL_FLAG_KEYS, () => ""),
       language: resolveEpisodeLanguage(
         typeof episode.language === "string" ? episode.language : undefined,
         typeof episode.transcript === "string" ? episode.transcript : "",

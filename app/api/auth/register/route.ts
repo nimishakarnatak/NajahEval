@@ -79,6 +79,10 @@ export async function POST(request: Request) {
     .prepare("UPDATE annotations SET rater_id = ? WHERE lower(rater_email) = ?")
     .bind(userId, email)
     .run();
+  await db
+    .prepare("UPDATE rubric_annotations SET rater_id = ? WHERE lower(rater_email) = ?")
+    .bind(userId, email)
+    .run();
 
   const cookie = await issueSessionCookie(db, userId);
   return Response.json(
