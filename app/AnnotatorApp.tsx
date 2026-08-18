@@ -392,23 +392,18 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         languageReviewStatus: record.language_review_status,
         releaseEligible: csvBoolean(record.release_eligible),
       }));
-      const releasable = mapped.filter(
-        (row) =>
-          row.episodeId &&
-          row.transcript &&
-          row.releaseEligible &&
-          row.privacyReviewStatus === "approved" &&
-          row.languageReviewStatus !== "pending_manual_review",
-      );
-      const blocked = mapped.length - releasable.length;
+      // During this temporary review phase, import every usable episode and
+      // retain review-status fields as metadata rather than using them as gates.
+      const importable = mapped.filter((row) => row.episodeId && row.transcript);
+      const invalid = mapped.length - importable.length;
       let imported = 0;
-      for (let index = 0; index < releasable.length; index += 40) {
+      for (let index = 0; index < importable.length; index += 40) {
         const response = await fetch("/api/episodes/import", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             batchName: file.name,
-            episodes: releasable.slice(index, index + 40),
+            episodes: importable.slice(index, index + 40),
           }),
         });
         const payload = await response.json();
@@ -418,11 +413,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       if (!imported) {
         setNotice("");
         setError(
-          `No rows were imported. ${blocked} row${blocked === 1 ? " is" : "s are"} still blocked by privacy or language review.`,
+          `No rows were imported. ${invalid} row${invalid === 1 ? " is" : "s are"} missing an episode ID or transcript.`,
         );
       } else {
-        setNotice(`Imported ${imported} approved episodes; skipped ${blocked} blocked rows.`);
-        await loadEpisodes(releasable[0]?.episodeId);
+        setNotice(`Imported ${imported} episodes; skipped ${invalid} row${invalid === 1 ? "" : "s"} missing required fields.`);
+        await loadEpisodes(importable[0]?.episodeId);
       }
     } catch (importError) {
       setNotice("");
@@ -530,9 +525,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
         <section className="data-tools">
           <h2>Dataset</h2>
-          <p>Only manually approved, release-eligible rows can be imported.</p>
+          <p>For now, any row with an episode ID and transcript can be imported.</p>
           <input ref={fileInput} type="file" accept=".csv,text/csv" hidden onChange={importCsv} />
-          <button className="secondary-button" onClick={() => fileInput.current?.click()}>Import approved CSV</button>
+          <button className="secondary-button" onClick={() => fileInput.current?.click()}>Import CSV</button>
           <button className="text-button" onClick={exportMyWork} disabled={!draftsByMe && !completedByMe}>Export my work</button>
         </section>
       </aside>
@@ -551,8 +546,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           <section className="empty-state">
             <div className="empty-icon">✓</div>
             <h1>{episodes.length ? "No episodes match these filters" : "Your review workspace is ready"}</h1>
-            <p>{episodes.length ? "Change a filter or return to My queue." : "Import the approved blinded dataset to begin."}</p>
-            {!episodes.length && <button className="primary-button" onClick={() => fileInput.current?.click()}>Import approved CSV</button>}
+            <p>{episodes.length ? "Change a filter or return to My queue." : "Import the blinded dataset to begin."}</p>
+            {!episodes.length && <button className="primary-button" onClick={() => fileInput.current?.click()}>Import CSV</button>}
           </section>
         ) : (
           <>

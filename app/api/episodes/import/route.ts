@@ -39,14 +39,6 @@ export async function POST(request: Request) {
       rejected.push({ episodeId: episodeId || "unknown", reason: "missing required text" });
       continue;
     }
-    if (
-      row.releaseEligible !== true ||
-      row.privacyReviewStatus !== "approved" ||
-      row.languageReviewStatus === "pending_manual_review"
-    ) {
-      rejected.push({ episodeId, reason: "manual review or release approval is incomplete" });
-      continue;
-    }
     accepted.push({
       episodeId,
       language: row.language?.trim() || "und",
@@ -54,9 +46,9 @@ export async function POST(request: Request) {
       moduleObjective: row.moduleObjective?.trim() || "",
       priorContext: row.priorContext?.trim() || "",
       transcript: row.transcript.trim(),
-      privacyReviewStatus: row.privacyReviewStatus,
+      privacyReviewStatus: row.privacyReviewStatus || "not_reviewed",
       languageReviewStatus: row.languageReviewStatus || "not_required",
-      releaseEligible: true,
+      releaseEligible: row.releaseEligible === true,
     });
   }
 

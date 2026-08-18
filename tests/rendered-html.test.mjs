@@ -17,13 +17,17 @@ test("ships Najah-specific metadata without starter preview markers", async () =
   assert.doesNotMatch(`${page}\n${layout}`, /codex-preview|SkeletonPreview/);
 });
 
-test("includes the core annotation workflow without the temporary do-not-release gate", async () => {
+test("includes the core annotation workflow without temporary release or review gates", async () => {
   const [component, importRoute] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(importRoutePath, "utf8"),
   ]);
   assert.match(component, /Task achievement/);
   assert.match(component, /Submit & next/);
-  assert.match(component, /Import approved CSV/);
+  assert.match(component, /Import CSV/);
   assert.doesNotMatch(`${component}\n${importRoute}`, /do_not_release|doNotRelease/);
+  assert.doesNotMatch(
+    importRoute,
+    /releaseEligible !== true|privacyReviewStatus !== "approved"|languageReviewStatus === "pending_manual_review"/,
+  );
 });
