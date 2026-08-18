@@ -9,6 +9,7 @@ const authScreenPath = new URL("../app/AuthScreen.tsx", import.meta.url);
 const serverAuthPath = new URL("../lib/server-auth.ts", import.meta.url);
 const languagePath = new URL("../lib/language.ts", import.meta.url);
 const importRoutePath = new URL("../app/api/episodes/import/route.ts", import.meta.url);
+const registerRoutePath = new URL("../app/api/auth/register/route.ts", import.meta.url);
 
 test("ships Najah-specific metadata without starter preview markers", async () => {
   const [page, layout] = await Promise.all([
@@ -49,15 +50,16 @@ test("includes the core annotation workflow without temporary release or review 
   );
 });
 
-test("provides invite-only account creation and independent server sessions", async () => {
-  const [authScreen, serverAuth, importRoute] = await Promise.all([
+test("provides open account creation and independent server sessions", async () => {
+  const [authScreen, serverAuth, importRoute, registerRoute] = await Promise.all([
     readFile(authScreenPath, "utf8"),
     readFile(serverAuthPath, "utf8"),
     readFile(importRoutePath, "utf8"),
+    readFile(registerRoutePath, "utf8"),
   ]);
   assert.match(authScreen, /Create account/);
-  assert.match(authScreen, /Team invitation code/);
   assert.match(authScreen, /At least 12 characters/);
+  assert.doesNotMatch(`${authScreen}\n${registerRoute}`, /invitation code|invitationCode|MAX_RATER_ACCOUNTS/);
   assert.match(serverAuth, /auth_sessions/);
   assert.match(serverAuth, /readSessionToken/);
   assert.doesNotMatch(serverAuth, /getChatGPTUser/);

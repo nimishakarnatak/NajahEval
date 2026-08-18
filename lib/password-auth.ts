@@ -106,15 +106,6 @@ export async function digestSessionToken(token: string): Promise<string> {
   return bytesToBase64Url(new Uint8Array(digest));
 }
 
-/** Compare an invitation code without leaking the first differing character. */
-export async function secretsMatch(submitted: string, expected: string): Promise<boolean> {
-  const [left, right] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encoder.encode(submitted)),
-    crypto.subtle.digest("SHA-256", encoder.encode(expected)),
-  ]);
-  return constantTimeEqual(new Uint8Array(left), new Uint8Array(right));
-}
-
 /** Read one cookie value from a request Cookie header. */
 export function readSessionToken(cookieHeader: string | null): string | null {
   for (const part of (cookieHeader ?? "").split(";")) {

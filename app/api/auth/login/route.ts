@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers";
+
 import { ensureNajahSchema, getD1 } from "@/db";
 import { issueSessionCookie } from "@/lib/auth-session";
 import { hashPassword, verifyPassword } from "@/lib/password-auth";
@@ -66,6 +68,14 @@ export async function POST(request: Request) {
         .run();
     }
     return Response.json({ error: "Email or password is incorrect." }, { status: 401 });
+  }
+
+  const adminEmail = ((env as unknown as { ADMIN_EMAIL?: string }).ADMIN_EMAIL ?? "")
+    .trim()
+    .toLowerCase();
+  if (adminEmail && user.email === adminEmail && user.role !== "admin") {
+    await db.prepare("UPDATE users SET role = 'admin' WHERE user_id = ?").bind(user.userId).run();
+    user.role = "admin";
   }
 
   await db

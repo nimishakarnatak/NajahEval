@@ -10,7 +10,6 @@ export function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [invitationCode, setInvitationCode] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,7 +35,7 @@ export function AuthScreen() {
         body: JSON.stringify(
           mode === "login"
             ? { email, password }
-            : { displayName, email, password, invitationCode },
+            : { displayName, email, password },
         ),
       });
       const payload = await response.json();
@@ -64,12 +63,12 @@ export function AuthScreen() {
             and build a reliable human reference dataset.
           </p>
           <ul>
-            <li><span>01</span> Three named rater accounts</li>
+            <li><span>01</span> Named rater accounts</li>
             <li><span>02</span> Separate drafts and completed ratings</li>
             <li><span>03</span> Protected conversation and annotation data</li>
           </ul>
         </div>
-        <p className="auth-privacy-note">Access is limited to the invited evaluation team.</p>
+        <p className="auth-privacy-note">Sign in is required to view the review workspace.</p>
       </section>
 
       <section className="auth-form-area">
@@ -92,12 +91,12 @@ export function AuthScreen() {
           </div>
 
           <div className="auth-card-heading">
-            <p>{mode === "login" ? "Welcome back" : "Invited raters only"}</p>
+            <p>{mode === "login" ? "Welcome back" : "New rater account"}</p>
             <h2>{mode === "login" ? "Sign in to continue" : "Create your rater account"}</h2>
             <span>
               {mode === "login"
                 ? "Use the email and password for your Najah account."
-                : "Up to three accounts can be created with the team invitation code."}
+                : "Create an account with your email and a secure password."}
             </span>
           </div>
 
@@ -153,17 +152,6 @@ export function AuthScreen() {
                     required
                     minLength={12}
                     maxLength={128}
-                  />
-                </label>
-                <label>
-                  <span>Team invitation code</span>
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    value={invitationCode}
-                    onChange={(event) => setInvitationCode(event.target.value)}
-                    placeholder="Provided by the project owner"
-                    required
                   />
                 </label>
               </>

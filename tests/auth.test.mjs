@@ -8,7 +8,6 @@ import {
   hashPassword,
   passwordValidationError,
   readSessionToken,
-  secretsMatch,
   sessionCookie,
   verifyPassword,
 } from "../lib/password-auth.ts";
@@ -41,9 +40,4 @@ test("sets and clears a secure HttpOnly session cookie", () => {
   assert.match(cookie, /SameSite=Lax/);
   assert.equal(readSessionToken(cookie), token);
   assert.match(expiredSessionCookie(), /Max-Age=0/);
-});
-
-test("compares invitation codes without partial string checks", async () => {
-  assert.equal(await secretsMatch("team-code", "team-code"), true);
-  assert.equal(await secretsMatch("team-codf", "team-code"), false);
 });
