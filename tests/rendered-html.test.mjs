@@ -7,6 +7,7 @@ const layoutPath = new URL("../app/layout.tsx", import.meta.url);
 const componentPath = new URL("../app/AnnotatorApp.tsx", import.meta.url);
 const authScreenPath = new URL("../app/AuthScreen.tsx", import.meta.url);
 const serverAuthPath = new URL("../lib/server-auth.ts", import.meta.url);
+const passwordAuthPath = new URL("../lib/password-auth.ts", import.meta.url);
 const languagePath = new URL("../lib/language.ts", import.meta.url);
 const importRoutePath = new URL("../app/api/episodes/import/route.ts", import.meta.url);
 const registerRoutePath = new URL("../app/api/auth/register/route.ts", import.meta.url);
@@ -51,9 +52,10 @@ test("includes the core annotation workflow without temporary release or review 
 });
 
 test("provides open account creation and independent server sessions", async () => {
-  const [authScreen, serverAuth, importRoute, registerRoute] = await Promise.all([
+  const [authScreen, serverAuth, passwordAuth, importRoute, registerRoute] = await Promise.all([
     readFile(authScreenPath, "utf8"),
     readFile(serverAuthPath, "utf8"),
+    readFile(passwordAuthPath, "utf8"),
     readFile(importRoutePath, "utf8"),
     readFile(registerRoutePath, "utf8"),
   ]);
@@ -62,6 +64,9 @@ test("provides open account creation and independent server sessions", async () 
   assert.doesNotMatch(`${authScreen}\n${registerRoute}`, /invitation code|invitationCode|MAX_RATER_ACCOUNTS/);
   assert.match(serverAuth, /auth_sessions/);
   assert.match(serverAuth, /readSessionToken/);
+  assert.match(passwordAuth, /PASSWORD_ITERATIONS = 100_000/);
+  assert.match(authScreen, /response\.text\(\)/);
+  assert.doesNotMatch(authScreen, /response\.json\(\)/);
   assert.doesNotMatch(serverAuth, /getChatGPTUser/);
   assert.match(importRoute, /rater\.role !== "admin"/);
 });

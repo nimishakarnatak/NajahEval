@@ -49,7 +49,15 @@ export async function POST(request: Request) {
 
   const userId = crypto.randomUUID();
   const role = email === configuredAdminEmail() ? "admin" : "rater";
-  const passwordHash = await hashPassword(password);
+  let passwordHash: string;
+  try {
+    passwordHash = await hashPassword(password);
+  } catch {
+    return Response.json(
+      { error: "Password protection is temporarily unavailable. Please try again." },
+      { status: 503 },
+    );
+  }
   try {
     await db
       .prepare(`

@@ -1,5 +1,6 @@
 const PASSWORD_SCHEME = "pbkdf2-sha256";
-const PASSWORD_ITERATIONS = 310_000;
+// Cloudflare Workers currently supports PBKDF2 iteration counts up to 100,000.
+const PASSWORD_ITERATIONS = 100_000;
 const PASSWORD_KEY_BYTES = 32;
 const SESSION_COOKIE = "najah_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;

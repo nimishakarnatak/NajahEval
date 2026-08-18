@@ -38,7 +38,16 @@ export function AuthScreen() {
             : { displayName, email, password },
         ),
       });
-      const payload = await response.json();
+      const responseText = await response.text();
+      let payload: { error?: string } = {};
+      if (responseText) {
+        try {
+          payload = JSON.parse(responseText) as { error?: string };
+        } catch {
+          // A proxy or unexpected server failure may return a non-JSON body.
+          // The fallback below keeps that infrastructure detail out of the UI.
+        }
+      }
       if (!response.ok) throw new Error(payload.error || "Unable to sign in.");
       window.location.assign("/");
     } catch (requestError) {
