@@ -5,6 +5,8 @@ import test from "node:test";
 const pagePath = new URL("../app/page.tsx", import.meta.url);
 const layoutPath = new URL("../app/layout.tsx", import.meta.url);
 const componentPath = new URL("../app/AnnotatorApp.tsx", import.meta.url);
+const authScreenPath = new URL("../app/AuthScreen.tsx", import.meta.url);
+const serverAuthPath = new URL("../lib/server-auth.ts", import.meta.url);
 const languagePath = new URL("../lib/language.ts", import.meta.url);
 const importRoutePath = new URL("../app/api/episodes/import/route.ts", import.meta.url);
 
@@ -45,4 +47,19 @@ test("includes the core annotation workflow without temporary release or review 
     importRoute,
     /releaseEligible !== true|privacyReviewStatus !== "approved"|languageReviewStatus === "pending_manual_review"/,
   );
+});
+
+test("provides invite-only account creation and independent server sessions", async () => {
+  const [authScreen, serverAuth, importRoute] = await Promise.all([
+    readFile(authScreenPath, "utf8"),
+    readFile(serverAuthPath, "utf8"),
+    readFile(importRoutePath, "utf8"),
+  ]);
+  assert.match(authScreen, /Create account/);
+  assert.match(authScreen, /Team invitation code/);
+  assert.match(authScreen, /At least 12 characters/);
+  assert.match(serverAuth, /auth_sessions/);
+  assert.match(serverAuth, /readSessionToken/);
+  assert.doesNotMatch(serverAuth, /getChatGPTUser/);
+  assert.match(importRoute, /rater\.role !== "admin"/);
 });

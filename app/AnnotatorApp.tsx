@@ -33,7 +33,7 @@ type Episode = AnnotationDraft & {
   annotationUpdatedAt: string | null;
 };
 
-type Rater = { displayName: string; email: string };
+type Rater = { displayName: string; email: string; role: "admin" | "rater" };
 type SaveState = "saved" | "saving" | "unsaved" | "error";
 type ViewFilter = "queue" | "drafts" | "completed" | "all";
 
@@ -444,6 +444,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     }
   }
 
+  async function signOut() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.assign("/");
+  }
+
   function exportMyWork() {
     const columns = [
       "episode_id",
@@ -495,9 +500,15 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
             <span>Human evaluation workspace</span>
           </div>
         </div>
-        <div className="rater-chip">
-          <span className="avatar">{rater.displayName.slice(0, 1).toUpperCase()}</span>
-          <span><strong>{rater.displayName}</strong><small>{rater.email}</small></span>
+        <div className="rater-actions">
+          <div className="rater-chip">
+            <span className="avatar">{rater.displayName.slice(0, 1).toUpperCase()}</span>
+            <span>
+              <strong>{rater.displayName}</strong>
+              <small>{rater.email} · {rater.role === "admin" ? "Admin" : "Rater"}</small>
+            </span>
+          </div>
+          <button className="sign-out-button" onClick={() => void signOut()}>Sign out</button>
         </div>
       </header>
 
@@ -541,10 +552,14 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         </div>
 
         <section className="data-tools">
-          <h2>Dataset</h2>
-          <p>For now, any row with an episode ID and transcript can be imported.</p>
+          <h2>{rater.role === "admin" ? "Dataset" : "My work"}</h2>
           <input ref={fileInput} type="file" accept=".csv,text/csv" hidden onChange={importCsv} />
-          <button className="secondary-button" onClick={() => fileInput.current?.click()}>Import CSV</button>
+          {rater.role === "admin" && (
+            <>
+              <p>Administrators can import rows with an episode ID and transcript.</p>
+              <button className="secondary-button" onClick={() => fileInput.current?.click()}>Import CSV</button>
+            </>
+          )}
           <button className="text-button" onClick={exportMyWork} disabled={!draftsByMe && !completedByMe}>Export my work</button>
         </section>
       </aside>

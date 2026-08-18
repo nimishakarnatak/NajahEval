@@ -20,6 +20,9 @@ export async function POST(request: Request) {
   if (!rater) {
     return Response.json({ error: "Sign in is required." }, { status: 401 });
   }
+  if (rater.role !== "admin") {
+    return Response.json({ error: "Only the account administrator can import datasets." }, { status: 403 });
+  }
 
   const payload = (await request.json()) as {
     batchName?: string;

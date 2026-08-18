@@ -5,7 +5,39 @@ import {
   primaryKey,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+
+export const users = sqliteTable(
+  "users",
+  {
+    userId: text("user_id").primaryKey(),
+    email: text("email").notNull(),
+    displayName: text("display_name").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    role: text("role", { enum: ["admin", "rater"] }).notNull(),
+    failedLoginCount: integer("failed_login_count").notNull().default(0),
+    lockedUntil: integer("locked_until"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [uniqueIndex("idx_users_email").on(table.email)],
+);
+
+export const authSessions = sqliteTable(
+  "auth_sessions",
+  {
+    sessionHash: text("session_hash").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.userId, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("idx_auth_sessions_user").on(table.userId),
+    index("idx_auth_sessions_expiry").on(table.expiresAt),
+  ],
+);
 
 export const episodes = sqliteTable(
   "episodes",

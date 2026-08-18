@@ -10,6 +10,26 @@ export function getD1(): D1Database {
 export async function ensureNajahSchema(db: D1Database): Promise<void> {
   await db.batch([
     db.prepare(`
+      CREATE TABLE IF NOT EXISTS users (
+        user_id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('admin', 'rater')),
+        failed_login_count INTEGER NOT NULL DEFAULT 0,
+        locked_until INTEGER,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        session_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+        expires_at INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `),
+    db.prepare(`
       CREATE TABLE IF NOT EXISTS episodes (
         episode_id TEXT PRIMARY KEY,
         language TEXT NOT NULL,
@@ -56,6 +76,14 @@ export async function ensureNajahSchema(db: D1Database): Promise<void> {
     db.prepare(`
       CREATE INDEX IF NOT EXISTS idx_annotations_rater_status
       ON annotations(rater_id, status)
+    `),
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
+      ON auth_sessions(user_id)
+    `),
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry
+      ON auth_sessions(expires_at)
     `),
   ]);
   await db.prepare("PRAGMA optimize").run();
