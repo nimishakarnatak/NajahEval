@@ -1,4 +1,5 @@
 import { ensureNajahSchema, getD1 } from "@/db";
+import { resolveEpisodeLanguage } from "@/lib/language";
 import { getRaterIdentity } from "@/lib/server-auth";
 
 type ImportEpisode = {
@@ -11,6 +12,7 @@ type ImportEpisode = {
   privacyReviewStatus?: string;
   languageReviewStatus?: string;
   releaseEligible?: boolean;
+  codeSwitchingDetected?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -41,7 +43,11 @@ export async function POST(request: Request) {
     }
     accepted.push({
       episodeId,
-      language: row.language?.trim() || "und",
+      language: resolveEpisodeLanguage(
+        row.language,
+        row.transcript,
+        row.codeSwitchingDetected,
+      ),
       module: row.module?.trim() || "unknown",
       moduleObjective: row.moduleObjective?.trim() || "",
       priorContext: row.priorContext?.trim() || "",
@@ -49,6 +55,7 @@ export async function POST(request: Request) {
       privacyReviewStatus: row.privacyReviewStatus || "not_reviewed",
       languageReviewStatus: row.languageReviewStatus || "not_required",
       releaseEligible: row.releaseEligible === true,
+      codeSwitchingDetected: row.codeSwitchingDetected ?? false,
     });
   }
 

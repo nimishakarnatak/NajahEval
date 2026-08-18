@@ -1,4 +1,5 @@
 import { ensureNajahSchema, getD1 } from "@/db";
+import { resolveEpisodeLanguage } from "@/lib/language";
 import { getRaterIdentity } from "@/lib/server-auth";
 
 const LOCAL_DEMO_EPISODES = [
@@ -113,8 +114,22 @@ export async function GET(request: Request) {
     .bind(rater.id)
     .all();
 
+  // Older imports stored only the primary language. Resolve the display value
+  // when episodes are read so already-imported code-switched conversations are
+  // upgraded without requiring annotators to upload the dataset again.
+  const episodes = result.results.map((row) => {
+    const episode = row as Record<string, unknown>;
+    return {
+      ...episode,
+      language: resolveEpisodeLanguage(
+        typeof episode.language === "string" ? episode.language : undefined,
+        typeof episode.transcript === "string" ? episode.transcript : "",
+      ),
+    };
+  });
+
   return Response.json({
     rater,
-    episodes: result.results,
+    episodes,
   });
 }

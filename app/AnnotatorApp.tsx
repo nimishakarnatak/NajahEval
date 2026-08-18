@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { languageBadgeTone, languageLabel, resolveEpisodeLanguage } from "@/lib/language";
 
 type ScoreKey =
   | "taskAchievement"
@@ -102,13 +103,6 @@ const MODULE_LABELS: Record<string, string> = {
   onboarding: "First days at work",
 };
 
-const LANGUAGE_LABELS: Record<string, string> = {
-  ar: "Arabic",
-  fr: "French",
-  en: "English",
-  und: "Undetermined",
-};
-
 function draftFromEpisode(episode: Episode | undefined): AnnotationDraft {
   if (!episode) return { ...EMPTY_DRAFT };
   return Object.fromEntries(
@@ -160,6 +154,13 @@ function parseCsv(text: string): string[][] {
 
 function csvBoolean(value: string | undefined): boolean {
   return ["true", "1", "yes", "y"].includes((value ?? "").trim().toLowerCase());
+}
+
+function csvOptionalBoolean(value: string | undefined): boolean | undefined {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (["true", "1", "yes", "y"].includes(normalized)) return true;
+  if (["false", "0", "no", "n"].includes(normalized)) return false;
+  return undefined;
 }
 
 function csvEscape(value: unknown): string {
@@ -267,7 +268,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   }, [selectedId]);
 
   const languages = useMemo(
-    () => Array.from(new Set(episodes.map((episode) => episode.language))).sort(),
+    () => Array.from(new Set(episodes.map((episode) => episode.language))).sort((left, right) =>
+      languageLabel(left).localeCompare(languageLabel(right)),
+    ),
     [episodes],
   );
   const modules = useMemo(
@@ -282,6 +285,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         !query ||
         episode.episodeId.toLowerCase().includes(query) ||
         episode.transcript.toLowerCase().includes(query) ||
+        languageLabel(episode.language).toLowerCase().includes(query) ||
         (MODULE_LABELS[episode.module] || episode.module).toLowerCase().includes(query);
       const matchesLanguage = languageFilter === "all" || episode.language === languageFilter;
       const matchesModule = moduleFilter === "all" || episode.module === moduleFilter;
@@ -381,17 +385,30 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       const records = rows
         .filter((row) => row.some((value) => value.trim()))
         .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])));
-      const mapped = records.map((record) => ({
-        episodeId: record.episode_id,
-        language: record.language,
-        module: record.module,
-        moduleObjective: record.module_objective,
-        priorContext: record.reviewed_prior_context || record.relevant_prior_context,
-        transcript: record.reviewed_transcript || record.deidentified_transcript,
-        privacyReviewStatus: record.privacy_review_status,
-        languageReviewStatus: record.language_review_status,
-        releaseEligible: csvBoolean(record.release_eligible),
-      }));
+      const mapped = records.map((record) => {
+        const transcript = record.reviewed_transcript || record.deidentified_transcript;
+        const reviewedLanguage = record.reviewed_language?.trim();
+        const sourceLanguage =
+          reviewedLanguage ||
+          record.languages_present ||
+          record.detected_languages ||
+          record.language;
+        const codeSwitchingHint = reviewedLanguage
+          ? false
+          : csvOptionalBoolean(record.code_switching_detected);
+        return {
+          episodeId: record.episode_id,
+          language: resolveEpisodeLanguage(sourceLanguage, transcript, codeSwitchingHint),
+          module: record.module,
+          moduleObjective: record.module_objective,
+          priorContext: record.reviewed_prior_context || record.relevant_prior_context,
+          transcript,
+          privacyReviewStatus: record.privacy_review_status,
+          languageReviewStatus: record.language_review_status,
+          releaseEligible: csvBoolean(record.release_eligible),
+          codeSwitchingDetected: codeSwitchingHint,
+        };
+      });
       // During this temporary review phase, import every usable episode and
       // retain review-status fields as metadata rather than using them as gates.
       const importable = mapped.filter((row) => row.episodeId && row.transcript);
@@ -511,7 +528,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
             <span>Language</span>
             <select value={languageFilter} onChange={(event) => setLanguageFilter(event.target.value)}>
               <option value="all">All languages</option>
-              {languages.map((language) => <option key={language} value={language}>{LANGUAGE_LABELS[language] || language}</option>)}
+              {languages.map((language) => <option key={language} value={language}>{languageLabel(language)}</option>)}
             </select>
           </label>
           <label>
@@ -553,7 +570,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           <>
             <div className="episode-toolbar">
               <div>
-                <span className={`language-badge language-${current.language}`}>{LANGUAGE_LABELS[current.language] || current.language}</span>
+                <span className={`language-badge language-${languageBadgeTone(current.language)}`}>{languageLabel(current.language)}</span>
                 <span className="module-badge">{MODULE_LABELS[current.module] || current.module}</span>
                 <span className="episode-id">{current.episodeId}</span>
               </div>
