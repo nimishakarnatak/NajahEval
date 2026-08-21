@@ -104,6 +104,21 @@ test("separates flattened transcripts into legible participant and Najah turns",
   assert.match(styles, /\.transcript \{[^}]*gap: 17px/);
 });
 
+test("offers a browser-local English translation toggle without replacing originals", async () => {
+  const [component, styles] = await Promise.all([
+    readFile(componentPath, "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(component, /English translation/);
+  assert.match(component, /globalThis[\s\S]*Translator\?: BrowserTranslatorFactory/);
+  assert.match(component, /targetLanguage: "en"/);
+  assert.match(component, /setTranscriptView\("original"\)/);
+  assert.match(component, /Machine translation for reading support/);
+  assert.match(component, /turn numbers are unchanged/);
+  assert.match(styles, /\.translation-view-options/);
+  assert.match(styles, /\.translation-progress/);
+});
+
 test("includes the core annotation workflow without temporary release or review gates", async () => {
   const [component, rubric, importRoute] = await Promise.all([
     readFile(componentPath, "utf8"),

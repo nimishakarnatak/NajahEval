@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   STUDENT_STATUS_VALUES,
   TREATMENT_VALUES,
@@ -54,6 +54,26 @@ type Rater = { displayName: string; email: string; role: "admin" | "rater" };
 type SaveState = "saved" | "saving" | "unsaved" | "error";
 type ViewFilter = "queue" | "drafts" | "completed" | "all";
 type ProgressView = "queue" | "not_started" | "draft" | "complete" | "all";
+type TranslationStatus = "idle" | "preparing" | "translating" | "ready" | "error";
+type TranscriptTurn = { speaker: "USER" | "NAJAH"; text: string; turn: string };
+
+type BrowserTranslator = {
+  translate: (text: string) => Promise<string>;
+  destroy?: () => void;
+};
+
+type BrowserTranslatorFactory = {
+  create: (options: {
+    sourceLanguage: string;
+    targetLanguage: string;
+    monitor?: (monitor: {
+      addEventListener: (
+        type: "downloadprogress",
+        listener: (event: { loaded: number }) => void,
+      ) => void;
+    }) => void;
+  }) => Promise<BrowserTranslator>;
+};
 
 const RUBRIC_SECTIONS: readonly RubricSection[] = [
   "Turn-level assessment",
@@ -102,8 +122,8 @@ function csvEscape(value: unknown): string {
   return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-function transcriptTurns(transcript: string) {
-  const turns: { speaker: "USER" | "NAJAH"; text: string; turn: string }[] = [];
+function transcriptTurns(transcript: string): TranscriptTurn[] {
+  const turns: TranscriptTurn[] = [];
 
   // Earlier de-identification exports flattened line breaks while retaining
   // stable [TURN ...] markers. Split on those markers instead of newlines so
@@ -124,6 +144,61 @@ function transcriptTurns(transcript: string) {
     turns.push({ speaker: "NAJAH", turn: "—", text: transcript.trim() });
   }
   return turns;
+}
+
+/** Return the non-English language packs needed for an episode. */
+function episodeTranslationLanguages(language: string, transcript: string): string[] {
+  const declared = language
+    .toLowerCase()
+    .split("+")
+    .map((value) => value.trim())
+    .filter((value) => value === "ar" || value === "fr");
+  if (declared.length) return Array.from(new Set(declared));
+
+  // Older rows may have an undetermined language. These conservative fallbacks
+  // still allow translation when the script makes the source unambiguous.
+  if (/[؀-ۿ]/.test(transcript)) return ["ar"];
+  if (/[àâçéèêëîïôùûüÿœ]/i.test(transcript)) return ["fr"];
+  return [];
+}
+
+/** Choose the most plausible source language for an individual mixed-language turn. */
+function turnTranslationLanguage(text: string, available: string[]): string | null {
+  const arabicCharacters = (text.match(/[؀-ۿ]/g) ?? []).length;
+  if (available.includes("ar") && arabicCharacters >= 3) return "ar";
+
+  const words = text.toLowerCase().match(/[a-zàâçéèêëîïôùûüÿœ']+/g) ?? [];
+  const frenchMarkers = new Set([
+    "avec", "bonjour", "dans", "des", "est", "et", "je", "le", "les",
+    "mais", "merci", "nous", "oui", "pas", "pour", "que", "suis", "une", "vous",
+  ]);
+  const englishMarkers = new Set([
+    "and", "can", "for", "have", "hello", "how", "is", "my", "please", "that",
+    "the", "to", "want", "with", "would", "yes", "you", "your",
+  ]);
+  const frenchScore = words.filter((word) => frenchMarkers.has(word)).length;
+  const englishScore = words.filter((word) => englishMarkers.has(word)).length;
+  if (available.includes("fr") && frenchScore > englishScore) return "fr";
+  if (englishScore > frenchScore) return null;
+  return available.length === 1 ? available[0] : available.includes("fr") ? "fr" : available[0] ?? null;
+}
+
+/** Keep long turns within practical browser-translation input sizes. */
+function translationChunks(text: string, maximumLength = 3200): string[] {
+  if (text.length <= maximumLength) return [text];
+  const words = text.split(/\s+/);
+  const chunks: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (current && current.length + word.length + 1 > maximumLength) {
+      chunks.push(current);
+      current = word;
+    } else {
+      current = current ? `${current} ${word}` : word;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
 }
 
 /**
@@ -307,6 +382,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [viewFilter, setViewFilter] = useState<ViewFilter>("queue");
   const [progressOpen, setProgressOpen] = useState(false);
   const [progressView, setProgressView] = useState<ProgressView>("not_started");
+  const [transcriptView, setTranscriptView] = useState<"original" | "english">("original");
+  const [translationStatus, setTranslationStatus] = useState<TranslationStatus>("idle");
+  const [translatedTurns, setTranslatedTurns] = useState<TranscriptTurn[]>([]);
+  const [translationProgress, setTranslationProgress] = useState(0);
+  const [translationMessage, setTranslationMessage] = useState("");
+  const translationCache = useRef(new Map<string, TranscriptTurn[]>());
+  const translationRequest = useRef(0);
 
   const loadEpisodes = useCallback(async (preferredId?: string) => {
     setLoading(true);
@@ -342,6 +424,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setDraft(draftFromEpisode(current));
     setDirty(false);
     setSaveState("saved");
+    setTranscriptView("original");
+    setTranslationMessage("");
+    setTranslationProgress(0);
+    translationRequest.current += 1;
+    const cached = current ? translationCache.current.get(current.episodeId) : undefined;
+    setTranslatedTurns(cached ?? []);
+    setTranslationStatus(cached ? "ready" : "idle");
   }, [current]);
 
   const modules = useMemo(
@@ -576,6 +665,105 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   async function signOut() {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.assign("/");
+  }
+
+  /**
+   * Translate one episode on demand with Chrome's local Translator API.
+   * Original text is never replaced, uploaded, or written to the annotation.
+   */
+  async function showEnglishTranslation() {
+    if (!current) return;
+    if (translationStatus === "ready" && translatedTurns.length) {
+      setTranscriptView("english");
+      return;
+    }
+
+    const sourceLanguages = episodeTranslationLanguages(current.language, current.transcript);
+    if (!sourceLanguages.length) {
+      setTranslationStatus("error");
+      setTranslationMessage(
+        current.language === "en"
+          ? "This conversation is already in English."
+          : "The source language could not be determined for translation.",
+      );
+      return;
+    }
+
+    const browserAI = globalThis as typeof globalThis & {
+      Translator?: BrowserTranslatorFactory;
+    };
+    if (!browserAI.Translator) {
+      setTranslationStatus("error");
+      setTranslationMessage(
+        "English translation requires a recent desktop Chrome browser. The original conversation remains available.",
+      );
+      return;
+    }
+
+    const requestId = ++translationRequest.current;
+    setTranslationStatus("preparing");
+    setTranslationProgress(0);
+    setTranslationMessage("Preparing English translation…");
+
+    const translators = new Map<string, BrowserTranslator>();
+    try {
+      // Start model creation directly from the rater's click so Chrome can
+      // download any required language packs with valid user activation.
+      const translatorEntries = await Promise.all(
+        sourceLanguages.map(async (sourceLanguage) => {
+          const translator = await browserAI.Translator!.create({
+            sourceLanguage,
+            targetLanguage: "en",
+            monitor(monitor) {
+              monitor.addEventListener("downloadprogress", (event) => {
+                if (translationRequest.current !== requestId) return;
+                setTranslationProgress(Math.round(event.loaded * 100));
+                setTranslationMessage(`Preparing language pack… ${Math.round(event.loaded * 100)}%`);
+              });
+            },
+          });
+          return [sourceLanguage, translator] as const;
+        }),
+      );
+      for (const [language, translator] of translatorEntries) translators.set(language, translator);
+
+      const originalTurns = transcriptTurns(current.transcript);
+      const translated: TranscriptTurn[] = [];
+      setTranslationStatus("translating");
+      for (const [index, turn] of originalTurns.entries()) {
+        if (translationRequest.current !== requestId) return;
+        const sourceLanguage = turnTranslationLanguage(turn.text, sourceLanguages);
+        const translator = sourceLanguage ? translators.get(sourceLanguage) : undefined;
+        let translatedText = turn.text;
+        if (translator) {
+          const pieces: string[] = [];
+          for (const chunk of translationChunks(turn.text)) {
+            pieces.push(await translator.translate(chunk));
+          }
+          translatedText = pieces.join(" ");
+        }
+        translated.push({ ...turn, text: translatedText });
+        const percent = Math.round(((index + 1) / Math.max(originalTurns.length, 1)) * 100);
+        setTranslationProgress(percent);
+        setTranslationMessage(`Translating conversation… ${percent}%`);
+      }
+
+      if (translationRequest.current !== requestId) return;
+      translationCache.current.set(current.episodeId, translated);
+      setTranslatedTurns(translated);
+      setTranslationStatus("ready");
+      setTranslationProgress(100);
+      setTranslationMessage("");
+      setTranscriptView("english");
+    } catch {
+      if (translationRequest.current !== requestId) return;
+      setTranslationStatus("error");
+      setTranslationMessage(
+        "English translation could not be prepared. Please continue with the original or try again in desktop Chrome.",
+      );
+    } finally {
+      for (const translator of translators.values()) translator.destroy?.();
+    }
   }
 
   function exportMyWork() {
@@ -898,6 +1086,46 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <div className="independence-note"><span>◎</span> {current.completedRaterCount}/2 independent ratings complete</div>
                 </header>
 
+                <section className="translation-toolbar" aria-label="Conversation language view">
+                  <div>
+                    <strong>Conversation view</strong>
+                    <span>Keep the original available while using an English aid.</span>
+                  </div>
+                  <div className="translation-view-options" role="group" aria-label="Choose conversation language">
+                    <button
+                      type="button"
+                      className={transcriptView === "original" ? "active" : ""}
+                      onClick={() => setTranscriptView("original")}
+                    >
+                      Original
+                    </button>
+                    <button
+                      type="button"
+                      className={transcriptView === "english" ? "active" : ""}
+                      onClick={() => void showEnglishTranslation()}
+                      disabled={translationStatus === "preparing" || translationStatus === "translating"}
+                    >
+                      {translationStatus === "preparing" || translationStatus === "translating"
+                        ? "Translating…"
+                        : "English translation"}
+                    </button>
+                  </div>
+                  {(translationStatus === "preparing" || translationStatus === "translating") && (
+                    <div className="translation-progress" aria-live="polite">
+                      <span style={{ width: `${translationProgress}%` }} />
+                      <small>{translationMessage}</small>
+                    </div>
+                  )}
+                  {translationStatus === "error" && (
+                    <p className="translation-message" role="status">{translationMessage}</p>
+                  )}
+                  {transcriptView === "english" && translationStatus === "ready" && (
+                    <p className="translation-note">
+                      Machine translation for reading support. Use the original text when meaning is uncertain; turn numbers are unchanged.
+                    </p>
+                  )}
+                </section>
+
                 {current.priorContext && (
                   <details className="context-card">
                     <summary>Relevant prior context</summary>
@@ -905,8 +1133,12 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   </details>
                 )}
 
-                <section className="transcript" aria-label="Episode transcript" dir={direction}>
-                  {turns.map((turn, index) => (
+                <section
+                  className="transcript"
+                  aria-label={transcriptView === "english" ? "English translation of episode transcript" : "Original episode transcript"}
+                  dir={transcriptView === "english" ? "ltr" : direction}
+                >
+                  {(transcriptView === "english" ? translatedTurns : turns).map((turn, index) => (
                     <div key={`${turn.turn}-${index}`} className={`turn ${turn.speaker === "USER" ? "user-turn" : "najah-turn"}`}>
                       <div className="speaker-row">
                         <span className="speaker">{turn.speaker === "USER" ? "Participant" : "Najah"}</span>

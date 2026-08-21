@@ -373,6 +373,21 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .independence-note { display: inline-flex; align-items: center; gap: 6px; margin-top: 15px; color: var(--muted); font-size: 10px; }
 .independence-note span { color: var(--green); font-size: 16px; }
 
+.translation-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 10px 14px; align-items: center; margin: 18px 26px 0; padding: 12px 13px; border: 1px solid #d8e4e0; border-radius: 11px; background: #f7faf9; }
+.translation-toolbar > div:first-child { display: grid; gap: 3px; }
+.translation-toolbar strong { color: #35433f; font-size: 10px; }
+.translation-toolbar > div:first-child > span { color: var(--muted); font-size: 8px; line-height: 1.45; }
+.translation-view-options { display: grid; grid-template-columns: 1fr 1.35fr; gap: 4px; padding: 3px; border-radius: 8px; background: #e9efed; }
+.translation-view-options button { min-height: 31px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: #5f6b68; font-size: 9px; font-weight: 750; white-space: nowrap; }
+.translation-view-options button.active { background: white; color: var(--green-dark); box-shadow: 0 2px 8px rgba(23, 48, 42, .09); }
+.translation-view-options button:disabled { cursor: wait; opacity: .72; }
+.translation-progress { grid-column: 1 / -1; position: relative; height: 19px; overflow: hidden; border-radius: 6px; background: #e4ece9; }
+.translation-progress > span { position: absolute; inset: 0 auto 0 0; background: #b9d9ce; transition: width .2s ease; }
+.translation-progress small { position: relative; z-index: 1; display: grid; height: 100%; place-items: center; color: #31564d; font-size: 8px; }
+.translation-message, .translation-note { grid-column: 1 / -1; margin: 0; padding: 8px 9px; border-radius: 7px; font-size: 8px; line-height: 1.5; }
+.translation-message { background: #fff4df; color: #775718; }
+.translation-note { background: #edf6f2; color: #42685e; }
+
 .context-card { margin: 18px 26px 0; border: 1px solid #eadbb9; border-radius: 11px; background: #fffaf0; }
 .context-card summary { cursor: pointer; padding: 11px 13px; color: #70501b; font-size: 11px; font-weight: 750; }
 .context-card p { margin: 0; padding: 0 13px 13px; color: #665c49; line-height: 1.65; white-space: pre-wrap; }
@@ -578,6 +593,8 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   .episode-toolbar { align-items: flex-start; gap: 10px; }
   .conversation-panel > header, .transcript { padding-left: 17px; padding-right: 17px; }
   .context-card { margin-left: 17px; margin-right: 17px; }
+  .translation-toolbar { grid-template-columns: 1fr; margin-left: 17px; margin-right: 17px; }
+  .translation-view-options { width: 100%; }
   .conversation-panel h1 { font-size: 20px; }
   .turn { width: 95%; }
   .rating-panel { padding: 17px; }
