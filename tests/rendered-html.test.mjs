@@ -76,6 +76,17 @@ test("bundles and automatically seeds the 300-episode final dataset", async () =
   assert.doesNotMatch(component, /Import CSV/);
 });
 
+test("opens a personal progress list with direct episode navigation", async () => {
+  const component = await readFile(componentPath, "utf8");
+  assert.match(component, /aria-haspopup="dialog"/);
+  assert.match(component, /Review progress/);
+  assert.match(component, /Completed by you/);
+  assert.match(component, /In progress/);
+  assert.match(component, /Not yet started/);
+  assert.match(component, /openEpisodeFromProgress/);
+  assert.match(component, /Select any episode to open it in the evaluation workspace/);
+});
+
 test("includes the core annotation workflow without temporary release or review gates", async () => {
   const [component, rubric, importRoute] = await Promise.all([
     readFile(componentPath, "utf8"),

@@ -50,6 +50,7 @@ type Episode = AnnotationDraft & {
 type Rater = { displayName: string; email: string; role: "admin" | "rater" };
 type SaveState = "saved" | "saving" | "unsaved" | "error";
 type ViewFilter = "queue" | "drafts" | "completed" | "all";
+type ProgressView = "not_started" | "draft" | "complete";
 
 const RUBRIC_SECTIONS: readonly RubricSection[] = [
   "Turn-level assessment",
@@ -265,6 +266,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [moduleFilter, setModuleFilter] = useState("all");
   const [treatmentFilter, setTreatmentFilter] = useState("all");
   const [viewFilter, setViewFilter] = useState<ViewFilter>("queue");
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [progressView, setProgressView] = useState<ProgressView>("not_started");
 
   const loadEpisodes = useCallback(async (preferredId?: string) => {
     setLoading(true);
@@ -451,6 +454,17 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, dirty, selectedId]);
 
+  useEffect(() => {
+    if (!progressOpen) return;
+
+    /** Closing on Escape keeps the progress list usable without a mouse. */
+    function closeProgressOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setProgressOpen(false);
+    }
+    window.addEventListener("keydown", closeProgressOnEscape);
+    return () => window.removeEventListener("keydown", closeProgressOnEscape);
+  }, [progressOpen]);
+
   async function navigate(direction: -1 | 1) {
     if (!filteredEpisodes.length) return;
     if (dirty) await persist("draft", true);
@@ -471,6 +485,31 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     const currentIndex = filteredEpisodes.findIndex((episode) => episode.episodeId === selectedId);
     const next = filteredEpisodes[currentIndex + 1] || filteredEpisodes[0];
     if (next && next.episodeId !== selectedId) setSelectedId(next.episodeId);
+  }
+
+  /**
+   * Opens an episode selected from the progress list and changes the queue view
+   * so the chosen status is not immediately hidden by the sidebar filters.
+   */
+  async function openEpisodeFromProgress(episode: Episode) {
+    if (dirty && current?.episodeId !== episode.episodeId) {
+      const saved = await persist("draft", true);
+      if (!saved) return;
+    }
+    setSearch("");
+    setStudentStatusFilter("all");
+    setModuleFilter("all");
+    setTreatmentFilter("all");
+    setViewFilter(
+      episode.annotationStatus === "complete"
+        ? "completed"
+        : episode.annotationStatus === "draft"
+          ? "drafts"
+          : "all",
+    );
+    setSelectedId(episode.episodeId);
+    setProgressOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function signOut() {
@@ -528,7 +567,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
   const completedByMe = episodes.filter((episode) => episode.annotationStatus === "complete").length;
   const draftsByMe = episodes.filter((episode) => episode.annotationStatus === "draft").length;
+  const notStartedByMe = episodes.length - completedByMe - draftsByMe;
   const doubleRated = episodes.filter((episode) => episode.completedRaterCount >= 2).length;
+  const progressEpisodes = episodes.filter((episode) => {
+    if (progressView === "complete") return episode.annotationStatus === "complete";
+    if (progressView === "draft") return episode.annotationStatus === "draft";
+    return episode.annotationStatus === null;
+  });
   const currentIndex = filteredEpisodes.findIndex((episode) => episode.episodeId === selectedId);
   const direction = current?.language === "ar" ? "rtl" : "ltr";
   const turns = transcriptTurns(current?.transcript || "");
@@ -556,14 +601,21 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       </header>
 
       <aside className="sidebar">
-        <section className="progress-card">
+        <button
+          type="button"
+          className="progress-card progress-card-button"
+          onClick={() => setProgressOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={progressOpen}
+        >
           <div className="progress-heading"><span>My progress</span><strong>{completedByMe}/{episodes.length}</strong></div>
           <div className="progress-track"><span style={{ width: `${episodes.length ? (completedByMe / episodes.length) * 100 : 0}%` }} /></div>
           <div className="progress-stats">
             <span><strong>{draftsByMe}</strong> drafts</span>
             <span><strong>{doubleRated}</strong> double-rated</span>
           </div>
-        </section>
+          <span className="progress-card-action">View episode list <span aria-hidden="true">→</span></span>
+        </button>
 
         <nav className="view-tabs" aria-label="Annotation views">
           {(["queue", "drafts", "completed", "all"] as ViewFilter[]).map((view) => (
@@ -619,6 +671,83 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           <div className={error ? "toast error" : "toast success"} role="status">
             <span>{error || notice}</span>
             <button aria-label="Dismiss message" onClick={() => { setError(""); setNotice(""); }}>×</button>
+          </div>
+        )}
+
+        {progressOpen && (
+          <div
+            className="progress-overlay"
+            onMouseDown={(event) => {
+              if (event.currentTarget === event.target) setProgressOpen(false);
+            }}
+          >
+            <section
+              className="progress-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="progress-dialog-title"
+            >
+              <header className="progress-dialog-header">
+                <div>
+                  <p className="eyebrow">Your own ratings</p>
+                  <h1 id="progress-dialog-title">Review progress</h1>
+                  <p>Select any episode to open it in the evaluation workspace.</p>
+                </div>
+                <button
+                  type="button"
+                  className="progress-close"
+                  onClick={() => setProgressOpen(false)}
+                  aria-label="Close progress list"
+                >
+                  ×
+                </button>
+              </header>
+
+              <div className="progress-summary" aria-label="Progress totals">
+                <button type="button" onClick={() => setProgressView("complete")} className={progressView === "complete" ? "active" : ""}>
+                  <strong>{completedByMe}</strong><span>Done</span>
+                </button>
+                <button type="button" onClick={() => setProgressView("draft")} className={progressView === "draft" ? "active" : ""}>
+                  <strong>{draftsByMe}</strong><span>Drafts</span>
+                </button>
+                <button type="button" onClick={() => setProgressView("not_started")} className={progressView === "not_started" ? "active" : ""}>
+                  <strong>{notStartedByMe}</strong><span>Not started</span>
+                </button>
+              </div>
+
+              <div className="progress-list-heading">
+                <strong>
+                  {progressView === "complete" ? "Completed by you" : progressView === "draft" ? "In progress" : "Not yet started"}
+                </strong>
+                <span>{progressEpisodes.length} episode{progressEpisodes.length === 1 ? "" : "s"}</span>
+              </div>
+
+              <div className="progress-episode-list">
+                {progressEpisodes.length ? progressEpisodes.map((episode) => (
+                  <button
+                    type="button"
+                    className="progress-episode-row"
+                    key={episode.episodeId}
+                    onClick={() => void openEpisodeFromProgress(episode)}
+                  >
+                    <span className={`progress-status-dot status-${progressView}`} aria-hidden="true" />
+                    <span className="progress-episode-copy">
+                      <strong>{episode.episodeId}</strong>
+                      <small>
+                        {MODULE_LABELS[episode.module] || episode.module} · {studentStatusLabel(episode.studentStatus)} · {treatmentLabel(episode.treatment)}
+                      </small>
+                    </span>
+                    <span className={`language-badge language-${languageBadgeTone(episode.language)}`}>{languageLabel(episode.language)}</span>
+                    <span className="progress-open-arrow" aria-hidden="true">→</span>
+                  </button>
+                )) : (
+                  <div className="progress-list-empty">
+                    <span>✓</span>
+                    <p>No episodes in this list.</p>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
         )}
 
