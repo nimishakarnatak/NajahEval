@@ -50,7 +50,7 @@ type Episode = AnnotationDraft & {
 type Rater = { displayName: string; email: string; role: "admin" | "rater" };
 type SaveState = "saved" | "saving" | "unsaved" | "error";
 type ViewFilter = "queue" | "drafts" | "completed" | "all";
-type ProgressView = "not_started" | "draft" | "complete";
+type ProgressView = "queue" | "not_started" | "draft" | "complete" | "all";
 
 const RUBRIC_SECTIONS: readonly RubricSection[] = [
   "Turn-level assessment",
@@ -501,7 +501,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setModuleFilter("all");
     setTreatmentFilter("all");
     setViewFilter(
-      episode.annotationStatus === "complete"
+      progressView === "queue"
+        ? "queue"
+        : progressView === "all"
+          ? "all"
+          : episode.annotationStatus === "complete"
         ? "completed"
         : episode.annotationStatus === "draft"
           ? "drafts"
@@ -510,6 +514,21 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setSelectedId(episode.episodeId);
     setProgressOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /** Opens the sidebar category as a navigable episode list. */
+  function openViewList(view: ViewFilter) {
+    setViewFilter(view);
+    setProgressView(
+      view === "queue"
+        ? "queue"
+        : view === "drafts"
+          ? "draft"
+          : view === "completed"
+            ? "complete"
+            : "all",
+    );
+    setProgressOpen(true);
   }
 
   async function signOut() {
@@ -569,11 +588,34 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const draftsByMe = episodes.filter((episode) => episode.annotationStatus === "draft").length;
   const notStartedByMe = episodes.length - completedByMe - draftsByMe;
   const doubleRated = episodes.filter((episode) => episode.completedRaterCount >= 2).length;
+  const queueCount = episodes.filter(
+    (episode) => episode.annotationStatus !== "complete" && episode.completedRaterCount < 2,
+  ).length;
+  const viewCounts: Record<ViewFilter, number> = {
+    queue: queueCount,
+    drafts: draftsByMe,
+    completed: completedByMe,
+    all: episodes.length,
+  };
   const progressEpisodes = episodes.filter((episode) => {
+    if (progressView === "all") return true;
+    if (progressView === "queue") {
+      return episode.annotationStatus !== "complete" && episode.completedRaterCount < 2;
+    }
     if (progressView === "complete") return episode.annotationStatus === "complete";
     if (progressView === "draft") return episode.annotationStatus === "draft";
     return episode.annotationStatus === null;
   });
+  const progressListTitle =
+    progressView === "all"
+      ? "All episodes"
+      : progressView === "queue"
+        ? "My queue"
+        : progressView === "complete"
+          ? "Completed by you"
+          : progressView === "draft"
+            ? "In progress"
+            : "Not yet started";
   const currentIndex = filteredEpisodes.findIndex((episode) => episode.episodeId === selectedId);
   const direction = current?.language === "ar" ? "rtl" : "ltr";
   const turns = transcriptTurns(current?.transcript || "");
@@ -604,7 +646,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         <button
           type="button"
           className="progress-card progress-card-button"
-          onClick={() => setProgressOpen(true)}
+          onClick={() => {
+            setProgressView("not_started");
+            setProgressOpen(true);
+          }}
           aria-haspopup="dialog"
           aria-expanded={progressOpen}
         >
@@ -619,8 +664,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
         <nav className="view-tabs" aria-label="Annotation views">
           {(["queue", "drafts", "completed", "all"] as ViewFilter[]).map((view) => (
-            <button key={view} className={viewFilter === view ? "active" : ""} onClick={() => setViewFilter(view)}>
-              {view === "queue" ? "My queue" : view[0].toUpperCase() + view.slice(1)}
+            <button key={view} className={viewFilter === view ? "active" : ""} onClick={() => openViewList(view)}>
+              <span>{view === "queue" ? "My queue" : view[0].toUpperCase() + view.slice(1)}</span>
+              <strong>{viewCounts[view]}</strong>
             </button>
           ))}
         </nav>
@@ -716,9 +762,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
               </div>
 
               <div className="progress-list-heading">
-                <strong>
-                  {progressView === "complete" ? "Completed by you" : progressView === "draft" ? "In progress" : "Not yet started"}
-                </strong>
+                <strong>{progressListTitle}</strong>
                 <span>{progressEpisodes.length} episode{progressEpisodes.length === 1 ? "" : "s"}</span>
               </div>
 
@@ -730,12 +774,18 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     key={episode.episodeId}
                     onClick={() => void openEpisodeFromProgress(episode)}
                   >
-                    <span className={`progress-status-dot status-${progressView}`} aria-hidden="true" />
+                    <span
+                      className={`progress-status-dot status-${episode.annotationStatus ?? "not_started"}`}
+                      aria-hidden="true"
+                    />
                     <span className="progress-episode-copy">
                       <strong>{episode.episodeId}</strong>
                       <small>
                         {MODULE_LABELS[episode.module] || episode.module} · {studentStatusLabel(episode.studentStatus)} · {treatmentLabel(episode.treatment)}
                       </small>
+                    </span>
+                    <span className={`progress-row-status status-${episode.annotationStatus ?? "not_started"}`}>
+                      {episode.annotationStatus === "complete" ? "Done" : episode.annotationStatus === "draft" ? "Draft" : "Not started"}
                     </span>
                     <span className={`language-badge language-${languageBadgeTone(episode.language)}`}>{languageLabel(episode.language)}</span>
                     <span className="progress-open-arrow" aria-hidden="true">→</span>
@@ -753,11 +803,31 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
         {loading ? (
           <div className="loading-state"><span className="spinner" />Loading the review queue…</div>
-        ) : !current ? (
+        ) : !current || currentIndex < 0 ? (
           <section className="empty-state">
             <div className="empty-icon">✓</div>
-            <h1>{episodes.length ? "No episodes match these filters" : "Your review workspace is ready"}</h1>
-            <p>{episodes.length ? "Change a filter or return to My queue." : "The built-in dataset could not be loaded. Refresh the page to try again."}</p>
+            <h1>
+              {!episodes.length
+                ? "Your review workspace is ready"
+                : viewFilter === "drafts" && !filteredEpisodes.length
+                  ? "No drafts yet"
+                  : viewFilter === "completed" && !filteredEpisodes.length
+                    ? "No completed episodes yet"
+                    : viewFilter === "queue" && !filteredEpisodes.length
+                      ? "Your queue is complete"
+                      : "No episodes match these filters"}
+            </h1>
+            <p>
+              {!episodes.length
+                ? "The built-in dataset could not be loaded. Refresh the page to try again."
+                : viewFilter === "drafts" && !filteredEpisodes.length
+                  ? "Ratings saved before submission will appear in Drafts."
+                  : viewFilter === "completed" && !filteredEpisodes.length
+                    ? "Ratings you submit will appear in Completed."
+                    : viewFilter === "queue" && !filteredEpisodes.length
+                      ? "There are no episodes currently waiting for your rating."
+                      : "Change a filter or choose another list."}
+            </p>
           </section>
         ) : (
           <>

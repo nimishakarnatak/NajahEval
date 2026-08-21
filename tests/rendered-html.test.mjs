@@ -84,6 +84,12 @@ test("opens a personal progress list with direct episode navigation", async () =
   assert.match(component, /In progress/);
   assert.match(component, /Not yet started/);
   assert.match(component, /openEpisodeFromProgress/);
+  assert.match(component, /openViewList/);
+  assert.match(component, /viewCounts\[view\]/);
+  assert.match(component, /progressView === "queue"/);
+  assert.match(component, /progressView === "all"/);
+  assert.match(component, /No drafts yet/);
+  assert.match(component, /No completed episodes yet/);
   assert.match(component, /Select any episode to open it in the evaluation workspace/);
 });
 
