@@ -1,15 +1,13 @@
 "use client";
 
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   STUDENT_STATUS_VALUES,
   TREATMENT_VALUES,
-  normalizeStudentStatus,
-  normalizeTreatment,
   studentStatusLabel,
   treatmentLabel,
 } from "@/lib/episode-dimensions";
-import { languageBadgeTone, languageLabel, resolveEpisodeLanguage } from "@/lib/language";
+import { languageBadgeTone, languageLabel } from "@/lib/language";
 import {
   CRITICAL_FLAGS,
   CRITICAL_FLAG_KEYS,
@@ -91,56 +89,6 @@ function draftFromEpisode(episode: Episode | undefined): AnnotationDraft {
     criticalEvidence: { ...emptyDraft().criticalEvidence, ...episode.criticalEvidence },
     comments: episode.comments ?? "",
   };
-}
-
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = "";
-  let quoted = false;
-
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-    const next = text[index + 1];
-    if (quoted) {
-      if (character === '"' && next === '"') {
-        field += '"';
-        index += 1;
-      } else if (character === '"') {
-        quoted = false;
-      } else {
-        field += character;
-      }
-    } else if (character === '"') {
-      quoted = true;
-    } else if (character === ",") {
-      row.push(field);
-      field = "";
-    } else if (character === "\n") {
-      row.push(field.replace(/\r$/, ""));
-      rows.push(row);
-      row = [];
-      field = "";
-    } else {
-      field += character;
-    }
-  }
-  if (field || row.length) {
-    row.push(field.replace(/\r$/, ""));
-    rows.push(row);
-  }
-  return rows;
-}
-
-function csvBoolean(value: string | undefined): boolean {
-  return ["true", "1", "yes", "y"].includes((value ?? "").trim().toLowerCase());
-}
-
-function csvOptionalBoolean(value: string | undefined): boolean | undefined {
-  const normalized = (value ?? "").trim().toLowerCase();
-  if (["true", "1", "yes", "y"].includes(normalized)) return true;
-  if (["false", "0", "no", "n"].includes(normalized)) return false;
-  return undefined;
 }
 
 function csvEscape(value: unknown): string {
@@ -317,7 +265,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [moduleFilter, setModuleFilter] = useState("all");
   const [treatmentFilter, setTreatmentFilter] = useState("all");
   const [viewFilter, setViewFilter] = useState<ViewFilter>("queue");
-  const fileInput = useRef<HTMLInputElement>(null);
 
   const loadEpisodes = useCallback(async (preferredId?: string) => {
     setLoading(true);
@@ -526,87 +473,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     if (next && next.episodeId !== selectedId) setSelectedId(next.episodeId);
   }
 
-  async function importCsv(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setError("");
-    setNotice("Reading and checking the dataset…");
-    try {
-      const rows = parseCsv(await file.text());
-      const headers = rows.shift()?.map((header) => header.trim().replace(/^\ufeff/, "")) ?? [];
-      const records = rows
-        .filter((row) => row.some((value) => value.trim()))
-        .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])));
-      const mapped = records.map((record) => {
-        const transcript = record.reviewed_transcript || record.deidentified_transcript;
-        const experimentalGroup = record.experimental_group || record.experimentalgroup;
-        const reviewedLanguage = record.reviewed_language?.trim();
-        const sourceLanguage =
-          reviewedLanguage ||
-          record.languages_present ||
-          record.detected_languages ||
-          record.language;
-        const codeSwitchingHint = reviewedLanguage
-          ? false
-          : csvOptionalBoolean(record.code_switching_detected);
-        return {
-          episodeId: record.episode_id,
-          studentStatus: normalizeStudentStatus(
-            record.student_status ||
-            record.participant_status ||
-            record.graduation_status ||
-            experimentalGroup,
-          ),
-          experimentalGroup,
-          language: resolveEpisodeLanguage(sourceLanguage, transcript, codeSwitchingHint),
-          module: record.module,
-          treatment: normalizeTreatment(
-            record.treatment || record.treatment_assignment || experimentalGroup,
-          ),
-          moduleObjective: record.module_objective,
-          priorContext: record.reviewed_prior_context || record.relevant_prior_context,
-          transcript,
-          privacyReviewStatus: record.privacy_review_status,
-          languageReviewStatus: record.language_review_status,
-          releaseEligible: csvBoolean(record.release_eligible),
-          codeSwitchingDetected: codeSwitchingHint,
-        };
-      });
-      // During this temporary review phase, import every usable episode and
-      // retain review-status fields as metadata rather than using them as gates.
-      const importable = mapped.filter((row) => row.episodeId && row.transcript);
-      const invalid = mapped.length - importable.length;
-      let imported = 0;
-      for (let index = 0; index < importable.length; index += 40) {
-        const response = await fetch("/api/episodes/import", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            batchName: file.name,
-            episodes: importable.slice(index, index + 40),
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || "Import failed.");
-        imported += payload.imported;
-      }
-      if (!imported) {
-        setNotice("");
-        setError(
-          `No rows were imported. ${invalid} row${invalid === 1 ? " is" : "s are"} missing an episode ID or transcript.`,
-        );
-      } else {
-        setNotice(`Imported ${imported} episodes; skipped ${invalid} row${invalid === 1 ? "" : "s"} missing required fields.`);
-        await loadEpisodes(importable[0]?.episodeId);
-      }
-    } catch (importError) {
-      setNotice("");
-      setError(importError instanceof Error ? importError.message : "Unable to import this CSV.");
-    } finally {
-      event.target.value = "";
-    }
-  }
-
   async function signOut() {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.assign("/");
@@ -742,14 +608,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         </div>
 
         <section className="data-tools">
-          <h2>{rater.role === "admin" ? "Dataset" : "My work"}</h2>
-          <input ref={fileInput} type="file" accept=".csv,text/csv" hidden onChange={importCsv} />
-          {rater.role === "admin" && (
-            <>
-              <p>Administrators can import rows with an episode ID and transcript.</p>
-              <button className="secondary-button" onClick={() => fileInput.current?.click()}>Import CSV</button>
-            </>
-          )}
+          <h2>Dataset</h2>
+          <p><strong>{episodes.length}</strong> reviewed episodes are built in and shared with every rater.</p>
           <button className="text-button" onClick={exportMyWork} disabled={!draftsByMe && !completedByMe}>Export my work</button>
         </section>
       </aside>
@@ -768,8 +628,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           <section className="empty-state">
             <div className="empty-icon">✓</div>
             <h1>{episodes.length ? "No episodes match these filters" : "Your review workspace is ready"}</h1>
-            <p>{episodes.length ? "Change a filter or return to My queue." : "Import the blinded dataset to begin."}</p>
-            {!episodes.length && <button className="primary-button" onClick={() => fileInput.current?.click()}>Import CSV</button>}
+            <p>{episodes.length ? "Change a filter or return to My queue." : "The built-in dataset could not be loaded. Refresh the page to try again."}</p>
           </section>
         ) : (
           <>

@@ -9,6 +9,9 @@ const authScreenPath = new URL("../app/AuthScreen.tsx", import.meta.url);
 const serverAuthPath = new URL("../lib/server-auth.ts", import.meta.url);
 const passwordAuthPath = new URL("../lib/password-auth.ts", import.meta.url);
 const languagePath = new URL("../lib/language.ts", import.meta.url);
+const bundledDatasetPath = new URL("../lib/bundled-dataset.ts", import.meta.url);
+const datasetCsvPath = new URL("../data/najah_final_annotation_dataset.csv", import.meta.url);
+const episodesRoutePath = new URL("../app/api/episodes/route.ts", import.meta.url);
 const dimensionsPath = new URL("../lib/episode-dimensions.ts", import.meta.url);
 const rubricPath = new URL("../lib/rubric.ts", import.meta.url);
 const importRoutePath = new URL("../app/api/episodes/import/route.ts", import.meta.url);
@@ -25,12 +28,13 @@ test("ships Najah-specific metadata without starter preview markers", async () =
 });
 
 test("shows every detected language for code-switched conversations", async () => {
-  const [component, language] = await Promise.all([
+  const [component, language, episodesRoute] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(languagePath, "utf8"),
+    readFile(episodesRoutePath, "utf8"),
   ]);
   assert.match(component, /languageLabel\(current\.language\)/);
-  assert.match(component, /code_switching_detected/);
+  assert.match(episodesRoute, /resolveEpisodeLanguage/);
   assert.match(language, /join\(" \+ "\)/);
   assert.match(language, /participant turns/);
   assert.match(language, /arabicCharacters >= 12/);
@@ -39,23 +43,37 @@ test("shows every detected language for code-switched conversations", async () =
 });
 
 test("filters the review queue by the requested three analysis dimensions", async () => {
-  const [component, dimensions, importRoute] = await Promise.all([
+  const [component, dimensions, bundledDataset] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(dimensionsPath, "utf8"),
-    readFile(importRoutePath, "utf8"),
+    readFile(bundledDatasetPath, "utf8"),
   ]);
   assert.match(component, /Student status/);
   assert.match(component, /Module/);
   assert.match(component, /Treatment assignment/);
   assert.match(component, /student_status/);
-  assert.match(component, /experimental_group/);
-  assert.match(component, /treatment_assignment/);
   assert.doesNotMatch(component, /All languages/);
   assert.match(dimensions, /Graduated student/);
   assert.match(dimensions, /Current student/);
   assert.match(dimensions, /Gender-sensitive/);
-  assert.match(importRoute, /student_status/);
-  assert.match(importRoute, /treatment/);
+  assert.match(bundledDataset, /student_status/);
+  assert.match(bundledDataset, /treatment/);
+});
+
+test("bundles and automatically seeds the 300-episode final dataset", async () => {
+  const [component, bundledDataset, datasetCsv, episodesRoute] = await Promise.all([
+    readFile(componentPath, "utf8"),
+    readFile(bundledDatasetPath, "utf8"),
+    readFile(datasetCsvPath, "utf8"),
+    readFile(episodesRoutePath, "utf8"),
+  ]);
+  assert.equal((datasetCsv.match(/^\d+,E\d+,/gm) ?? []).length, 300);
+  assert.match(datasetCsv, /^rater_item_order,episode_id,student_status,language,module,treatment,/);
+  assert.match(bundledDataset, /BUNDLED_EPISODE_COUNT/);
+  assert.match(bundledDataset, /ON CONFLICT\(episode_id\) DO UPDATE/);
+  assert.match(episodesRoute, /ensureBundledDataset\(db\)/);
+  assert.match(component, /reviewed episodes are built in and shared with every rater/);
+  assert.doesNotMatch(component, /Import CSV/);
 });
 
 test("includes the core annotation workflow without temporary release or review gates", async () => {
@@ -70,7 +88,7 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(component, /Critical-failure flags/);
   assert.match(component, /genuinely cannot be assessed/);
   assert.match(component, /Submit & next/);
-  assert.match(component, /Import CSV/);
+  assert.match(component, /reviewed episodes are built in/);
   assert.doesNotMatch(`${component}\n${importRoute}`, /do_not_release|doNotRelease/);
   assert.doesNotMatch(
     importRoute,

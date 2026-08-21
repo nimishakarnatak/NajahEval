@@ -1,4 +1,5 @@
 import { ensureNajahSchema, getD1 } from "@/db";
+import { ensureBundledDataset } from "@/lib/bundled-dataset";
 import { normalizeStudentStatus, normalizeTreatment } from "@/lib/episode-dimensions";
 import { resolveEpisodeLanguage } from "@/lib/language";
 import {
@@ -9,76 +10,6 @@ import {
   keyedRecord,
 } from "@/lib/rubric";
 import { getRaterIdentity } from "@/lib/server-auth";
-
-const LOCAL_DEMO_EPISODES = [
-  {
-    id: "DEMO-AR-001",
-    studentStatus: "current_student",
-    language: "ar",
-    module: "interview_preparation",
-    treatment: "gender_sensitive",
-    objective: "Help the participant practise interviews and improve readiness.",
-    context: "[TURN 001] USER: أبحث عن أول وظيفة لي بعد التخرج.",
-    transcript:
-      "[TURN 001] USER: كيف أستعد لسؤال حدثيني عن نفسك؟\n[TURN 002] NAJAH: ابدئي بملخص موجز عن دراستك، ثم اذكري خبرة أو مشروعًا ذا صلة، واختمي بسبب اهتمامك بهذه الوظيفة.",
-  },
-  {
-    id: "DEMO-FR-001",
-    studentStatus: "current_student",
-    language: "fr",
-    module: "cv_building",
-    treatment: "standard",
-    objective: "Help the participant create or improve usable CV content.",
-    context: "",
-    transcript:
-      "[TURN 001] USER: Mon CV est trop général.\n[TURN 002] NAJAH: Commençons par adapter le résumé au poste visé. Quel métier recherchez-vous et quelles réalisations pouvez-vous quantifier ?",
-  },
-  {
-    id: "DEMO-EN-001",
-    studentStatus: "graduated_student",
-    language: "en",
-    module: "job_search_strategy",
-    treatment: "standard",
-    objective: "Help the participant build a focused, actionable job-search plan.",
-    context: "[TURN 001] USER: I recently finished an economics degree.",
-    transcript:
-      "[TURN 001] USER: I apply everywhere but rarely hear back.\n[TURN 002] NAJAH: Let’s narrow the search to two role families, identify ten suitable employers, and tailor your CV keywords before each application.",
-  },
-];
-
-async function seedLocalPreview(db: D1Database, request: Request) {
-  const hostname = new URL(request.url).hostname;
-  if (hostname !== "localhost" && hostname !== "127.0.0.1") return;
-
-  const count = await db.prepare("SELECT COUNT(*) AS count FROM episodes").first<{
-    count: number;
-  }>();
-  if ((count?.count ?? 0) > 0) return;
-
-  await db.batch(
-    LOCAL_DEMO_EPISODES.map((episode) =>
-      db
-        .prepare(`
-          INSERT OR IGNORE INTO episodes (
-            episode_id, student_status, language, module, treatment,
-            module_objective, prior_context,
-            transcript, privacy_review_status, language_review_status,
-            import_batch, imported_by
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'not_required', 'local-demo', 'system')
-        `)
-        .bind(
-          episode.id,
-          episode.studentStatus,
-          episode.language,
-          episode.module,
-          episode.treatment,
-          episode.objective,
-          episode.context,
-          episode.transcript,
-        ),
-    ),
-  );
-}
 
 /**
  * Reads a JSON object stored in D1 while providing every expected key. A bad or
@@ -115,7 +46,7 @@ export async function GET(request: Request) {
 
   const db = getD1();
   await ensureNajahSchema(db);
-  await seedLocalPreview(db, request);
+  await ensureBundledDataset(db);
 
   const result = await db
     .prepare(`
