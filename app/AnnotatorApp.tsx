@@ -104,18 +104,22 @@ function csvEscape(value: unknown): string {
 
 function transcriptTurns(transcript: string) {
   const turns: { speaker: "USER" | "NAJAH"; text: string; turn: string }[] = [];
-  for (const rawLine of transcript.split(/\r?\n/)) {
-    const match = rawLine.match(/^\[TURN\s+(\d+)\]\s+(USER|NAJAH):\s*(.*)$/i);
-    if (match) {
-      turns.push({
-        turn: match[1],
-        speaker: match[2].toUpperCase() as "USER" | "NAJAH",
-        text: match[3],
-      });
-    } else if (turns.length && rawLine.trim()) {
-      turns[turns.length - 1].text += `\n${rawLine.trim()}`;
-    }
+
+  // Earlier de-identification exports flattened line breaks while retaining
+  // stable [TURN ...] markers. Split on those markers instead of newlines so
+  // every participant and Najah message is rendered as a separate bubble.
+  const turnMarker = /\[TURN\s+(\d+)\]\s+(USER|NAJAH):\s*/gi;
+  const matches = Array.from(transcript.matchAll(turnMarker));
+  for (const [index, match] of matches.entries()) {
+    const messageStart = (match.index ?? 0) + match[0].length;
+    const messageEnd = matches[index + 1]?.index ?? transcript.length;
+    turns.push({
+      turn: match[1],
+      speaker: match[2].toUpperCase() as "USER" | "NAJAH",
+      text: transcript.slice(messageStart, messageEnd).trim(),
+    });
   }
+
   if (!turns.length && transcript.trim()) {
     turns.push({ speaker: "NAJAH", turn: "—", text: transcript.trim() });
   }

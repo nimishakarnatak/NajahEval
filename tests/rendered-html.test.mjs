@@ -93,6 +93,17 @@ test("opens a personal progress list with direct episode navigation", async () =
   assert.match(component, /Select any episode to open it in the evaluation workspace/);
 });
 
+test("separates flattened transcripts into legible participant and Najah turns", async () => {
+  const [component, styles] = await Promise.all([
+    readFile(componentPath, "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(component, /transcript\.matchAll\(turnMarker\)/);
+  assert.match(component, /messageEnd = matches\[index \+ 1\]\?\.index/);
+  assert.match(styles, /\.najah-turn \{[^}]*margin-bottom: 11px/);
+  assert.match(styles, /\.transcript \{[^}]*gap: 17px/);
+});
+
 test("includes the core annotation workflow without temporary release or review gates", async () => {
   const [component, rubric, importRoute] = await Promise.all([
     readFile(componentPath, "utf8"),

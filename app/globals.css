@@ -376,13 +376,13 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .context-card { margin: 18px 26px 0; border: 1px solid #eadbb9; border-radius: 11px; background: #fffaf0; }
 .context-card summary { cursor: pointer; padding: 11px 13px; color: #70501b; font-size: 11px; font-weight: 750; }
 .context-card p { margin: 0; padding: 0 13px 13px; color: #665c49; line-height: 1.65; white-space: pre-wrap; }
-.transcript { padding: 24px 26px 34px; display: grid; gap: 15px; }
+.transcript { padding: 24px 26px 34px; display: grid; gap: 17px; }
 .turn { width: min(88%, 700px); }
 .user-turn { justify-self: start; }
-.najah-turn { justify-self: end; }
+.najah-turn { justify-self: end; margin-bottom: 11px; }
 .speaker-row { gap: 8px; margin: 0 3px 6px; color: #88918f; font-size: 9px; }
 .speaker-row .speaker { color: #4b5855; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-.turn p { margin: 0; padding: 13px 15px; border-radius: 5px 14px 14px 14px; background: #f0f4f2; line-height: 1.72; white-space: pre-wrap; }
+.turn p { margin: 0; padding: 14px 16px; border-radius: 5px 14px 14px 14px; background: #f0f4f2; font-size: 13px; line-height: 1.78; overflow-wrap: anywhere; white-space: pre-wrap; }
 .najah-turn p { border-radius: 14px 5px 14px 14px; background: var(--green-soft); color: #173f36; }
 [dir="rtl"] .user-turn { justify-self: end; }
 [dir="rtl"] .najah-turn { justify-self: start; }
