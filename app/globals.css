@@ -448,10 +448,20 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .evidence-field { display: grid; gap: 6px; margin-top: 10px; }
 .evidence-field > span { color: #4f5c59; font-size: 9px; font-weight: 700; }
 .evidence-field > span strong { color: var(--coral); font-size: 8px; text-transform: uppercase; }
+.evidence-field > span small { color: #8b9492; font-weight: 500; }
 .evidence-field input { height: 34px; font-size: 10px; }
 .evidence-field textarea { min-height: 66px; font-size: 10px; }
 
 .critical-section { padding-top: 4px; border-top: 1px solid var(--line); }
+.episode-ending-section { padding-top: 4px; border-top: 1px solid var(--line); }
+.episode-end-card { margin: 9px 0 0; padding: 13px; border: 1px solid #d8e4e0; border-radius: 11px; background: #f8fbfa; }
+.episode-end-card legend { padding: 0 3px; font-size: 11px; font-weight: 800; }
+.episode-end-card > p { margin: 2px 0 10px; color: var(--muted); font-size: 8px; line-height: 1.5; }
+.episode-end-options { display: grid; gap: 7px; }
+.episode-end-options label { display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px; border: 1px solid #d9e0de; border-radius: 8px; background: white; color: #4f5c59; font-size: 9px; font-weight: 700; line-height: 1.4; cursor: pointer; }
+.episode-end-options label:hover { border-color: #86ad9f; }
+.episode-end-options label.selected { border-color: var(--green); background: var(--green-soft); color: var(--green-dark); box-shadow: inset 0 0 0 1px rgba(18, 110, 90, .08); }
+.episode-end-options input { margin: 1px 0 0; accent-color: var(--green); }
 .critical-flag-card { margin: 9px 0 0; padding: 12px; border: 1px solid #eadfdc; border-radius: 10px; background: #fffdfc; }
 .critical-flag-card legend { padding: 0 3px; font-size: 10px; font-weight: 800; }
 .critical-flag-card > p { margin: 2px 0 9px; color: var(--muted); font-size: 8px; line-height: 1.5; }

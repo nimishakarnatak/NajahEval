@@ -1,0 +1,1 @@
+ALTER TABLE `rubric_annotations` ADD `episode_end_reason` text DEFAULT '' NOT NULL;

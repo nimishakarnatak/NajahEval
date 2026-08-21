@@ -4,7 +4,41 @@
  * Keeping a version in each saved row makes future rubric revisions auditable
  * and prevents results from different instruments being silently combined.
  */
-export const RUBRIC_VERSION = "najah-evidence-v2";
+export const RUBRIC_VERSION = "najah-evidence-v3";
+
+/**
+ * Mutually exclusive, observable reasons that a module episode stopped.
+ *
+ * The labels avoid attributing an unobserved motive to the participant. For
+ * example, `no_further_participant_reply_observed` records what is present in
+ * the transcript without claiming that the participant chose to disengage.
+ */
+export const EPISODE_END_REASONS = [
+  { value: "task_completed", label: "Task completed" },
+  {
+    value: "output_delivered_unconfirmed",
+    label: "Output delivered, but completion was not confirmed",
+  },
+  {
+    value: "participant_moved_module",
+    label: "Participant moved to another module",
+  },
+  {
+    value: "no_further_participant_reply_observed",
+    label: "No further participant reply was observed",
+  },
+  {
+    value: "no_further_najah_reply_observed",
+    label: "No further Najah reply was observed",
+  },
+  { value: "system_or_technical_failure", label: "System or technical failure" },
+  {
+    value: "cannot_determine",
+    label: "Cannot determine from the available record",
+  },
+] as const;
+
+export type EpisodeEndReason = (typeof EPISODE_END_REASONS)[number]["value"];
 
 export const DIMENSION_KEYS = [
   "contextualAppropriateness",

@@ -77,6 +77,7 @@ export async function ensureNajahSchema(db: D1Database): Promise<void> {
         justifications_json TEXT NOT NULL DEFAULT '{}',
         critical_flags_json TEXT NOT NULL DEFAULT '{}',
         critical_evidence_json TEXT NOT NULL DEFAULT '{}',
+        episode_end_reason TEXT NOT NULL DEFAULT '',
         comments TEXT NOT NULL DEFAULT '',
         rubric_version TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'draft',

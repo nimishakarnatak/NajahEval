@@ -117,6 +117,7 @@ export const rubricAnnotations = sqliteTable(
     justificationsJson: text("justifications_json").notNull().default("{}"),
     criticalFlagsJson: text("critical_flags_json").notNull().default("{}"),
     criticalEvidenceJson: text("critical_evidence_json").notNull().default("{}"),
+    episodeEndReason: text("episode_end_reason").notNull().default(""),
     comments: text("comments").notNull().default(""),
     rubricVersion: text("rubric_version").notNull(),
     status: text("status").notNull().default("draft"),

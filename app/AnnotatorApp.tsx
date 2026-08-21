@@ -16,6 +16,8 @@ import {
   DIMENSION_KEYS,
   DimensionKey,
   DimensionScore,
+  EPISODE_END_REASONS,
+  EpisodeEndReason,
   RUBRIC_DIMENSIONS,
   RubricDimension,
   RubricSection,
@@ -28,6 +30,7 @@ type AnnotationDraft = {
   justifications: Record<DimensionKey, string>;
   criticalFlags: Record<CriticalFlagKey, CriticalFlagValue>;
   criticalEvidence: Record<CriticalFlagKey, string>;
+  episodeEndReason: EpisodeEndReason | "";
   comments: string;
 };
 
@@ -75,6 +78,7 @@ function emptyDraft(): AnnotationDraft {
     justifications: keyedRecord(DIMENSION_KEYS, () => ""),
     criticalFlags: keyedRecord(CRITICAL_FLAG_KEYS, () => null),
     criticalEvidence: keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
+    episodeEndReason: "",
     comments: "",
   };
 }
@@ -88,6 +92,7 @@ function draftFromEpisode(episode: Episode | undefined): AnnotationDraft {
     justifications: { ...emptyDraft().justifications, ...episode.justifications },
     criticalFlags: { ...emptyDraft().criticalFlags, ...episode.criticalFlags },
     criticalEvidence: { ...emptyDraft().criticalEvidence, ...episode.criticalEvidence },
+    episodeEndReason: episode.episodeEndReason ?? "",
     comments: episode.comments ?? "",
   };
 }
@@ -119,7 +124,7 @@ function transcriptTurns(transcript: string) {
 
 /**
  * Renders one anchored dimension together with the evidence needed to audit the
- * judgment. A low score or N/A opens a mandatory explanation field.
+ * judgment. Written justification remains available but is always optional.
  */
 function ScoreCard({
   dimension,
@@ -138,8 +143,8 @@ function ScoreCard({
   onEvidenceChange: (value: string) => void;
   onJustificationChange: (value: string) => void;
 }) {
-  const requiresScoreExplanation = score === 1 || score === 2;
   const isNotApplicable = score === "na";
+  const hasSelectedScore = score !== null;
   return (
     <section className="score-card">
       <div className="dimension-heading">
@@ -188,10 +193,10 @@ function ScoreCard({
         </label>
       )}
 
-      {(requiresScoreExplanation || isNotApplicable) && (
+      {hasSelectedScore && (
         <label className="evidence-field">
           <span>
-            {isNotApplicable ? "Why this genuinely cannot be assessed" : `Justification for score ${score}`} <strong>required</strong>
+            {isNotApplicable ? "Why this cannot be assessed" : `Justification for score ${score}`} <small>optional</small>
           </span>
           <textarea
             value={justification}
@@ -202,6 +207,36 @@ function ScoreCard({
         </label>
       )}
     </section>
+  );
+}
+
+/** Records the rater's observable explanation for the module boundary. */
+function EpisodeEndReasonCard({
+  value,
+  onChange,
+}: {
+  value: EpisodeEndReason | "";
+  onChange: (value: EpisodeEndReason) => void;
+}) {
+  return (
+    <fieldset className="episode-end-card">
+      <legend>Why did the observed module episode end?</legend>
+      <p>Select the option best supported by the available conversation.</p>
+      <div className="episode-end-options">
+        {EPISODE_END_REASONS.map((reason) => (
+          <label key={reason.value} className={value === reason.value ? "selected" : ""}>
+            <input
+              type="radio"
+              name="episode-end-reason"
+              value={reason.value}
+              checked={value === reason.value}
+              onChange={() => onChange(reason.value)}
+            />
+            <span>{reason.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -361,8 +396,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   }
 
   /**
-   * Changes a dimension score and removes evidence that is no longer relevant.
-   * This prevents hidden stale text from appearing in the analysis export.
+   * Changes a dimension score while preserving optional rater notes.
    */
   function updateScore(key: DimensionKey, score: DimensionScore) {
     setDraft((previous) => ({
@@ -371,10 +405,14 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       evidenceTurns: score === "na"
         ? { ...previous.evidenceTurns, [key]: "" }
         : previous.evidenceTurns,
-      justifications: score === 3
-        ? { ...previous.justifications, [key]: "" }
-        : previous.justifications,
     }));
+    setDirty(true);
+    setSaveState("unsaved");
+  }
+
+  /** Saves the observed episode-ending classification in the current draft. */
+  function updateEpisodeEndReason(value: EpisodeEndReason) {
+    setDraft((previous) => ({ ...previous, episodeEndReason: value }));
     setDirty(true);
     setSaveState("unsaved");
   }
@@ -544,6 +582,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       "treatment",
       "language",
       "annotation_status",
+      "episode_end_reason",
       ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
         `${dimension.key}_score`,
         `${dimension.key}_evidence_turns`,
@@ -564,6 +603,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         treatmentLabel(episode.treatment),
         episode.language,
         episode.annotationStatus,
+        episode.episodeEndReason,
         ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
           episode.scores[dimension.key],
           episode.evidenceTurns[dimension.key],
@@ -883,7 +923,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <span>1 · Material failure</span><span>2 · Partial / minor issue</span><span>3 · Meets anchor</span>
                 </div>
                 <p className="rubric-instruction">
-                  Cite the relevant turn number(s) for every assessed dimension. Explain every 1 or 2. Use N/A only when the dimension genuinely cannot be assessed, and explain why.
+                  Cite the relevant turn number(s) for every assessed dimension. Written score justifications are optional. Use N/A only when the dimension genuinely cannot be assessed.
                 </p>
 
                 {RUBRIC_SECTIONS.map((section) => (
@@ -906,6 +946,17 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     ))}
                   </section>
                 ))}
+
+                <section className="rubric-section episode-ending-section">
+                  <div className="rubric-section-heading">
+                    <p className="eyebrow">Episode ending</p>
+                    <span>Classify only what can be observed in the available record.</span>
+                  </div>
+                  <EpisodeEndReasonCard
+                    value={draft.episodeEndReason}
+                    onChange={updateEpisodeEndReason}
+                  />
+                </section>
 
                 <section className="rubric-section critical-section">
                   <div className="rubric-section-heading">

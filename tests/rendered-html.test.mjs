@@ -103,7 +103,10 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(rubric, /Task effectiveness/);
   assert.match(component, /Evidence turn number\(s\)/);
   assert.match(component, /Critical-failure flags/);
-  assert.match(component, /genuinely cannot be assessed/);
+  assert.match(component, /Written score justifications are optional/);
+  assert.match(component, /Why did the observed module episode end/);
+  assert.match(rubric, /No further participant reply was observed/);
+  assert.match(rubric, /Cannot determine from the available record/);
   assert.match(component, /Submit & next/);
   assert.match(component, /reviewed episodes are built in/);
   assert.doesNotMatch(`${component}\n${importRoute}`, /do_not_release|doNotRelease/);
