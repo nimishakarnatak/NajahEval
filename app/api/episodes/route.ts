@@ -1,4 +1,5 @@
 import { ensureNajahSchema, getD1 } from "@/db";
+import { normalizeStudentStatus, normalizeTreatment } from "@/lib/episode-dimensions";
 import { resolveEpisodeLanguage } from "@/lib/language";
 import {
   CRITICAL_FLAG_KEYS,
@@ -12,8 +13,10 @@ import { getRaterIdentity } from "@/lib/server-auth";
 const LOCAL_DEMO_EPISODES = [
   {
     id: "DEMO-AR-001",
+    studentStatus: "current_student",
     language: "ar",
     module: "interview_preparation",
+    treatment: "gender_sensitive",
     objective: "Help the participant practise interviews and improve readiness.",
     context: "[TURN 001] USER: أبحث عن أول وظيفة لي بعد التخرج.",
     transcript:
@@ -21,8 +24,10 @@ const LOCAL_DEMO_EPISODES = [
   },
   {
     id: "DEMO-FR-001",
+    studentStatus: "current_student",
     language: "fr",
     module: "cv_building",
+    treatment: "standard",
     objective: "Help the participant create or improve usable CV content.",
     context: "",
     transcript:
@@ -30,8 +35,10 @@ const LOCAL_DEMO_EPISODES = [
   },
   {
     id: "DEMO-EN-001",
+    studentStatus: "graduated_student",
     language: "en",
     module: "job_search_strategy",
+    treatment: "standard",
     objective: "Help the participant build a focused, actionable job-search plan.",
     context: "[TURN 001] USER: I recently finished an economics degree.",
     transcript:
@@ -53,15 +60,18 @@ async function seedLocalPreview(db: D1Database, request: Request) {
       db
         .prepare(`
           INSERT OR IGNORE INTO episodes (
-            episode_id, language, module, module_objective, prior_context,
+            episode_id, student_status, language, module, treatment,
+            module_objective, prior_context,
             transcript, privacy_review_status, language_review_status,
             import_batch, imported_by
-          ) VALUES (?, ?, ?, ?, ?, ?, 'approved', 'not_required', 'local-demo', 'system')
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'not_required', 'local-demo', 'system')
         `)
         .bind(
           episode.id,
+          episode.studentStatus,
           episode.language,
           episode.module,
+          episode.treatment,
           episode.objective,
           episode.context,
           episode.transcript,
@@ -111,8 +121,10 @@ export async function GET(request: Request) {
     .prepare(`
       SELECT
         e.episode_id AS episodeId,
+        e.student_status AS studentStatus,
         e.language,
         e.module,
+        e.treatment,
         e.module_objective AS moduleObjective,
         e.prior_context AS priorContext,
         e.transcript,
@@ -137,8 +149,13 @@ export async function GET(request: Request) {
         ON current.episode_id = e.episode_id
        AND current.rater_id = ?
       ORDER BY
-        CASE e.language WHEN 'ar' THEN 1 WHEN 'fr' THEN 2 WHEN 'en' THEN 3 ELSE 4 END,
+        CASE e.student_status
+          WHEN 'graduated_student' THEN 1
+          WHEN 'current_student' THEN 2
+          ELSE 3
+        END,
         e.module,
+        CASE e.treatment WHEN 'standard' THEN 1 WHEN 'gender_sensitive' THEN 2 ELSE 3 END,
         e.episode_id
     `)
     .bind(rater.id)
@@ -156,6 +173,8 @@ export async function GET(request: Request) {
       justifications: parseKeyedJson<string>(episode.justificationsJson, DIMENSION_KEYS, () => ""),
       criticalFlags: parseKeyedJson<CriticalFlagValue>(episode.criticalFlagsJson, CRITICAL_FLAG_KEYS, () => null),
       criticalEvidence: parseKeyedJson<string>(episode.criticalEvidenceJson, CRITICAL_FLAG_KEYS, () => ""),
+      studentStatus: normalizeStudentStatus(episode.studentStatus),
+      treatment: normalizeTreatment(episode.treatment),
       language: resolveEpisodeLanguage(
         typeof episode.language === "string" ? episode.language : undefined,
         typeof episode.transcript === "string" ? episode.transcript : "",

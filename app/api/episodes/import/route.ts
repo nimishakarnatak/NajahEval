@@ -1,11 +1,15 @@
 import { ensureNajahSchema, getD1 } from "@/db";
+import { normalizeStudentStatus, normalizeTreatment } from "@/lib/episode-dimensions";
 import { resolveEpisodeLanguage } from "@/lib/language";
 import { getRaterIdentity } from "@/lib/server-auth";
 
 type ImportEpisode = {
   episodeId?: string;
+  studentStatus?: string;
+  experimentalGroup?: string;
   language?: string;
   module?: string;
+  treatment?: string;
   moduleObjective?: string;
   priorContext?: string;
   transcript?: string;
@@ -46,12 +50,15 @@ export async function POST(request: Request) {
     }
     accepted.push({
       episodeId,
+      studentStatus: normalizeStudentStatus(row.studentStatus || row.experimentalGroup),
+      experimentalGroup: row.experimentalGroup?.trim() || "",
       language: resolveEpisodeLanguage(
         row.language,
         row.transcript,
         row.codeSwitchingDetected,
       ),
       module: row.module?.trim() || "unknown",
+      treatment: normalizeTreatment(row.treatment),
       moduleObjective: row.moduleObjective?.trim() || "",
       priorContext: row.priorContext?.trim() || "",
       transcript: row.transcript.trim(),
@@ -70,13 +77,16 @@ export async function POST(request: Request) {
         db
           .prepare(`
             INSERT INTO episodes (
-              episode_id, language, module, module_objective, prior_context,
+              episode_id, student_status, language, module, treatment,
+              module_objective, prior_context,
               transcript, privacy_review_status, language_review_status,
               import_batch, imported_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(episode_id) DO UPDATE SET
+              student_status = excluded.student_status,
               language = excluded.language,
               module = excluded.module,
+              treatment = excluded.treatment,
               module_objective = excluded.module_objective,
               prior_context = excluded.prior_context,
               transcript = excluded.transcript,
@@ -88,8 +98,10 @@ export async function POST(request: Request) {
           `)
           .bind(
             episode.episodeId,
+            episode.studentStatus,
             episode.language,
             episode.module,
+            episode.treatment,
             episode.moduleObjective,
             episode.priorContext,
             episode.transcript,

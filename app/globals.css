@@ -170,7 +170,7 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 
 .episode-toolbar { justify-content: space-between; max-width: 1320px; margin: 0 auto 14px; }
 .episode-toolbar > div:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
-.language-badge, .module-badge, .episode-id {
+.student-status-badge, .language-badge, .module-badge, .treatment-badge, .episode-id {
   display: inline-flex;
   align-items: center;
   min-height: 26px;
@@ -179,10 +179,14 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   font-size: 10px;
   font-weight: 750;
 }
+.student-status-badge { background: #e4eef7; color: #345d7c; }
 .language-badge { background: var(--green); color: white; }
 .language-fr { background: #496d9b; }
 .language-en { background: #7c5f99; }
 .module-badge { background: var(--sand); color: #70501b; }
+.treatment-badge { background: #eee9f5; color: #655078; }
+.treatment-gender_sensitive { background: #f5e6ee; color: #7f3f60; }
+.treatment-unknown { background: #ecefed; color: #64706d; }
 .episode-id { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .episode-nav { gap: 7px; }
 .episode-nav > span { color: var(--muted); font-size: 10px; margin-right: 3px; }

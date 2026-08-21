@@ -6,7 +6,7 @@ Najah guidance episodes.
 ## Annotator workflow
 
 - Import the manually approved blinded CSV.
-- Filter episodes by queue, language, module, or status.
+- Filter episodes by student status, module, treatment assignment, or review status.
 - Read relevant prior context and the complete module transcript.
 - Score five turn-level and four module-level dimensions on the anchored 1–3
   scale, with explicit N/A only when a dimension cannot genuinely be assessed.
@@ -28,6 +28,11 @@ During the current review phase, the importer accepts every row with an episode
 ID and transcript. Privacy, language-review, and release fields are retained as
 metadata but do not gate import. This temporary behavior should be revisited
 before any dataset is released outside the authorized review team.
+
+The importer reads `student_status` when it is present. For the current Najah
+export it also maps `experimental_group` values: `group1` is a current student
+and `group2` is a graduated student. Treatment values are displayed as
+`Standard` (`not-gender-sensitive`) or `Gender-sensitive`.
 
 ## Local development
 

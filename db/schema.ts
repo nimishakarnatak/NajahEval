@@ -43,8 +43,10 @@ export const episodes = sqliteTable(
   "episodes",
   {
     episodeId: text("episode_id").primaryKey(),
+    studentStatus: text("student_status").notNull().default("unknown"),
     language: text("language").notNull(),
     module: text("module").notNull(),
+    treatment: text("treatment").notNull().default("unknown"),
     moduleObjective: text("module_objective").notNull().default(""),
     priorContext: text("prior_context").notNull().default(""),
     transcript: text("transcript").notNull(),
@@ -56,6 +58,11 @@ export const episodes = sqliteTable(
   },
   (table) => [
     index("idx_episodes_language_module").on(table.language, table.module),
+    index("idx_episodes_student_module_treatment").on(
+      table.studentStatus,
+      table.module,
+      table.treatment,
+    ),
   ],
 );
 

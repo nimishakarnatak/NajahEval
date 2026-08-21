@@ -9,6 +9,7 @@ const authScreenPath = new URL("../app/AuthScreen.tsx", import.meta.url);
 const serverAuthPath = new URL("../lib/server-auth.ts", import.meta.url);
 const passwordAuthPath = new URL("../lib/password-auth.ts", import.meta.url);
 const languagePath = new URL("../lib/language.ts", import.meta.url);
+const dimensionsPath = new URL("../lib/episode-dimensions.ts", import.meta.url);
 const rubricPath = new URL("../lib/rubric.ts", import.meta.url);
 const importRoutePath = new URL("../app/api/episodes/import/route.ts", import.meta.url);
 const registerRoutePath = new URL("../app/api/auth/register/route.ts", import.meta.url);
@@ -35,6 +36,26 @@ test("shows every detected language for code-switched conversations", async () =
   assert.match(language, /arabicCharacters >= 12/);
   assert.match(language, /frenchScore >= 3/);
   assert.match(language, /englishScore >= 3/);
+});
+
+test("filters the review queue by the requested three analysis dimensions", async () => {
+  const [component, dimensions, importRoute] = await Promise.all([
+    readFile(componentPath, "utf8"),
+    readFile(dimensionsPath, "utf8"),
+    readFile(importRoutePath, "utf8"),
+  ]);
+  assert.match(component, /Student status/);
+  assert.match(component, /Module/);
+  assert.match(component, /Treatment assignment/);
+  assert.match(component, /student_status/);
+  assert.match(component, /experimental_group/);
+  assert.match(component, /treatment_assignment/);
+  assert.doesNotMatch(component, /All languages/);
+  assert.match(dimensions, /Graduated student/);
+  assert.match(dimensions, /Current student/);
+  assert.match(dimensions, /Gender-sensitive/);
+  assert.match(importRoute, /student_status/);
+  assert.match(importRoute, /treatment/);
 });
 
 test("includes the core annotation workflow without temporary release or review gates", async () => {

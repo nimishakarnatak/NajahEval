@@ -1,6 +1,14 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  STUDENT_STATUS_VALUES,
+  TREATMENT_VALUES,
+  normalizeStudentStatus,
+  normalizeTreatment,
+  studentStatusLabel,
+  treatmentLabel,
+} from "@/lib/episode-dimensions";
 import { languageBadgeTone, languageLabel, resolveEpisodeLanguage } from "@/lib/language";
 import {
   CRITICAL_FLAGS,
@@ -27,8 +35,10 @@ type AnnotationDraft = {
 
 type Episode = AnnotationDraft & {
   episodeId: string;
+  studentStatus: string;
   language: string;
   module: string;
+  treatment: string;
   moduleObjective: string;
   priorContext: string;
   transcript: string;
@@ -303,8 +313,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
-  const [languageFilter, setLanguageFilter] = useState("all");
+  const [studentStatusFilter, setStudentStatusFilter] = useState("all");
   const [moduleFilter, setModuleFilter] = useState("all");
+  const [treatmentFilter, setTreatmentFilter] = useState("all");
   const [viewFilter, setViewFilter] = useState<ViewFilter>("queue");
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -344,16 +355,12 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setSaveState("saved");
   }, [current]);
 
-  const languages = useMemo(
-    () => Array.from(new Set(episodes.map((episode) => episode.language))).sort((left, right) =>
-      languageLabel(left).localeCompare(languageLabel(right)),
-    ),
-    [episodes],
-  );
   const modules = useMemo(
     () => Array.from(new Set(episodes.map((episode) => episode.module))).sort(),
     [episodes],
   );
+  const hasUnknownStudentStatus = episodes.some((episode) => episode.studentStatus === "unknown");
+  const hasUnknownTreatment = episodes.some((episode) => episode.treatment === "unknown");
 
   const filteredEpisodes = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -362,18 +369,23 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         !query ||
         episode.episodeId.toLowerCase().includes(query) ||
         episode.transcript.toLowerCase().includes(query) ||
+        studentStatusLabel(episode.studentStatus).toLowerCase().includes(query) ||
         languageLabel(episode.language).toLowerCase().includes(query) ||
+        treatmentLabel(episode.treatment).toLowerCase().includes(query) ||
         (MODULE_LABELS[episode.module] || episode.module).toLowerCase().includes(query);
-      const matchesLanguage = languageFilter === "all" || episode.language === languageFilter;
+      const matchesStudentStatus =
+        studentStatusFilter === "all" || episode.studentStatus === studentStatusFilter;
       const matchesModule = moduleFilter === "all" || episode.module === moduleFilter;
+      const matchesTreatment =
+        treatmentFilter === "all" || episode.treatment === treatmentFilter;
       const matchesView =
         viewFilter === "all" ||
         (viewFilter === "queue" && episode.annotationStatus !== "complete" && episode.completedRaterCount < 2) ||
         (viewFilter === "drafts" && episode.annotationStatus === "draft") ||
         (viewFilter === "completed" && episode.annotationStatus === "complete");
-      return matchesSearch && matchesLanguage && matchesModule && matchesView;
+      return matchesSearch && matchesStudentStatus && matchesModule && matchesTreatment && matchesView;
     });
-  }, [episodes, languageFilter, moduleFilter, search, viewFilter]);
+  }, [episodes, moduleFilter, search, studentStatusFilter, treatmentFilter, viewFilter]);
 
   useEffect(() => {
     if (filteredEpisodes.length && !filteredEpisodes.some((episode) => episode.episodeId === selectedId)) {
@@ -527,6 +539,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])));
       const mapped = records.map((record) => {
         const transcript = record.reviewed_transcript || record.deidentified_transcript;
+        const experimentalGroup = record.experimental_group || record.experimentalgroup;
         const reviewedLanguage = record.reviewed_language?.trim();
         const sourceLanguage =
           reviewedLanguage ||
@@ -538,8 +551,18 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           : csvOptionalBoolean(record.code_switching_detected);
         return {
           episodeId: record.episode_id,
+          studentStatus: normalizeStudentStatus(
+            record.student_status ||
+            record.participant_status ||
+            record.graduation_status ||
+            experimentalGroup,
+          ),
+          experimentalGroup,
           language: resolveEpisodeLanguage(sourceLanguage, transcript, codeSwitchingHint),
           module: record.module,
+          treatment: normalizeTreatment(
+            record.treatment || record.treatment_assignment || experimentalGroup,
+          ),
           moduleObjective: record.module_objective,
           priorContext: record.reviewed_prior_context || record.relevant_prior_context,
           transcript,
@@ -592,8 +615,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   function exportMyWork() {
     const columns = [
       "episode_id",
-      "language",
+      "student_status",
       "module",
+      "treatment",
+      "language",
       "annotation_status",
       ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
         `${dimension.key}_score`,
@@ -610,8 +635,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       .filter((episode) => episode.annotationStatus)
       .map((episode) => [
         episode.episodeId,
-        episode.language,
+        studentStatusLabel(episode.studentStatus),
         episode.module,
+        treatmentLabel(episode.treatment),
+        episode.language,
         episode.annotationStatus,
         ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
           episode.scores[dimension.key],
@@ -686,10 +713,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ID, module, or text" />
           </label>
           <label>
-            <span>Language</span>
-            <select value={languageFilter} onChange={(event) => setLanguageFilter(event.target.value)}>
-              <option value="all">All languages</option>
-              {languages.map((language) => <option key={language} value={language}>{languageLabel(language)}</option>)}
+            <span>Student status</span>
+            <select value={studentStatusFilter} onChange={(event) => setStudentStatusFilter(event.target.value)}>
+              <option value="all">All student statuses</option>
+              {STUDENT_STATUS_VALUES.map((status) => (
+                <option key={status} value={status}>{studentStatusLabel(status)}</option>
+              ))}
+              {hasUnknownStudentStatus && <option value="unknown">Status not supplied</option>}
             </select>
           </label>
           <label>
@@ -697,6 +727,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
             <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)}>
               <option value="all">All modules</option>
               {modules.map((module) => <option key={module} value={module}>{MODULE_LABELS[module] || module}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Treatment assignment</span>
+            <select value={treatmentFilter} onChange={(event) => setTreatmentFilter(event.target.value)}>
+              <option value="all">All treatments</option>
+              {TREATMENT_VALUES.map((treatment) => (
+                <option key={treatment} value={treatment}>{treatmentLabel(treatment)}</option>
+              ))}
+              {hasUnknownTreatment && <option value="unknown">Treatment not supplied</option>}
             </select>
           </label>
         </div>
@@ -735,8 +775,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           <>
             <div className="episode-toolbar">
               <div>
-                <span className={`language-badge language-${languageBadgeTone(current.language)}`}>{languageLabel(current.language)}</span>
+                <span className="student-status-badge">{studentStatusLabel(current.studentStatus)}</span>
                 <span className="module-badge">{MODULE_LABELS[current.module] || current.module}</span>
+                <span className={`treatment-badge treatment-${current.treatment}`}>{treatmentLabel(current.treatment)}</span>
+                <span className={`language-badge language-${languageBadgeTone(current.language)}`}>{languageLabel(current.language)}</span>
                 <span className="episode-id">{current.episodeId}</span>
               </div>
               <div className="episode-nav">

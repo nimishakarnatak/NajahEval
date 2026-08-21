@@ -32,8 +32,10 @@ export async function ensureNajahSchema(db: D1Database): Promise<void> {
     db.prepare(`
       CREATE TABLE IF NOT EXISTS episodes (
         episode_id TEXT PRIMARY KEY,
+        student_status TEXT NOT NULL DEFAULT 'unknown',
         language TEXT NOT NULL,
         module TEXT NOT NULL,
+        treatment TEXT NOT NULL DEFAULT 'unknown',
         module_objective TEXT NOT NULL DEFAULT '',
         prior_context TEXT NOT NULL DEFAULT '',
         transcript TEXT NOT NULL,
@@ -85,6 +87,10 @@ export async function ensureNajahSchema(db: D1Database): Promise<void> {
     db.prepare(`
       CREATE INDEX IF NOT EXISTS idx_episodes_language_module
       ON episodes(language, module)
+    `),
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_episodes_student_module_treatment
+      ON episodes(student_status, module, treatment)
     `),
     db.prepare(`
       CREATE INDEX IF NOT EXISTS idx_annotations_episode_status
