@@ -2,12 +2,13 @@ import { headers } from "next/headers";
 
 import { ensureNajahSchema, getDatabase } from "@/db";
 import { digestSessionToken, readSessionToken } from "@/lib/password-auth";
+import type { UserRole } from "@/lib/user-roles";
 
 export type RaterIdentity = {
   id: string;
   email: string;
   displayName: string;
-  role: "admin" | "rater";
+  role: UserRole;
 };
 
 function hostnameFromHeaders(requestHeaders: Headers): string {
@@ -53,10 +54,22 @@ export async function getRaterIdentity(request?: Request): Promise<RaterIdentity
       INNER JOIN users ON users.user_id = auth_sessions.user_id
       WHERE auth_sessions.session_hash = ?
         AND auth_sessions.expires_at > ?
+        AND users.is_active = TRUE
       LIMIT 1
     `)
     .bind(tokenHash, now)
     .first<RaterIdentity>();
 
-  return user ?? null;
+  if (!user) return null;
+
+  // Keep the configured owner authoritative even when the account was created
+  // before ADMIN_EMAIL was set. This also upgrades an existing live session on
+  // its next request, so the administrator does not need a database edit.
+  const adminEmail = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
+  if (adminEmail && user.email.toLowerCase() === adminEmail && user.role !== "admin") {
+    await db.prepare("UPDATE users SET role = 'admin' WHERE user_id = ?").bind(user.id).run();
+    user.role = "admin";
+  }
+
+  return user;
 }

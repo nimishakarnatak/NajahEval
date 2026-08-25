@@ -4,12 +4,13 @@ import { redirect } from "next/navigation";
 
 import { getAdminProgress } from "@/lib/admin-progress";
 import { getRaterIdentity } from "@/lib/server-auth";
+import { AdminParticipantManager } from "./AdminParticipantManager";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Evaluator progress · Najah Review Studio",
-  description: "Administrator dashboard for monitoring Najah evaluator progress.",
+  title: "Participant administration · Najah Review Studio",
+  description: "Administrator dashboard for managing access and monitoring evaluator progress.",
 };
 
 /** Formats activity timestamps consistently while keeping an explicit empty state. */
@@ -61,10 +62,10 @@ export default async function AdminDashboardPage() {
         <section className="admin-page-heading">
           <div>
             <p className="admin-eyebrow">Administration dashboard</p>
-            <h1>Evaluator progress</h1>
+            <h1>Participants and evaluator progress</h1>
             <p>
-              Monitor saved work across registered evaluator accounts. Counts update
-              whenever this page is refreshed.
+              Manage who can rate or view the dataset, and monitor saved work across
+              evaluator accounts. Counts update whenever this page is refreshed.
             </p>
           </div>
           <div className="admin-overall-progress">
@@ -83,6 +84,8 @@ export default async function AdminDashboardPage() {
             <small>{progress.completedRatings} of {progress.expectedRatings} required independent ratings</small>
           </div>
         </section>
+
+        <AdminParticipantManager adminEmail={admin.email} />
 
         <section className="admin-summary-grid" aria-label="Evaluation summary">
           <article>

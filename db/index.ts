@@ -1,6 +1,9 @@
 import { neon } from "@neondatabase/serverless";
 
-import { NAJAH_SCHEMA_STATEMENTS } from "@/db/schema";
+import {
+  NAJAH_SCHEMA_MIGRATION_STATEMENTS,
+  NAJAH_SCHEMA_STATEMENTS,
+} from "@/db/schema";
 
 /** Values accepted by the parameterized SQL adapter. */
 export type DatabaseValue = string | number | boolean | null | Date | Uint8Array;
@@ -133,11 +136,14 @@ let schemaReady: Promise<void> | null = null;
 export async function ensureNajahSchema(db: AppDatabase): Promise<void> {
   if (!schemaReady) {
     schemaReady = (async () => {
-      try {
-        await db.prepare("SELECT user_id FROM users LIMIT 1").first();
-      } catch {
-        await db.batch(NAJAH_SCHEMA_STATEMENTS.map((statement) => db.prepare(statement)));
-      }
+      // Run the idempotent schema and upgrade statements together under the
+      // advisory lock. Existing installations are upgraded automatically, while
+      // a fresh database is still initialized in a single transaction.
+      await db.batch(
+        [...NAJAH_SCHEMA_STATEMENTS, ...NAJAH_SCHEMA_MIGRATION_STATEMENTS].map(
+          (statement) => db.prepare(statement),
+        ),
+      );
     })().catch((error: unknown) => {
       schemaReady = null;
       throw error;
