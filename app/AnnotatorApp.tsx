@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   STUDENT_STATUS_VALUES,
@@ -859,6 +860,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
               <small>{rater.email} · {rater.role === "admin" ? "Admin" : "Rater"}</small>
             </span>
           </div>
+          {rater.role === "admin" && (
+            <Link href="/admin" className="admin-dashboard-link">Dashboard</Link>
+          )}
           <button className="sign-out-button" onClick={() => void signOut()}>Sign out</button>
         </div>
       </header>

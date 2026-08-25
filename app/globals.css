@@ -100,6 +100,25 @@ button:disabled { cursor: not-allowed; opacity: 0.48; }
   font-weight: 750;
 }
 .sign-out-button:hover { border-color: #86ad9f; color: var(--green-dark); }
+.admin-dashboard-link, .admin-back-link {
+  min-height: 33px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid #b9d3ca;
+  border-radius: 8px;
+  background: var(--green-soft);
+  color: var(--green-dark);
+  font-size: 10px;
+  font-weight: 750;
+  text-decoration: none;
+}
+.admin-dashboard-link:hover, .admin-back-link:hover {
+  border-color: #78aa99;
+  background: #d9eee7;
+}
+.brand-link { color: inherit; text-decoration: none; }
+.brand-link:hover strong { color: var(--green-dark); }
 
 .sidebar {
   grid-area: sidebar;
@@ -482,10 +501,10 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .episode-end-card legend { padding: 0 3px; font-size: 11px; font-weight: 800; }
 .episode-end-card > p { margin: 2px 0 10px; color: var(--muted); font-size: 8px; line-height: 1.5; }
 .episode-end-options { display: grid; gap: 7px; }
-.episode-end-options label { display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px; border: 1px solid #d9e0de; border-radius: 8px; background: white; color: #4f5c59; font-size: 9px; font-weight: 700; line-height: 1.4; cursor: pointer; }
+.episode-end-options label { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 46px; padding: 9px 10px; border: 1px solid #d9e0de; border-radius: 8px; background: white; color: #4f5c59; font-size: 9px; font-weight: 700; line-height: 1.4; cursor: pointer; }
 .episode-end-options label:hover { border-color: #86ad9f; }
 .episode-end-options label.selected { border-color: var(--green); background: var(--green-soft); color: var(--green-dark); box-shadow: inset 0 0 0 1px rgba(18, 110, 90, .08); }
-.episode-end-options input { margin: 1px 0 0; accent-color: var(--green); }
+.episode-end-options input { width: 16px; height: 16px; min-width: 16px; margin: 0; padding: 0; justify-self: start; accent-color: var(--green); box-shadow: none; }
 .critical-flag-card { margin: 9px 0 0; padding: 12px; border: 1px solid #eadfdc; border-radius: 10px; background: #fffdfc; }
 .critical-flag-card legend { padding: 0 3px; font-size: 10px; font-weight: 800; }
 .critical-flag-card > p { margin: 2px 0 9px; color: var(--muted); font-size: 8px; line-height: 1.5; }
@@ -590,10 +609,198 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .auth-submit:hover { background: var(--green-dark); }
 .auth-help { margin: 18px 0 0; color: var(--muted); font-size: 10px; text-align: center; }
 
+/* Administrator progress dashboard */
+.admin-shell { min-height: 100vh; background: var(--canvas); }
+.admin-topbar { height: 68px; }
+.admin-main {
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 42px 0 54px;
+}
+.admin-page-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 390px);
+  align-items: end;
+  gap: 36px;
+  margin-bottom: 25px;
+}
+.admin-eyebrow {
+  margin: 0 0 8px;
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.admin-page-heading h1 {
+  margin: 0;
+  font: 600 clamp(32px, 4vw, 46px)/1.08 Georgia, serif;
+  letter-spacing: -.035em;
+}
+.admin-page-heading > div:first-child > p:last-child {
+  max-width: 640px;
+  margin: 13px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.admin-overall-progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 18px 20px;
+  border: 1px solid #d8e3df;
+  border-radius: 15px;
+  background: white;
+  box-shadow: 0 8px 25px rgba(26, 55, 48, .05);
+}
+.admin-overall-progress > span { color: #52605c; font-size: 10px; font-weight: 750; }
+.admin-overall-progress > strong { color: var(--green-dark); font: 650 24px/1 Georgia, serif; }
+.admin-overall-progress > small { grid-column: 1 / -1; color: var(--muted); font-size: 9px; }
+.admin-progress-track {
+  grid-column: 1 / -1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #e6ece9;
+}
+.admin-progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), #35a47f);
+}
+.admin-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+}
+.admin-summary-grid article {
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border: 1px solid #dbe4e1;
+  border-radius: 15px;
+  background: white;
+  box-shadow: 0 8px 26px rgba(26, 55, 48, .04);
+}
+.admin-summary-grid article > span { color: #52605c; font-size: 10px; font-weight: 750; }
+.admin-summary-grid article > strong {
+  margin: 10px 0 auto;
+  font: 600 34px/1 Georgia, serif;
+  letter-spacing: -.025em;
+}
+.admin-summary-grid article > small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.admin-coverage-card {
+  display: grid;
+  grid-template-columns: minmax(240px, .8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 30px;
+  margin-top: 16px;
+  padding: 24px;
+  border: 1px solid #dbe4e1;
+  border-radius: 16px;
+  background: #fbfcfc;
+}
+.admin-coverage-card h2, .admin-section-heading h2 {
+  margin: 0;
+  font: 600 22px/1.2 Georgia, serif;
+  letter-spacing: -.02em;
+}
+.admin-coverage-card > div:first-child > p:last-child {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+.admin-coverage-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  overflow: hidden;
+  border: 1px solid #dce5e2;
+  border-radius: 12px;
+  background: white;
+}
+.admin-coverage-stats > div { min-height: 86px; display: grid; align-content: center; gap: 6px; padding: 14px 18px; border-left: 1px solid #e3e9e7; }
+.admin-coverage-stats > div:first-child { border-left: 0; }
+.admin-coverage-stats strong { font: 650 25px/1 Georgia, serif; }
+.admin-coverage-stats span { color: var(--muted); font-size: 9px; line-height: 1.35; }
+.admin-coverage-stats .coverage-complete { background: var(--green-soft); }
+.admin-coverage-stats .coverage-complete strong { color: var(--green-dark); }
+.admin-evaluator-card {
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid #dbe4e1;
+  border-radius: 16px;
+  background: white;
+  box-shadow: var(--shadow);
+}
+.admin-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.admin-section-heading > span {
+  padding: 5px 8px;
+  border-radius: 99px;
+  background: #eef3f1;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+}
+.admin-table-scroll { overflow-x: auto; }
+.admin-progress-table { width: 100%; border-collapse: collapse; }
+.admin-progress-table th {
+  padding: 11px 14px;
+  background: #f7f9f8;
+  color: #68736f;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.admin-progress-table th:first-child, .admin-progress-table td:first-child { padding-left: 24px; }
+.admin-progress-table th:last-child, .admin-progress-table td:last-child { padding-right: 24px; }
+.admin-progress-table td {
+  min-width: 90px;
+  padding: 14px;
+  border-top: 1px solid #edf1ef;
+  color: #52605c;
+  font-size: 10px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.admin-progress-table tbody tr:first-child td { border-top: 0; }
+.admin-progress-table tbody tr:hover { background: #fbfdfc; }
+.admin-progress-table time { color: var(--muted); font-size: 9px; }
+.admin-evaluator-identity { min-width: 210px; display: flex; align-items: center; gap: 10px; }
+.admin-evaluator-identity > span:last-child { min-width: 0; }
+.admin-evaluator-identity strong, .admin-evaluator-identity small { display: block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.admin-evaluator-identity strong { color: var(--ink); font-size: 11px; }
+.admin-evaluator-identity small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.admin-person-progress { min-width: 128px; display: grid; grid-template-columns: minmax(80px, 1fr) 30px; align-items: center; gap: 8px; }
+.admin-person-progress > span { height: 6px; overflow: hidden; border-radius: 99px; background: #e6ece9; }
+.admin-person-progress > span > span { display: block; height: 100%; border-radius: inherit; background: var(--green); }
+.admin-person-progress > strong { color: #4e5d59; font-size: 9px; }
+.admin-count-complete { color: var(--green-dark); }
+.admin-empty-state { display: grid; place-items: center; padding: 55px 24px; text-align: center; }
+.admin-empty-state > span { width: 47px; height: 47px; display: grid; place-items: center; border-radius: 50%; background: var(--green-soft); color: var(--green); font-size: 22px; }
+.admin-empty-state h3 { margin: 14px 0 5px; font: 600 19px/1.2 Georgia, serif; }
+.admin-empty-state p { margin: 0; color: var(--muted); font-size: 10px; }
+.admin-data-note { margin: 14px 3px 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+
 @media (max-width: 1050px) {
   .app-shell { grid-template-columns: 210px minmax(0, 1fr); }
   .review-layout { grid-template-columns: 1fr; }
   .rating-panel { position: static; max-height: none; }
+  .admin-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
@@ -602,6 +809,7 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   .brand-lockup span, .rater-chip small { display: none; }
   .rater-actions { gap: 7px; }
   .sign-out-button { min-height: 31px; padding: 0 8px; }
+  .admin-dashboard-link { min-height: 31px; padding: 0 8px; }
   .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 14px; }
   .filter-stack, .data-tools { display: none; }
   .progress-card { margin-bottom: 12px; }
@@ -629,6 +837,25 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   .progress-episode-list { padding: 0 10px 15px; }
   .progress-episode-row { grid-template-columns: 8px minmax(0, 1fr) auto; gap: 9px; }
   .progress-episode-row .language-badge, .progress-open-arrow { display: none; }
+  .admin-main { width: min(100% - 24px, 1180px); padding: 27px 0 38px; }
+  .admin-page-heading { grid-template-columns: 1fr; gap: 19px; }
+  .admin-page-heading h1 { font-size: 34px; }
+  .admin-summary-grid { grid-template-columns: 1fr 1fr; gap: 9px; }
+  .admin-summary-grid article { min-height: 118px; padding: 16px; }
+  .admin-coverage-card { grid-template-columns: 1fr; gap: 18px; padding: 19px; }
+  .admin-coverage-stats { grid-template-columns: 1fr; }
+  .admin-coverage-stats > div { min-height: 66px; grid-template-columns: 54px 1fr; align-items: center; border-top: 1px solid #e3e9e7; border-left: 0; }
+  .admin-coverage-stats > div:first-child { border-top: 0; }
+  .admin-section-heading { padding: 19px 17px 15px; }
+  .admin-progress-table th:first-child, .admin-progress-table td:first-child { padding-left: 17px; }
+  .admin-progress-table th:last-child, .admin-progress-table td:last-child { padding-right: 17px; }
+}
+
+@media (max-width: 520px) {
+  .admin-topbar .rater-chip { display: none; }
+  .admin-back-link { min-height: 31px; padding: 0 9px; }
+  .admin-summary-grid { grid-template-columns: 1fr; }
+  .admin-summary-grid article { min-height: 105px; }
 }
 
 @media (max-width: 860px) {

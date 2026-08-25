@@ -4,7 +4,7 @@
  * Keeping a version in each saved row makes future rubric revisions auditable
  * and prevents results from different instruments being silently combined.
  */
-export const RUBRIC_VERSION = "najah-evidence-v3";
+export const RUBRIC_VERSION = "najah-evidence-v4";
 
 /**
  * Mutually exclusive, observable reasons that a module episode stopped.
@@ -14,24 +14,30 @@ export const RUBRIC_VERSION = "najah-evidence-v3";
  * the transcript without claiming that the participant chose to disengage.
  */
 export const EPISODE_END_REASONS = [
-  { value: "task_completed", label: "Task completed" },
+  {
+    value: "task_completed",
+    label: "Task completed (confirmed or clearly evident)",
+  },
   {
     value: "output_delivered_unconfirmed",
-    label: "Output delivered, but completion was not confirmed",
+    label: "Final output delivered; completion not confirmed",
   },
   {
     value: "participant_moved_module",
-    label: "Participant moved to another module",
+    label: "Participant moved to another module before completion",
   },
   {
     value: "no_further_participant_reply_observed",
-    label: "No further participant reply was observed",
+    label: "Participant stopped replying before a final output",
   },
   {
     value: "no_further_najah_reply_observed",
-    label: "No further Najah reply was observed",
+    label: "Najah stopped replying after a participant message",
   },
-  { value: "system_or_technical_failure", label: "System or technical failure" },
+  {
+    value: "system_or_technical_failure",
+    label: "System or technical failure interrupted the episode",
+  },
   {
     value: "cannot_determine",
     label: "Cannot determine from the available record",
