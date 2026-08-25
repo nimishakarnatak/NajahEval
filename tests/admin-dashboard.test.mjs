@@ -39,10 +39,40 @@ test("shows the dashboard link only to administrators and renders evaluator deta
 
   assert.match(app, /rater\.role === "admin"/);
   assert.match(app, /href="\/admin"/);
-  assert.match(page, /Evaluator progress/);
+  assert.match(page, /Participants and evaluator progress/);
   assert.match(page, /Completed ratings/);
   assert.match(page, /Draft ratings/);
   assert.match(page, /Not started/);
   assert.match(page, /Latest activity/);
   assert.match(page, /Independent-rating coverage/);
+});
+
+test("lets administrators manage raters and read-only viewers without deleting ratings", async () => {
+  const [page, manager, route, schema, annotations, app, serverAuth] = await Promise.all([
+    readFile(projectFile("app/admin/page.tsx"), "utf8"),
+    readFile(projectFile("app/admin/AdminParticipantManager.tsx"), "utf8"),
+    readFile(projectFile("app/api/admin/users/route.ts"), "utf8"),
+    readFile(projectFile("db/schema.ts"), "utf8"),
+    readFile(projectFile("app/api/annotations/route.ts"), "utf8"),
+    readFile(projectFile("app/AnnotatorApp.tsx"), "utf8"),
+    readFile(projectFile("lib/server-auth.ts"), "utf8"),
+  ]);
+
+  assert.match(page, /AdminParticipantManager/);
+  assert.match(manager, /Add participant/);
+  assert.match(manager, /Rater/);
+  assert.match(manager, /Viewer/);
+  assert.match(manager, /Remove/);
+  assert.match(manager, /Restore/);
+  assert.match(route, /Administrator access is required/);
+  assert.match(route, /UPDATE users SET is_active = FALSE/);
+  assert.match(route, /DELETE FROM auth_sessions/);
+  assert.doesNotMatch(route, /DELETE FROM rubric_annotations/);
+  assert.match(schema, /'admin', 'rater', 'viewer'/);
+  assert.match(schema, /is_active BOOLEAN NOT NULL DEFAULT TRUE/);
+  assert.match(annotations, /Viewer accounts can read conversations but cannot save ratings/);
+  assert.match(app, /Read-only dataset/);
+  assert.match(app, /!readOnly &&/);
+  assert.match(serverAuth, /ADMIN_EMAIL/);
+  assert.match(serverAuth, /UPDATE users SET role = 'admin'/);
 });

@@ -1,11 +1,20 @@
 import { ensureNajahSchema, getDatabase } from "@/db";
 import { issueSessionCookie } from "@/lib/auth-session";
+import { isInvitedPassword } from "@/lib/participant-accounts";
 import { hashPassword, passwordValidationError } from "@/lib/password-auth";
+import type { UserRole } from "@/lib/user-roles";
 
 type RegistrationPayload = {
   displayName?: string;
   email?: string;
   password?: string;
+};
+
+type ExistingUser = {
+  userId: string;
+  passwordHash: string;
+  role: UserRole;
+  isActive: boolean;
 };
 
 function normalizedEmail(value: string | undefined): string {
@@ -38,13 +47,26 @@ export async function POST(request: Request) {
   }
   const db = getDatabase();
   await ensureNajahSchema(db);
-  const existing = await db.prepare("SELECT user_id FROM users WHERE email = ?").bind(email).first();
-  if (existing) {
+  const existing = await db
+    .prepare(`
+      SELECT
+        user_id AS "userId",
+        password_hash AS "passwordHash",
+        role,
+        is_active AS "isActive"
+      FROM users
+      WHERE email = ?
+    `)
+    .bind(email)
+    .first<ExistingUser>();
+  if (existing && !isInvitedPassword(existing.passwordHash)) {
     return Response.json({ error: "An account already exists for this email." }, { status: 409 });
   }
 
-  const userId = crypto.randomUUID();
-  const role = email === configuredAdminEmail() ? "admin" : "rater";
+  const userId = existing?.userId ?? crypto.randomUUID();
+  const role: UserRole = email === configuredAdminEmail()
+    ? "admin"
+    : existing?.role ?? "rater";
   let passwordHash: string;
   try {
     passwordHash = await hashPassword(password);
@@ -55,13 +77,27 @@ export async function POST(request: Request) {
     );
   }
   try {
-    await db
-      .prepare(`
-        INSERT INTO users (user_id, email, display_name, password_hash, role)
-        VALUES (?, ?, ?, ?, ?)
-      `)
-      .bind(userId, email, displayName, passwordHash, role)
-      .run();
+    if (existing) {
+      // Claim an administrator-created participant record while preserving the
+      // assigned Rater or Viewer role.
+      await db
+        .prepare(`
+          UPDATE users
+          SET display_name = ?, password_hash = ?, is_active = TRUE,
+              failed_login_count = 0, locked_until = NULL
+          WHERE user_id = ?
+        `)
+        .bind(displayName, passwordHash, userId)
+        .run();
+    } else {
+      await db
+        .prepare(`
+          INSERT INTO users (user_id, email, display_name, password_hash, role)
+          VALUES (?, ?, ?, ?, ?)
+        `)
+        .bind(userId, email, displayName, passwordHash, role)
+        .run();
+    }
   } catch {
     return Response.json(
       { error: "The account could not be created. Check whether it already exists." },

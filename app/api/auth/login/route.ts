@@ -1,6 +1,7 @@
 import { ensureNajahSchema, getDatabase } from "@/db";
 import { issueSessionCookie } from "@/lib/auth-session";
 import { hashPassword, verifyPassword } from "@/lib/password-auth";
+import type { UserRole } from "@/lib/user-roles";
 
 type LoginPayload = { email?: string; password?: string };
 
@@ -9,7 +10,8 @@ type LoginUser = {
   email: string;
   displayName: string;
   passwordHash: string;
-  role: "admin" | "rater";
+  role: UserRole;
+  isActive: boolean;
   failedLoginCount: number;
   lockedUntil: number | null;
 };
@@ -32,6 +34,7 @@ export async function POST(request: Request) {
         display_name AS "displayName",
         password_hash AS "passwordHash",
         role,
+        is_active AS "isActive",
         failed_login_count AS "failedLoginCount",
         locked_until AS "lockedUntil"
       FROM users
@@ -52,8 +55,8 @@ export async function POST(request: Request) {
   // response timing from revealing whether a particular address is registered.
   if (!user) await hashPassword(password);
   const passwordMatches = user ? await verifyPassword(password, user.passwordHash) : false;
-  if (!user || !passwordMatches) {
-    if (user) {
+  if (!user || !user.isActive || !passwordMatches) {
+    if (user?.isActive) {
       const nextFailureCount = user.failedLoginCount + 1;
       const shouldLock = nextFailureCount >= 5;
       await db

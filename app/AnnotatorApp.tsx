@@ -23,6 +23,7 @@ import {
   RubricSection,
   keyedRecord,
 } from "@/lib/rubric";
+import { type UserRole, userRoleLabel } from "@/lib/user-roles";
 
 type AnnotationDraft = {
   scores: Record<DimensionKey, DimensionScore>;
@@ -50,7 +51,7 @@ type Episode = AnnotationDraft & {
   annotationUpdatedAt: string | null;
 };
 
-type Rater = { displayName: string; email: string; role: "admin" | "rater" };
+type Rater = { displayName: string; email: string; role: UserRole };
 type SaveState = "saved" | "saving" | "unsaved" | "error";
 type ViewFilter = "queue" | "drafts" | "completed" | "all";
 type ProgressView = "queue" | "not_started" | "draft" | "complete" | "all";
@@ -415,6 +416,7 @@ function CriticalFlagCard({
 export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [rater, setRater] = useState(initialRater);
+  const readOnly = rater.role === "viewer";
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<AnnotationDraft>(emptyDraft);
   const [dirty, setDirty] = useState(false);
@@ -426,7 +428,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [studentStatusFilter, setStudentStatusFilter] = useState("all");
   const [moduleFilter, setModuleFilter] = useState("all");
   const [treatmentFilter, setTreatmentFilter] = useState("all");
-  const [viewFilter, setViewFilter] = useState<ViewFilter>("queue");
+  const [viewFilter, setViewFilter] = useState<ViewFilter>(
+    initialRater.role === "viewer" ? "all" : "queue",
+  );
   const [progressOpen, setProgressOpen] = useState(false);
   const [progressView, setProgressView] = useState<ProgressView>("not_started");
   const [transcriptView, setTranscriptView] = useState<"original" | "english">("original");
@@ -446,7 +450,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       if (!response.ok) throw new Error(payload.error || "Unable to load episodes.");
       const loaded = payload.episodes as Episode[];
       setEpisodes(loaded);
-      setRater(payload.rater ?? initialRater);
+      const loadedRater = (payload.rater ?? initialRater) as Rater;
+      setRater(loadedRater);
+      if (loadedRater.role === "viewer") setViewFilter("all");
       setSelectedId((current) => preferredId || current || loaded[0]?.episodeId || "");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to load episodes.");
@@ -494,14 +500,14 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       const matchesModule = moduleFilter === "all" || episode.module === moduleFilter;
       const matchesTreatment =
         treatmentFilter === "all" || episode.treatment === treatmentFilter;
-      const matchesView =
+      const matchesView = readOnly ||
         viewFilter === "all" ||
         (viewFilter === "queue" && episode.annotationStatus !== "complete" && episode.completedRaterCount < 2) ||
         (viewFilter === "drafts" && episode.annotationStatus === "draft") ||
         (viewFilter === "completed" && episode.annotationStatus === "complete");
       return matchesStudentStatus && matchesModule && matchesTreatment && matchesView;
     });
-  }, [episodes, moduleFilter, studentStatusFilter, treatmentFilter, viewFilter]);
+  }, [episodes, moduleFilter, readOnly, studentStatusFilter, treatmentFilter, viewFilter]);
 
   useEffect(() => {
     if (filteredEpisodes.length && !filteredEpisodes.some((episode) => episode.episodeId === selectedId)) {
@@ -591,7 +597,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   }
 
   async function persist(status: "draft" | "complete", quiet = false) {
-    if (!current) return false;
+    if (!current || readOnly) return false;
     setSaveState("saving");
     try {
       const response = await fetch("/api/annotations", {
@@ -635,13 +641,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   }
 
   useEffect(() => {
-    if (!dirty || !current) return;
+    if (readOnly || !dirty || !current) return;
     const timeout = window.setTimeout(() => void persist("draft", true), 1000);
     return () => window.clearTimeout(timeout);
     // `draft` is the intentional autosave trigger. Including `persist` would
     // recreate the timeout on every render because it closes over form state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, dirty, selectedId]);
+  }, [draft, dirty, readOnly, selectedId]);
 
   useEffect(() => {
     if (!progressOpen) return;
@@ -943,7 +949,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
             <span className="avatar">{rater.displayName.slice(0, 1).toUpperCase()}</span>
             <span>
               <strong>{rater.displayName}</strong>
-              <small>{rater.email} · {rater.role === "admin" ? "Admin" : "Rater"}</small>
+              <small>{rater.email} · {userRoleLabel(rater.role)}</small>
             </span>
           </div>
           {rater.role === "admin" && (
@@ -954,33 +960,43 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       </header>
 
       <aside className="sidebar">
-        <button
-          type="button"
-          className="progress-card progress-card-button"
-          onClick={() => {
-            setProgressView("not_started");
-            setProgressOpen(true);
-          }}
-          aria-haspopup="dialog"
-          aria-expanded={progressOpen}
-        >
-          <div className="progress-heading"><span>My progress</span><strong>{completedByMe}/{episodes.length}</strong></div>
-          <div className="progress-track"><span style={{ width: `${episodes.length ? (completedByMe / episodes.length) * 100 : 0}%` }} /></div>
-          <div className="progress-stats">
-            <span><strong>{draftsByMe}</strong> drafts</span>
-            <span><strong>{doubleRated}</strong> double-rated</span>
-          </div>
-          <span className="progress-card-action">View episode list <span aria-hidden="true">→</span></span>
-        </button>
-
-        <nav className="view-tabs" aria-label="Annotation views">
-          {(["queue", "drafts", "completed", "all"] as ViewFilter[]).map((view) => (
-            <button key={view} className={viewFilter === view ? "active" : ""} onClick={() => openViewList(view)}>
-              <span>{view === "queue" ? "My queue" : view[0].toUpperCase() + view.slice(1)}</span>
-              <strong>{viewCounts[view]}</strong>
+        {readOnly ? (
+          <section className="viewer-access-card">
+            <p className="eyebrow">Viewer access</p>
+            <h2>Read-only dataset</h2>
+            <p>You can inspect every conversation, use filters, and view translations. Ratings cannot be changed or submitted.</p>
+          </section>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="progress-card progress-card-button"
+              onClick={() => {
+                setProgressView("not_started");
+                setProgressOpen(true);
+              }}
+              aria-haspopup="dialog"
+              aria-expanded={progressOpen}
+            >
+              <div className="progress-heading"><span>My progress</span><strong>{completedByMe}/{episodes.length}</strong></div>
+              <div className="progress-track"><span style={{ width: `${episodes.length ? (completedByMe / episodes.length) * 100 : 0}%` }} /></div>
+              <div className="progress-stats">
+                <span><strong>{draftsByMe}</strong> drafts</span>
+                <span><strong>{doubleRated}</strong> double-rated</span>
+              </div>
+              <span className="progress-card-action">View episode list <span aria-hidden="true">→</span></span>
             </button>
-          ))}
-        </nav>
+
+            <nav className="view-tabs" aria-label="Annotation views">
+              {(["queue", "drafts", "completed", "all"] as ViewFilter[]).map((view) => (
+                <button key={view} className={viewFilter === view ? "active" : ""} onClick={() => openViewList(view)}>
+                  <span>{view === "queue" ? "My queue" : view[0].toUpperCase() + view.slice(1)}</span>
+                  <strong>{viewCounts[view]}</strong>
+                </button>
+              ))}
+            </nav>
+          </>
+        )}
 
         <div className="filter-stack">
           <label>
@@ -1014,8 +1030,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
         <section className="data-tools">
           <h2>Dataset</h2>
-          <p><strong>{episodes.length}</strong> reviewed episodes are built in and shared with every rater.</p>
-          <button className="text-button" onClick={exportMyWork} disabled={!draftsByMe && !completedByMe}>Export my work</button>
+          <p><strong>{episodes.length}</strong> reviewed episodes are built in and shared with every rater or viewer.</p>
+          {!readOnly && (
+            <button className="text-button" onClick={exportMyWork} disabled={!draftsByMe && !completedByMe}>Export my work</button>
+          )}
         </section>
       </aside>
 
@@ -1152,7 +1170,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
               </div>
             </div>
 
-            <div className="review-layout">
+            <div className={`review-layout${readOnly ? " viewer-layout" : ""}`}>
               <article className="conversation-panel">
                 <header>
                   <p className="eyebrow">Module objective</p>
@@ -1224,6 +1242,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                 </section>
               </article>
 
+              {!readOnly && (
               <aside className="rating-panel">
                 <div className="rating-header">
                   <div><p className="eyebrow">Your evaluation</p><h2>Rate this episode</h2></div>
@@ -1301,6 +1320,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <button className="primary-button" onClick={() => void submitAndAdvance()} disabled={saveState === "saving"}>Submit & next <span>→</span></button>
                 </div>
               </aside>
+              )}
             </div>
           </>
         )}

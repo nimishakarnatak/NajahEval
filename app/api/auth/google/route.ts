@@ -1,13 +1,17 @@
 import { ensureNajahSchema, getDatabase } from "@/db";
 import { issueSessionCookie } from "@/lib/auth-session";
 import { verifyGoogleIdToken } from "@/lib/google-identity";
+import { isInvitedPassword } from "@/lib/participant-accounts";
+import type { UserRole } from "@/lib/user-roles";
 
 type GoogleLoginPayload = { credential?: string };
 type ExistingUser = {
   userId: string;
   email: string;
   displayName: string;
-  role: "admin" | "rater";
+  passwordHash: string;
+  role: UserRole;
+  isActive: boolean;
 };
 
 function configuredValue(name: "GOOGLE_CLIENT_ID" | "ADMIN_EMAIL"): string {
@@ -66,7 +70,9 @@ export async function POST(request: Request) {
         user_id AS "userId",
         email,
         display_name AS "displayName",
-        role
+        password_hash AS "passwordHash",
+        role,
+        is_active AS "isActive"
       FROM users
       WHERE email = ?
       LIMIT 1
@@ -91,11 +97,30 @@ export async function POST(request: Request) {
       userId,
       email: googleIdentity.email,
       displayName: googleIdentity.displayName,
+      passwordHash,
       role,
+      isActive: true,
     };
+  } else if (!user.isActive) {
+    return Response.json(
+      { error: "Your access to this workspace has been removed." },
+      { status: 403 },
+    );
   } else if (role === "admin" && user.role !== "admin") {
     await db.prepare("UPDATE users SET role = 'admin' WHERE user_id = ?").bind(user.userId).run();
     user.role = "admin";
+  }
+
+  // A participant invited from the admin dashboard can claim the placeholder
+  // record through verified Google sign-in while keeping the assigned role.
+  if (isInvitedPassword(user.passwordHash)) {
+    const claimedPasswordHash = `google-identity-only$${googleIdentity.subject}`;
+    await db
+      .prepare("UPDATE users SET password_hash = ?, display_name = ? WHERE user_id = ?")
+      .bind(claimedPasswordHash, googleIdentity.displayName, user.userId)
+      .run();
+    user.passwordHash = claimedPasswordHash;
+    user.displayName = googleIdentity.displayName;
   }
 
   // Reconnect any historical annotations that were saved under the same

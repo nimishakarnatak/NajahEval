@@ -149,6 +149,12 @@ export async function POST(request: Request) {
   if (!rater) {
     return Response.json({ error: "Sign in is required." }, { status: 401 });
   }
+  if (rater.role === "viewer") {
+    return Response.json(
+      { error: "Viewer accounts can read conversations but cannot save ratings." },
+      { status: 403 },
+    );
+  }
 
   const payload = (await request.json()) as AnnotationPayload;
   const episodeId = payload.episodeId?.trim() ?? "";

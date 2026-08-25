@@ -11,7 +11,8 @@ export const NAJAH_SCHEMA_STATEMENTS = [
       email TEXT NOT NULL UNIQUE,
       display_name TEXT NOT NULL,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK (role IN ('admin', 'rater')),
+      role TEXT NOT NULL CHECK (role IN ('admin', 'rater', 'viewer')),
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
       failed_login_count INTEGER NOT NULL DEFAULT 0,
       locked_until BIGINT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -89,4 +90,35 @@ export const NAJAH_SCHEMA_STATEMENTS = [
   "CREATE INDEX IF NOT EXISTS idx_rubric_annotations_rater_status ON rubric_annotations(rater_id, status)",
   "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)",
   "CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at)",
+] as const;
+
+/**
+ * Idempotent upgrades for databases created by earlier releases.
+ *
+ * Access removal is deliberately represented by `is_active` instead of deleting
+ * a user. This preserves the person's historical ratings for analysis while
+ * preventing both new sessions and reuse of an existing session.
+ */
+export const NAJAH_SCHEMA_MIGRATION_STATEMENTS = [
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+  `
+    DO $$
+    DECLARE
+      role_constraint TEXT;
+    BEGIN
+      SELECT pg_get_constraintdef(oid)
+      INTO role_constraint
+      FROM pg_constraint
+      WHERE conrelid = 'users'::regclass
+        AND conname = 'users_role_check';
+
+      IF role_constraint IS NULL OR role_constraint NOT LIKE '%viewer%' THEN
+        ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+        ALTER TABLE users
+          ADD CONSTRAINT users_role_check
+          CHECK (role IN ('admin', 'rater', 'viewer'));
+      END IF;
+    END
+    $$
+  `,
 ] as const;
