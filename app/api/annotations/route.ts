@@ -128,9 +128,6 @@ function completionError(annotation: NormalizedAnnotation): string | null {
   for (const dimension of RUBRIC_DIMENSIONS) {
     const score = annotation.scores[dimension.key];
     if (score === null) return `Select a score or N/A for ${dimension.label}.`;
-    if (score !== "na" && !annotation.evidenceTurns[dimension.key]) {
-      return `Add the relevant turn number(s) for ${dimension.label}.`;
-    }
   }
 
   if (!annotation.episodeEndReason) {

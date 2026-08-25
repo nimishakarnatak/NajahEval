@@ -121,12 +121,6 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
         targetId: `rating-${dimension.key}`,
       };
     }
-    if (score !== "na" && !draft.evidenceTurns[dimension.key].trim()) {
-      return {
-        message: `Add the relevant turn number(s) for ${dimension.label}.`,
-        targetId: `evidence-${dimension.key}`,
-      };
-    }
   }
 
   if (!draft.episodeEndReason) {
@@ -315,7 +309,7 @@ function ScoreCard({
 
       {!isNotApplicable && (
         <label className="evidence-field">
-          <span>Evidence turn number(s) <strong>required</strong></span>
+          <span>Evidence turn number(s) <small>optional</small></span>
           <input
             id={`evidence-${dimension.key}`}
             value={evidenceTurns}
@@ -1242,7 +1236,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <span>1 · Material failure</span><span>2 · Partial / minor issue</span><span>3 · Meets anchor</span>
                 </div>
                 <p className="rubric-instruction">
-                  Cite the relevant turn number(s) for every assessed dimension. Written score justifications are optional. Use N/A only when the dimension genuinely cannot be assessed.
+                  Evidence turn numbers and written score justifications are optional. Use N/A only when the dimension genuinely cannot be assessed.
                 </p>
 
                 {RUBRIC_SECTIONS.map((section) => (

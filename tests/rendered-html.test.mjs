@@ -141,7 +141,7 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(rubric, /Task effectiveness/);
   assert.match(component, /Evidence turn number\(s\)/);
   assert.match(component, /Critical-failure flags/);
-  assert.match(component, /Written score justifications are optional/);
+  assert.match(component, /Evidence turn numbers and written score justifications are optional/);
   assert.match(component, /Why did the observed module episode end/);
   assert.match(rubric, /Participant stopped replying before a final output/);
   assert.match(rubric, /Final output delivered—user completion unconfirmed/);
