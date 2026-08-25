@@ -522,6 +522,24 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .comments-field textarea { min-height: 92px; }
 .rating-actions { gap: 9px; margin-top: 18px; }
 .rating-actions button { flex: 1; }
+.rating-actions { flex-wrap: wrap; }
+.submit-error {
+  flex: 0 0 100%;
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
+  border: 1px solid #efc9c3;
+  border-radius: 8px;
+  background: #fae7e4;
+  color: #852f25;
+  font-size: 9px;
+  line-height: 1.45;
+}
+.submit-error strong { font-size: 10px; }
+.score-card:focus-within, .episode-end-card:focus-within, .critical-flag-card:focus-within {
+  border-color: #69a895;
+  box-shadow: 0 0 0 3px rgba(18, 110, 90, .1);
+}
 .primary-button, .secondary-button, .text-button { min-height: 39px; border-radius: 9px; padding: 0 13px; font-size: 11px; font-weight: 750; }
 .primary-button { border: 1px solid var(--green); background: var(--green); color: white; box-shadow: 0 6px 16px rgba(18,110,90,.18); }
 .primary-button:hover { background: var(--green-dark); }

@@ -57,6 +57,7 @@ type ViewFilter = "queue" | "drafts" | "completed" | "all";
 type ProgressView = "queue" | "not_started" | "draft" | "complete" | "all";
 type TranslationStatus = "idle" | "preparing" | "translating" | "ready" | "error";
 type TranscriptTurn = { speaker: "USER" | "NAJAH"; text: string; turn: string };
+type SubmissionProblem = { message: string; targetId: string };
 
 type BrowserTranslator = {
   translate: (text: string) => Promise<string>;
@@ -102,6 +103,50 @@ function emptyDraft(): AnnotationDraft {
     episodeEndReason: "",
     comments: "",
   };
+}
+
+/**
+ * Finds the first requirement that prevents a draft from being submitted.
+ *
+ * This mirrors the server-side completion rules so the rater receives useful
+ * feedback before a request is sent. The target ID lets the long, independently
+ * scrolling rating panel reveal the exact field that needs attention.
+ */
+function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | null {
+  for (const dimension of RUBRIC_DIMENSIONS) {
+    const score = draft.scores[dimension.key];
+    if (score === null) {
+      return {
+        message: `Select a score or N/A for ${dimension.label}.`,
+        targetId: `rating-${dimension.key}`,
+      };
+    }
+  }
+
+  if (!draft.episodeEndReason) {
+    return {
+      message: "Select why the observed module episode ended.",
+      targetId: "episode-end-reason",
+    };
+  }
+
+  for (const flag of CRITICAL_FLAGS) {
+    const value = draft.criticalFlags[flag.key];
+    if (value === null) {
+      return {
+        message: `Select Yes or No for the ${flag.label} flag.`,
+        targetId: `critical-${flag.key}`,
+      };
+    }
+    if (value === "yes" && !draft.criticalEvidence[flag.key].trim()) {
+      return {
+        message: `Provide turn evidence and an explanation for the ${flag.label} flag.`,
+        targetId: `critical-evidence-${flag.key}`,
+      };
+    }
+  }
+
+  return null;
 }
 
 /** Copies the current rater's saved values into editable local state. */
@@ -226,7 +271,7 @@ function ScoreCard({
   const isNotApplicable = score === "na";
   const hasSelectedScore = score !== null;
   return (
-    <section className="score-card">
+    <section className="score-card" id={`rating-${dimension.key}`}>
       <div className="dimension-heading">
         <h4>{dimension.label}</h4>
         <span>{score === null ? "Not scored" : score === "na" ? "N/A selected" : `Score ${score}`}</span>
@@ -264,8 +309,9 @@ function ScoreCard({
 
       {!isNotApplicable && (
         <label className="evidence-field">
-          <span>Evidence turn number(s) <strong>required</strong></span>
+          <span>Evidence turn number(s) <small>optional</small></span>
           <input
+            id={`evidence-${dimension.key}`}
             value={evidenceTurns}
             onChange={(event) => onEvidenceChange(event.target.value)}
             placeholder="e.g. 002, 004–006"
@@ -299,7 +345,7 @@ function EpisodeEndReasonCard({
   onChange: (value: EpisodeEndReason) => void;
 }) {
   return (
-    <fieldset className="episode-end-card">
+    <fieldset className="episode-end-card" id="episode-end-reason">
       <legend>Why did the observed module episode end?</legend>
       <p>Select the option best supported by the available conversation.</p>
       <div className="episode-end-options">
@@ -335,7 +381,7 @@ function CriticalFlagCard({
   onEvidenceChange: (value: string) => void;
 }) {
   return (
-    <fieldset className="critical-flag-card">
+    <fieldset className="critical-flag-card" id={`critical-${flag.key}`}>
       <legend>{flag.label}</legend>
       <p>{flag.trigger}</p>
       <div className="binary-options" aria-label={`${flag.label}, yes or no`}>
@@ -355,6 +401,7 @@ function CriticalFlagCard({
         <label className="evidence-field critical-evidence-field">
           <span>Evidence turn(s) and explanation <strong>required</strong></span>
           <textarea
+            id={`critical-evidence-${flag.key}`}
             value={evidence}
             onChange={(event) => onEvidenceChange(event.target.value)}
             placeholder="e.g. Turn 004 — identify the exact statement and explain why it triggers this flag."
@@ -376,6 +423,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [studentStatusFilter, setStudentStatusFilter] = useState("all");
   const [moduleFilter, setModuleFilter] = useState("all");
   const [treatmentFilter, setTreatmentFilter] = useState("all");
@@ -465,12 +513,19 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     }
   }, [filteredEpisodes, selectedId]);
 
+  /** Clears a previous submission warning as soon as the rater corrects a field. */
+  function clearSubmissionFeedback() {
+    setError("");
+    setSubmitError("");
+  }
+
   /** Updates a single dimension without replacing evidence for other scores. */
   function updateDimensionText(
     field: "evidenceTurns" | "justifications",
     key: DimensionKey,
     value: string,
   ) {
+    clearSubmissionFeedback();
     setDraft((previous) => ({
       ...previous,
       [field]: { ...previous[field], [key]: value },
@@ -483,6 +538,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
    * Changes a dimension score while preserving optional rater notes.
    */
   function updateScore(key: DimensionKey, score: DimensionScore) {
+    clearSubmissionFeedback();
     setDraft((previous) => ({
       ...previous,
       scores: { ...previous.scores, [key]: score },
@@ -496,6 +552,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
   /** Saves the observed episode-ending classification in the current draft. */
   function updateEpisodeEndReason(value: EpisodeEndReason) {
+    clearSubmissionFeedback();
     setDraft((previous) => ({ ...previous, episodeEndReason: value }));
     setDirty(true);
     setSaveState("unsaved");
@@ -503,6 +560,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
   /** Updates one Yes/No flag or its associated evidence text. */
   function updateCriticalEvidence(key: CriticalFlagKey, value: string) {
+    clearSubmissionFeedback();
     setDraft((previous) => ({
       ...previous,
       criticalEvidence: { ...previous.criticalEvidence, [key]: value },
@@ -513,6 +571,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
   /** Selecting No clears any evidence that was entered for an earlier Yes. */
   function updateCriticalFlag(key: CriticalFlagKey, value: CriticalFlagValue) {
+    clearSubmissionFeedback();
     setDraft((previous) => ({
       ...previous,
       criticalFlags: { ...previous.criticalFlags, [key]: value },
@@ -526,6 +585,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
   /** Updates the optional episode-level adjudication note. */
   function updateComments(value: string) {
+    clearSubmissionFeedback();
     setDraft((previous) => ({ ...previous, comments: value }));
     setDirty(true);
     setSaveState("unsaved");
@@ -558,11 +618,19 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       );
       setDirty(false);
       setSaveState("saved");
+      if (status === "complete") {
+        setError("");
+        setSubmitError("");
+      }
       if (!quiet) setNotice(status === "complete" ? "Rating submitted." : "Draft saved.");
       return true;
     } catch (requestError) {
       setSaveState("error");
-      if (!quiet) setError(requestError instanceof Error ? requestError.message : "Unable to save.");
+      if (!quiet) {
+        const message = requestError instanceof Error ? requestError.message : "Unable to save.";
+        setError(message);
+        if (status === "complete") setSubmitError(message);
+      }
       return false;
     }
   }
@@ -602,6 +670,25 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   }
 
   async function submitAndAdvance() {
+    const problem = firstSubmissionProblem(draft);
+    if (problem) {
+      setNotice("");
+      setError(problem.message);
+      setSubmitError(problem.message);
+      window.requestAnimationFrame(() => {
+        const target = document.getElementById(problem.targetId);
+        target?.scrollIntoView({ behavior: "smooth", block: "center" });
+        const focusTarget = target?.matches("input, textarea, button")
+          ? target
+          : target?.querySelector<HTMLElement>("input, textarea, button");
+        if (focusTarget instanceof HTMLElement) focusTarget.focus({ preventScroll: true });
+      });
+      return;
+    }
+
+    setError("");
+    setNotice("");
+    setSubmitError("");
     const saved = await persist("complete");
     if (!saved) return;
     const currentIndex = filteredEpisodes.findIndex((episode) => episode.episodeId === selectedId);
@@ -1149,7 +1236,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <span>1 · Material failure</span><span>2 · Partial / minor issue</span><span>3 · Meets anchor</span>
                 </div>
                 <p className="rubric-instruction">
-                  Cite the relevant turn number(s) for every assessed dimension. Written score justifications are optional. Use N/A only when the dimension genuinely cannot be assessed.
+                  Evidence turn numbers and written score justifications are optional. Use N/A only when the dimension genuinely cannot be assessed.
                 </p>
 
                 {RUBRIC_SECTIONS.map((section) => (
@@ -1207,6 +1294,12 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                 </label>
 
                 <div className="rating-actions">
+                  {submitError && (
+                    <div className="submit-error" role="alert">
+                      <strong>Rating not submitted</strong>
+                      <span>{submitError}</span>
+                    </div>
+                  )}
                   <button className="secondary-button" onClick={() => void persist("draft")} disabled={saveState === "saving"}>Save draft</button>
                   <button className="primary-button" onClick={() => void submitAndAdvance()} disabled={saveState === "saving"}>Submit & next <span>→</span></button>
                 </div>

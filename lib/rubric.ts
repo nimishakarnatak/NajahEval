@@ -16,15 +16,15 @@ export const RUBRIC_VERSION = "najah-evidence-v4";
 export const EPISODE_END_REASONS = [
   {
     value: "task_completed",
-    label: "Task completed (confirmed or clearly evident)",
+    label: "Task completed—confirmed or clearly evident",
   },
   {
     value: "output_delivered_unconfirmed",
-    label: "Final output delivered; completion not confirmed",
+    label: "Final output delivered—user completion unconfirmed",
   },
   {
     value: "participant_moved_module",
-    label: "Participant moved to another module before completion",
+    label: "Participant changed modules before completion",
   },
   {
     value: "no_further_participant_reply_observed",
@@ -36,11 +36,11 @@ export const EPISODE_END_REASONS = [
   },
   {
     value: "system_or_technical_failure",
-    label: "System or technical failure interrupted the episode",
+    label: "Technical failure interrupted the episode",
   },
   {
     value: "cannot_determine",
-    label: "Cannot determine from the available record",
+    label: "Cannot determine",
   },
 ] as const;
 

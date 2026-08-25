@@ -37,9 +37,9 @@ test("defines all nine evidence-based dimensions and six critical flags", async 
   }
 });
 
-test("enforces evidence, episode ending, and Yes/No flags without requiring score justifications", async () => {
+test("keeps score evidence optional while enforcing episode ending and critical flags", async () => {
   const route = await readFile(annotationRoutePath, "utf8");
-  assert.match(route, /Add the relevant turn number\(s\)/);
+  assert.doesNotMatch(route, /Add the relevant turn number\(s\)/);
   assert.match(route, /Select why the observed module episode ended/);
   assert.doesNotMatch(route, /received a score of/);
   assert.doesNotMatch(route, /genuinely cannot be assessed/);

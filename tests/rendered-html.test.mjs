@@ -141,11 +141,11 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(rubric, /Task effectiveness/);
   assert.match(component, /Evidence turn number\(s\)/);
   assert.match(component, /Critical-failure flags/);
-  assert.match(component, /Written score justifications are optional/);
+  assert.match(component, /Evidence turn numbers and written score justifications are optional/);
   assert.match(component, /Why did the observed module episode end/);
   assert.match(rubric, /Participant stopped replying before a final output/);
-  assert.match(rubric, /Final output delivered; completion not confirmed/);
-  assert.match(rubric, /Cannot determine from the available record/);
+  assert.match(rubric, /Final output delivered—user completion unconfirmed/);
+  assert.match(rubric, /Cannot determine/);
   assert.match(component, /Submit & next/);
   assert.match(component, /reviewed episodes are built in/);
   assert.doesNotMatch(`${component}\n${importRoute}`, /do_not_release|doNotRelease/);
@@ -161,11 +161,26 @@ test("aligns episode-ending controls and keeps outcome choices mutually distinct
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(rubric, /najah-evidence-v4/);
-  assert.match(rubric, /Task completed \(confirmed or clearly evident\)/);
-  assert.match(rubric, /Participant moved to another module before completion/);
+  assert.match(rubric, /Task completed—confirmed or clearly evident/);
+  assert.match(rubric, /Participant changed modules before completion/);
   assert.match(rubric, /Najah stopped replying after a participant message/);
   assert.match(styles, /\.episode-end-options label \{[^}]*grid-template-columns: 16px minmax\(0, 1fr\)/);
   assert.match(styles, /\.episode-end-options input \{[^}]*width: 16px; height: 16px/);
+});
+
+test("keeps submission validation visible and reveals the first incomplete field", async () => {
+  const [component, styles] = await Promise.all([
+    readFile(componentPath, "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(component, /firstSubmissionProblem/);
+  assert.match(component, /Rating not submitted/);
+  assert.match(component, /role="alert"/);
+  assert.match(component, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
+  assert.match(component, /id=\{`evidence-\$\{dimension\.key\}`\}/);
+  assert.match(component, /id="episode-end-reason"/);
+  assert.match(styles, /\.submit-error/);
+  assert.match(styles, /\.score-card:focus-within/);
 });
 
 test("provides open account creation and independent server sessions", async () => {
