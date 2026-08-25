@@ -1,0 +1,37 @@
+name: Sync Netlify publish branch
+
+on:
+  push:
+    branches:
+      - main
+
+# The workflow only needs permission to fast-forward or merge the dedicated
+# Netlify production branch. It cannot modify repository settings or secrets.
+permissions:
+  contents: write
+
+# If several commits reach main close together, finish one branch sync before
+# starting the next so the publish branch cannot be updated out of order.
+concurrency:
+  group: sync-netlify-publish-branch
+  cancel-in-progress: false
+
+jobs:
+  sync-publish-branch:
+    name: Merge main into new-site-publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the Netlify production branch
+        uses: actions/checkout@v4
+        with:
+          ref: new-site-publish
+          fetch-depth: 0
+
+      - name: Merge and publish the latest main branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          git push origin HEAD:new-site-publish
