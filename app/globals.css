@@ -59,18 +59,6 @@ button:disabled { cursor: not-allowed; opacity: 0.48; }
   align-items: center;
 }
 
-.brand-lockup { gap: 11px; }
-.brand-mark {
-  width: 37px;
-  height: 37px;
-  display: grid;
-  place-items: center;
-  border-radius: 11px;
-  background: var(--green);
-  color: white;
-  font: 700 22px/1 Georgia, serif;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
-}
 .brand-lockup strong { display: block; letter-spacing: -0.015em; font-size: 15px; }
 .brand-lockup span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
 
@@ -587,17 +575,7 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   font: 700 420px/1 Georgia, serif;
   pointer-events: none;
 }
-.auth-brand { display: flex; align-items: center; gap: 12px; font-weight: 750; letter-spacing: -.01em; }
-.auth-brand-mark {
-  width: 39px;
-  height: 39px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(255,255,255,.22);
-  border-radius: 11px;
-  background: rgba(255,255,255,.1);
-  font: 700 23px/1 Georgia, serif;
-}
+.auth-brand { display: flex; align-items: center; font-weight: 750; letter-spacing: -.01em; }
 .auth-introduction-copy { position: relative; z-index: 1; max-width: 560px; margin: auto 0; padding: 70px 0; }
 .auth-eyebrow { margin: 0 0 15px; color: #a9d5c5; font-size: 10px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
 .auth-introduction-copy h1 { margin: 0; font: 600 clamp(38px, 4.2vw, 64px)/1.06 Georgia, serif; letter-spacing: -.035em; }
