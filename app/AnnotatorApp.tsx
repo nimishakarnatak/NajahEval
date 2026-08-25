@@ -8,7 +8,6 @@ import {
   studentStatusLabel,
   treatmentLabel,
 } from "@/lib/episode-dimensions";
-import { languageBadgeTone, languageLabel } from "@/lib/language";
 import {
   CRITICAL_FLAGS,
   CRITICAL_FLAG_KEYS,
@@ -1096,7 +1095,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     <span className={`progress-row-status status-${episode.annotationStatus ?? "not_started"}`}>
                       {episode.annotationStatus === "complete" ? "Done" : episode.annotationStatus === "draft" ? "Draft" : "Not started"}
                     </span>
-                    <span className={`language-badge language-${languageBadgeTone(episode.language)}`}>{languageLabel(episode.language)}</span>
                     <span className="progress-open-arrow" aria-hidden="true">→</span>
                   </button>
                 )) : (
@@ -1145,7 +1143,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                 <span className="student-status-badge">{studentStatusLabel(current.studentStatus)}</span>
                 <span className="module-badge">{MODULE_LABELS[current.module] || current.module}</span>
                 <span className={`treatment-badge treatment-${current.treatment}`}>{treatmentLabel(current.treatment)}</span>
-                <span className={`language-badge language-${languageBadgeTone(current.language)}`}>{languageLabel(current.language)}</span>
                 <span className="episode-id">{current.episodeId}</span>
               </div>
               <div className="episode-nav">

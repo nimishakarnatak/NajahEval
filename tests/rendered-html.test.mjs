@@ -29,13 +29,13 @@ test("ships Najah-specific metadata without starter preview markers", async () =
   assert.doesNotMatch(`${page}\n${layout}`, /codex-preview|SkeletonPreview/);
 });
 
-test("shows every detected language for code-switched conversations", async () => {
+test("classifies code-switched conversations while keeping language labels out of the review UI", async () => {
   const [component, language, episodesRoute] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(languagePath, "utf8"),
     readFile(episodesRoutePath, "utf8"),
   ]);
-  assert.match(component, /languageLabel\(current\.language\)/);
+  assert.doesNotMatch(component, /languageLabel\(current\.language\)/);
   assert.match(episodesRoute, /resolveEpisodeLanguage/);
   assert.match(language, /join\(" \+ "\)/);
   assert.match(language, /participant turns/);
