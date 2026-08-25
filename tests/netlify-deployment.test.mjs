@@ -4,7 +4,7 @@ import test from "node:test";
 
 const projectFile = (path) => new URL(`../${path}`, import.meta.url);
 
-test("uses standard Next.js and Netlify Database for a durable deployment", async () => {
+test("uses standard Next.js and external Neon Postgres for a durable deployment", async () => {
   const [packageJson, netlify, database] = await Promise.all([
     readFile(projectFile("package.json"), "utf8"),
     readFile(projectFile("netlify.toml"), "utf8"),
@@ -14,10 +14,11 @@ test("uses standard Next.js and Netlify Database for a durable deployment", asyn
 
   assert.equal(manifest.scripts.build, "next build --webpack");
   assert.equal(manifest.dependencies.next, "16.2.6");
-  assert.equal(manifest.dependencies["@netlify/database"], "2.0.0");
+  assert.equal(manifest.dependencies["@neondatabase/serverless"], "1.1.0");
+  assert.equal(manifest.dependencies["@netlify/database"], undefined);
   assert.equal(manifest.dependencies.vinext, undefined);
   assert.match(netlify, /publish = "\.next"/);
-  assert.match(database, /getDatabase as getNetlifyDatabase/);
+  assert.match(database, /import \{ neon \} from "@neondatabase\/serverless"/);
   assert.match(database, /process\.env\.DATABASE_URL/);
   assert.doesNotMatch(database, /cloudflare:workers/);
 });
@@ -25,7 +26,7 @@ test("uses standard Next.js and Netlify Database for a durable deployment", asyn
 test("ships a versioned Postgres schema and traces the bundled dataset", async () => {
   const [migration, nextConfig, bundledDataset] = await Promise.all([
     readFile(
-      projectFile("netlify/database/migrations/20260825000000_create_najah_schema.sql"),
+      projectFile("database/migrations/20260825000000_create_najah_schema.sql"),
       "utf8",
     ),
     readFile(projectFile("next.config.ts"), "utf8"),
@@ -33,7 +34,7 @@ test("ships a versioned Postgres schema and traces the bundled dataset", async (
   ]);
 
   for (const table of ["users", "auth_sessions", "episodes", "annotations", "rubric_annotations"]) {
-    assert.match(migration, new RegExp(`CREATE TABLE ${table}`));
+    assert.match(migration, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   }
   assert.match(nextConfig, /outputFileTracingIncludes/);
   assert.match(nextConfig, /najah_final_annotation_dataset\.csv/);
