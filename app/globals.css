@@ -753,10 +753,13 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .account-state.invited { color: #815e1c; background: #fff5dc; }
 .admin-protected-access { color: var(--muted); background: #eef2f0; }
 .admin-role-select { min-width: 105px; min-height: 33px; }
-.remove-access-button, .restore-access-button { min-height: 32px; padding: 0 11px; border: 1px solid #cedbd6; border-radius: 8px; background: white; font-size: 9px; font-weight: 750; cursor: pointer; }
+.admin-access-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; }
+.remove-access-button, .restore-access-button, .permanent-delete-button { min-height: 32px; padding: 0 11px; border: 1px solid #cedbd6; border-radius: 8px; background: white; font-size: 9px; font-weight: 750; cursor: pointer; white-space: nowrap; }
 .remove-access-button { color: #9c3d34; border-color: #e5c6c1; }
 .restore-access-button { color: var(--green-dark); border-color: #bcd8ce; }
-.remove-access-button:disabled, .restore-access-button:disabled { opacity: .55; cursor: wait; }
+.permanent-delete-button { color: white; border-color: #a94338; background: #a94338; }
+.permanent-delete-button:hover { background: #87362e; }
+.remove-access-button:disabled, .restore-access-button:disabled, .permanent-delete-button:disabled { opacity: .55; cursor: wait; }
 .admin-export-card {
   margin: 0 0 16px;
   overflow: hidden;

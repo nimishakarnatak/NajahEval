@@ -11,6 +11,7 @@ type ParticipantPayload = {
   displayName?: string;
   email?: string;
   role?: ParticipantRole;
+  mode?: "remove" | "permanent";
 };
 
 type UserRow = {
@@ -181,7 +182,13 @@ export async function PATCH(request: Request) {
   return Response.json({ ok: true });
 }
 
-/** Revoke access without deleting the participant's historical ratings. */
+/**
+ * Revoke access, or permanently delete an already-removed participant.
+ *
+ * Ordinary removal preserves saved work and can be reversed. Permanent
+ * deletion is deliberately limited to inactive accounts and erases both legacy
+ * and current rubric annotations before deleting the account itself.
+ */
 export async function DELETE(request: Request) {
   const admin = await requireAdmin(request);
   if (!admin) {
@@ -190,18 +197,35 @@ export async function DELETE(request: Request) {
 
   const payload = await readPayload(request);
   const userId = payload?.userId?.trim() ?? "";
+  const permanent = payload?.mode === "permanent";
   if (!userId) return Response.json({ error: "Choose a participant." }, { status: 400 });
 
   const db = getDatabase();
   await ensureNajahSchema(db);
   const target = await db
-    .prepare(`SELECT email, role FROM users WHERE user_id = ?`)
+    .prepare(`SELECT email, role, is_active AS "isActive" FROM users WHERE user_id = ?`)
     .bind(userId)
-    .first<{ email: string; role: UserRole }>();
+    .first<{ email: string; role: UserRole; isActive: boolean }>();
   const configuredAdminEmail = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
   if (!target) return Response.json({ error: "Participant not found." }, { status: 404 });
   if (target.role === "admin" || target.email === configuredAdminEmail || userId === admin.id) {
     return Response.json({ error: "The administrator account cannot be removed." }, { status: 400 });
+  }
+
+  if (permanent) {
+    if (target.isActive) {
+      return Response.json(
+        { error: "Remove this participant's access before deleting the account permanently." },
+        { status: 409 },
+      );
+    }
+    await db.batch([
+      db.prepare("DELETE FROM rubric_annotations WHERE rater_id = ?").bind(userId),
+      db.prepare("DELETE FROM annotations WHERE rater_id = ?").bind(userId),
+      db.prepare("DELETE FROM auth_sessions WHERE user_id = ?").bind(userId),
+      db.prepare("DELETE FROM users WHERE user_id = ?").bind(userId),
+    ]);
+    return Response.json({ ok: true, permanentlyDeleted: true });
   }
 
   await db.batch([

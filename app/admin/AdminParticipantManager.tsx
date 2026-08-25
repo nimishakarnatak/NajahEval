@@ -25,6 +25,8 @@ type RequestMethod = "POST" | "PATCH" | "DELETE";
  * Admin-only participant access manager.
  *
  * User removal revokes sessions but does not erase historical annotations.
+ * Permanent deletion is available only after removal and requires the
+ * administrator to type the participant's email before saved work is erased.
  * Role changes take effect immediately because every request resolves the role
  * from the server-side user record rather than trusting browser state.
  */
@@ -131,6 +133,26 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
       await loadUsers();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to restore access.");
+    } finally {
+      setBusyUserId("");
+    }
+  }
+
+  async function deleteParticipantPermanently(user: ManagedUser) {
+    const confirmation = window.prompt(
+      `Permanently delete ${user.displayName}? This will erase the account, drafts, and completed ratings and cannot be undone.\n\nType ${user.email} to confirm.`,
+    );
+    if (confirmation?.trim().toLowerCase() !== user.email.toLowerCase()) return;
+
+    setBusyUserId(user.userId);
+    setError("");
+    setMessage("");
+    try {
+      await mutate("DELETE", { userId: user.userId, mode: "permanent" });
+      setMessage(`${user.displayName}'s account and saved ratings were permanently deleted.`);
+      await loadUsers();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to delete this participant.");
     } finally {
       setBusyUserId("");
     }
@@ -249,14 +271,24 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
                           {busy ? "Updating…" : "Remove"}
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          className="restore-access-button"
-                          disabled={busy}
-                          onClick={() => void restoreParticipant(user)}
-                        >
-                          {busy ? "Restoring…" : "Restore"}
-                        </button>
+                        <span className="admin-access-actions">
+                          <button
+                            type="button"
+                            className="restore-access-button"
+                            disabled={busy}
+                            onClick={() => void restoreParticipant(user)}
+                          >
+                            {busy ? "Updating…" : "Restore"}
+                          </button>
+                          <button
+                            type="button"
+                            className="permanent-delete-button"
+                            disabled={busy}
+                            onClick={() => void deleteParticipantPermanently(user)}
+                          >
+                            {busy ? "Updating…" : "Delete permanently"}
+                          </button>
+                        </span>
                       )}
                     </td>
                   </tr>
