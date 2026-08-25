@@ -76,3 +76,27 @@ test("lets administrators manage raters and read-only viewers without deleting r
   assert.match(serverAuth, /ADMIN_EMAIL/);
   assert.match(serverAuth, /UPDATE users SET role = 'admin'/);
 });
+
+test("provides one administrator CSV per rater plus a combined analysis file", async () => {
+  const [page, exportsPanel, exportsRoute, exporter, app] = await Promise.all([
+    readFile(projectFile("app/admin/page.tsx"), "utf8"),
+    readFile(projectFile("app/admin/AdminRatingExports.tsx"), "utf8"),
+    readFile(projectFile("app/api/admin/exports/route.ts"), "utf8"),
+    readFile(projectFile("lib/annotation-export.ts"), "utf8"),
+    readFile(projectFile("app/AnnotatorApp.tsx"), "utf8"),
+  ]);
+
+  assert.match(page, /AdminRatingExports/);
+  assert.match(exportsPanel, /Four analysis files/);
+  assert.match(exportsPanel, /Rater \{index \+ 1\}/);
+  assert.match(exportsPanel, /Download combined CSV/);
+  assert.match(exportsPanel, /both drafts and completed ratings/);
+  assert.match(exportsRoute, /admin\.role !== "admin"/);
+  assert.match(exportsRoute, /scope"\) === "combined"/);
+  assert.match(exportsRoute, /content-disposition/);
+  assert.match(exportsRoute, /private, no-store/);
+  assert.match(exporter, /rater_email/);
+  assert.match(exporter, /rubric_version/);
+  assert.match(exporter, /spreadsheet-formula prefixes/);
+  assert.match(app, /Open export centre/);
+});

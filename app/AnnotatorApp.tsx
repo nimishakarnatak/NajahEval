@@ -1031,7 +1031,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         <section className="data-tools">
           <h2>Dataset</h2>
           <p><strong>{episodes.length}</strong> reviewed episodes are built in and shared with every rater or viewer.</p>
-          {!readOnly && (
+          {rater.role === "admin" ? (
+            <Link className="text-button" href="/admin#rating-exports">Open export centre</Link>
+          ) : !readOnly && (
             <button className="text-button" onClick={exportMyWork} disabled={!draftsByMe && !completedByMe}>Export my work</button>
           )}
         </section>
