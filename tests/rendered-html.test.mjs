@@ -143,7 +143,8 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(component, /Critical-failure flags/);
   assert.match(component, /Written score justifications are optional/);
   assert.match(component, /Why did the observed module episode end/);
-  assert.match(rubric, /No further participant reply was observed/);
+  assert.match(rubric, /Participant stopped replying before a final output/);
+  assert.match(rubric, /Final output delivered; completion not confirmed/);
   assert.match(rubric, /Cannot determine from the available record/);
   assert.match(component, /Submit & next/);
   assert.match(component, /reviewed episodes are built in/);
@@ -152,6 +153,19 @@ test("includes the core annotation workflow without temporary release or review 
     importRoute,
     /releaseEligible !== true|privacyReviewStatus !== "approved"|languageReviewStatus === "pending_manual_review"/,
   );
+});
+
+test("aligns episode-ending controls and keeps outcome choices mutually distinct", async () => {
+  const [rubric, styles] = await Promise.all([
+    readFile(rubricPath, "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(rubric, /najah-evidence-v4/);
+  assert.match(rubric, /Task completed \(confirmed or clearly evident\)/);
+  assert.match(rubric, /Participant moved to another module before completion/);
+  assert.match(rubric, /Najah stopped replying after a participant message/);
+  assert.match(styles, /\.episode-end-options label \{[^}]*grid-template-columns: 16px minmax\(0, 1fr\)/);
+  assert.match(styles, /\.episode-end-options input \{[^}]*width: 16px; height: 16px/);
 });
 
 test("provides open account creation and independent server sessions", async () => {
