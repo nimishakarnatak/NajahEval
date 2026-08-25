@@ -9,7 +9,7 @@ const finalDatasetCsv = readFileSync(
 );
 
 /** Stable marker used to detect whether this exact bundled sample is in Postgres. */
-export const BUNDLED_DATASET_VERSION = "najah-final-annotation-dataset-v1";
+export const BUNDLED_DATASET_VERSION = "najah-activity-sample-v2";
 
 type BundledEpisode = {
   episodeId: string;
@@ -142,9 +142,10 @@ export const BUNDLED_EPISODE_COUNT = BUNDLED_EPISODES.length;
  * database before the queue is returned.
  *
  * The operation is idempotent. Once all rows carry the current dataset marker,
- * later requests perform only a count query. If an earlier load was interrupted,
- * the next request safely resumes in small batches. Upserts update episode
- * metadata and text but never touch rater annotations stored in their own table.
+ * later requests perform only a count query. A new sample uses a new marker:
+ * overlapping episode IDs are updated in place, while earlier sample episodes
+ * and their ratings remain stored as historical data. Active-site queries use
+ * this marker so old and new samples can never be mixed in a rater queue.
  */
 export async function ensureBundledDataset(db: AppDatabase): Promise<void> {
   const existing = await db

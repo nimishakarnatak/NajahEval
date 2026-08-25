@@ -56,7 +56,11 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
   }, []);
 
   useEffect(() => {
-    void loadUsers();
+    // Schedule the request after the effect has committed. This avoids a
+    // synchronous loading-state update during effect execution and cancels the
+    // initial request cleanly if the dashboard unmounts immediately.
+    const initialLoad = window.setTimeout(() => void loadUsers(), 0);
+    return () => window.clearTimeout(initialLoad);
   }, [loadUsers]);
 
   async function mutate(method: RequestMethod, body: Record<string, unknown>) {

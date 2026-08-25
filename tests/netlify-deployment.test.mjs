@@ -24,13 +24,16 @@ test("uses standard Next.js and external Neon Postgres for a durable deployment"
 });
 
 test("ships a versioned Postgres schema and traces the bundled dataset", async () => {
-  const [migration, nextConfig, bundledDataset] = await Promise.all([
+  const [migration, nextConfig, bundledDataset, episodesRoute, progress, exportsRoute] = await Promise.all([
     readFile(
       projectFile("database/migrations/20260825000000_create_najah_schema.sql"),
       "utf8",
     ),
     readFile(projectFile("next.config.ts"), "utf8"),
     readFile(projectFile("lib/bundled-dataset.ts"), "utf8"),
+    readFile(projectFile("app/api/episodes/route.ts"), "utf8"),
+    readFile(projectFile("lib/admin-progress.ts"), "utf8"),
+    readFile(projectFile("app/api/admin/exports/route.ts"), "utf8"),
   ]);
 
   for (const table of ["users", "auth_sessions", "episodes", "annotations", "rubric_annotations"]) {
@@ -40,4 +43,8 @@ test("ships a versioned Postgres schema and traces the bundled dataset", async (
   assert.match(nextConfig, /najah_final_annotation_dataset\.csv/);
   assert.match(bundledDataset, /parameterized multi-row upsert/);
   assert.match(bundledDataset, /ON CONFLICT\(episode_id\) DO UPDATE/);
+  assert.match(bundledDataset, /najah-activity-sample-v2/);
+  assert.match(episodesRoute, /WHERE e\.import_batch = \?/);
+  assert.match(progress, /WHERE import_batch = \?/);
+  assert.match(exportsRoute, /e\.import_batch = \?/);
 });

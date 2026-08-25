@@ -1,7 +1,7 @@
 # Najah Review Studio
 
 A full-stack human-evaluation workspace for rating the reviewed, de-identified
-Najah module episodes. The repository includes the final 300-episode annotation
+Najah module episodes. The repository includes the final 300-participant annotation
 sample, independent rater accounts, drafts, completed ratings, progress views,
 CSV export, and optional Google sign-in.
 
@@ -29,8 +29,24 @@ GitHub main branch ───> Netlify Next.js build
 
 The 300-row CSV remains version-controlled and read-only. The first authenticated
 request performs one parameterized bulk upsert into Postgres; future requests
-only run a count check. User accounts and annotations are durable and are never
-stored in a serverless function's temporary filesystem.
+only run a count check. Dataset versions are isolated by an import marker, so a
+new sample replaces the active queue without deleting historical episodes or
+ratings. User accounts and annotations are durable and are never stored in a
+serverless function's temporary filesystem.
+
+## Activity-based sampling design
+
+The current dataset samples 100 unique participants from each of three
+separated activity groups: low (1-4 participant turns), medium (8-12), and high
+(20 or more). Activity is calculated across every eligible module episode in a
+participant's available history before one focal episode is selected. Najah
+messages are excluded. Participants with 5-7 or 13-19 turns remain in a
+transition group for later scale analyses but are not sampled initially.
+
+Activity is descriptive, not a proxy for positive engagement. High activity can
+reflect productive work, persistence, confusion, retries, or technical issues.
+The activity measure and group are deliberately omitted from the rater-facing
+CSV so they cannot influence human judgments.
 
 ## Publish from GitHub to Netlify
 

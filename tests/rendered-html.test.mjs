@@ -71,6 +71,7 @@ test("bundles and automatically seeds the 300-episode final dataset", async () =
   ]);
   assert.equal((datasetCsv.match(/^\d+,E\d+,/gm) ?? []).length, 300);
   assert.match(datasetCsv, /^rater_item_order,episode_id,student_status,language,module,treatment,/);
+  assert.doesNotMatch(datasetCsv.split("\n", 1)[0], /activity/);
   assert.match(bundledDataset, /BUNDLED_EPISODE_COUNT/);
   assert.match(bundledDataset, /ON CONFLICT\(episode_id\) DO UPDATE/);
   assert.match(episodesRoute, /ensureBundledDataset\(db\)/);

@@ -1,5 +1,8 @@
 import { ensureNajahSchema, getDatabase } from "@/db";
-import { ensureBundledDataset } from "@/lib/bundled-dataset";
+import {
+  BUNDLED_DATASET_VERSION,
+  ensureBundledDataset,
+} from "@/lib/bundled-dataset";
 import { normalizeStudentStatus, normalizeTreatment } from "@/lib/episode-dimensions";
 import { resolveEpisodeLanguage } from "@/lib/language";
 import {
@@ -80,6 +83,7 @@ export async function GET(request: Request) {
       LEFT JOIN rubric_annotations current
         ON current.episode_id = e.episode_id
        AND current.rater_id = ?
+      WHERE e.import_batch = ?
       ORDER BY
         CASE e.student_status
           WHEN 'graduated_student' THEN 1
@@ -90,7 +94,7 @@ export async function GET(request: Request) {
         CASE e.treatment WHEN 'standard' THEN 1 WHEN 'gender_sensitive' THEN 2 ELSE 3 END,
         e.episode_id
     `)
-    .bind(rater.id)
+    .bind(rater.id, BUNDLED_DATASET_VERSION)
     .all();
 
   // Older imports stored only the primary language. Resolve the display value
