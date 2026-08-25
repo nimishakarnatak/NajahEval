@@ -1,5 +1,8 @@
 import { ensureNajahSchema, getDatabase } from "@/db";
-import { ensureBundledDataset } from "@/lib/bundled-dataset";
+import {
+  BUNDLED_DATASET_VERSION,
+  ensureBundledDataset,
+} from "@/lib/bundled-dataset";
 
 export type EvaluatorProgress = {
   raterId: string;
@@ -75,25 +78,31 @@ export async function getAdminProgress(): Promise<AdminProgress> {
   await ensureBundledDataset(db);
 
   const [episodeCountRow, evaluatorResult, coverageRow] = await Promise.all([
-    db.prepare("SELECT COUNT(*) AS count FROM episodes").first<CountRow>(),
+    db
+      .prepare("SELECT COUNT(*) AS count FROM episodes WHERE import_batch = ?")
+      .bind(BUNDLED_DATASET_VERSION)
+      .first<CountRow>(),
     db.prepare(`
       SELECT
         u.user_id AS "raterId",
         u.display_name AS "displayName",
         u.email,
         u.created_at AS "joinedAt",
-        COUNT(ra.episode_id) FILTER (WHERE ra.status = 'complete') AS "completedCount",
-        COUNT(ra.episode_id) FILTER (WHERE ra.status = 'draft') AS "draftCount",
-        MAX(ra.updated_at) AS "lastActivity"
+        COUNT(active_episode.episode_id) FILTER (WHERE ra.status = 'complete') AS "completedCount",
+        COUNT(active_episode.episode_id) FILTER (WHERE ra.status = 'draft') AS "draftCount",
+        MAX(ra.updated_at) FILTER (WHERE active_episode.episode_id IS NOT NULL) AS "lastActivity"
       FROM users u
       LEFT JOIN rubric_annotations ra ON ra.rater_id = u.user_id
+      LEFT JOIN episodes active_episode
+        ON active_episode.episode_id = ra.episode_id
+       AND active_episode.import_batch = ?
       WHERE u.role = 'rater'
       GROUP BY u.user_id, u.display_name, u.email, u.created_at
       ORDER BY
-        COUNT(ra.episode_id) FILTER (WHERE ra.status = 'complete') DESC,
+        COUNT(active_episode.episode_id) FILTER (WHERE ra.status = 'complete') DESC,
         LOWER(u.display_name),
         LOWER(u.email)
-    `).all<RawEvaluatorProgress>(),
+    `).bind(BUNDLED_DATASET_VERSION).all<RawEvaluatorProgress>(),
     db.prepare(`
       SELECT
         COUNT(*) FILTER (WHERE completed_count = 0) AS "noCompletedRating",
@@ -108,9 +117,10 @@ export async function getAdminProgress(): Promise<AdminProgress> {
         LEFT JOIN users rating_user
           ON rating_user.user_id = ra.rater_id
          AND rating_user.role = 'rater'
+        WHERE e.import_batch = ?
         GROUP BY e.episode_id
       ) episode_coverage
-    `).first<RawCoverage>(),
+    `).bind(BUNDLED_DATASET_VERSION).first<RawCoverage>(),
   ]);
 
   const totalEpisodes = Number(episodeCountRow?.count ?? 0);

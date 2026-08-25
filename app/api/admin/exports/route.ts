@@ -1,5 +1,9 @@
 import { ensureNajahSchema, getDatabase } from "@/db";
 import {
+  BUNDLED_DATASET_VERSION,
+  ensureBundledDataset,
+} from "@/lib/bundled-dataset";
+import {
   annotationExportCsv,
   exportFilenamePart,
   type ExportAnnotationRow,
@@ -31,6 +35,7 @@ export async function GET(request: Request) {
 
   const db = getDatabase();
   await ensureNajahSchema(db);
+  await ensureBundledDataset(db);
 
   let selectedRater: ExportRater | null = null;
   if (!combined) {
@@ -51,8 +56,8 @@ export async function GET(request: Request) {
   }
 
   const whereClause = combined
-    ? "WHERE annotation_user.role <> 'admin'"
-    : "WHERE ra.rater_id = ?";
+    ? "WHERE e.import_batch = ? AND annotation_user.role <> 'admin'"
+    : "WHERE e.import_batch = ? AND ra.rater_id = ?";
   const query = db.prepare(`
     SELECT
       ra.rater_id AS "raterId",
@@ -80,8 +85,8 @@ export async function GET(request: Request) {
     ORDER BY LOWER(annotation_user.display_name), ra.episode_id
   `);
   const result = combined
-    ? await query.all<ExportAnnotationRow>()
-    : await query.bind(raterId).all<ExportAnnotationRow>();
+    ? await query.bind(BUNDLED_DATASET_VERSION).all<ExportAnnotationRow>()
+    : await query.bind(BUNDLED_DATASET_VERSION, raterId).all<ExportAnnotationRow>();
 
   const date = new Date().toISOString().slice(0, 10);
   const filename = combined

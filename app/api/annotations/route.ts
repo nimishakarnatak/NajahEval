@@ -1,5 +1,9 @@
 import { ensureNajahSchema, getDatabase } from "@/db";
 import {
+  BUNDLED_DATASET_VERSION,
+  ensureBundledDataset,
+} from "@/lib/bundled-dataset";
+import {
   CRITICAL_FLAGS,
   CRITICAL_FLAG_KEYS,
   CriticalFlagKey,
@@ -171,9 +175,10 @@ export async function POST(request: Request) {
 
   const db = getDatabase();
   await ensureNajahSchema(db);
+  await ensureBundledDataset(db);
   const episode = await db
-    .prepare("SELECT episode_id FROM episodes WHERE episode_id = ?")
-    .bind(episodeId)
+    .prepare("SELECT episode_id FROM episodes WHERE episode_id = ? AND import_batch = ?")
+    .bind(episodeId, BUNDLED_DATASET_VERSION)
     .first();
   if (!episode) {
     return Response.json({ error: "Episode not found." }, { status: 404 });
