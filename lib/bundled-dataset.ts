@@ -1,15 +1,15 @@
-import finalDatasetCsv from "@/data/najah_final_annotation_dataset.csv?raw";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-/** Stable marker used to detect whether this exact bundled sample is in D1. */
+import type { AppDatabase, DatabaseValue } from "@/db";
+
+const finalDatasetCsv = readFileSync(
+  join(process.cwd(), "data", "najah_final_annotation_dataset.csv"),
+  "utf8",
+);
+
+/** Stable marker used to detect whether this exact bundled sample is in Postgres. */
 export const BUNDLED_DATASET_VERSION = "najah-final-annotation-dataset-v1";
-
-/**
- * Maximum number of prepared inserts sent to D1 in one batch.
- *
- * Keeping batches small avoids platform statement limits while still loading
- * the 300-row sample quickly during the first authenticated request.
- */
-const D1_BATCH_SIZE = 40;
 
 type BundledEpisode = {
   episodeId: string;
@@ -133,7 +133,12 @@ const BUNDLED_EPISODES = readBundledEpisodes(finalDatasetCsv);
 export const BUNDLED_EPISODE_COUNT = BUNDLED_EPISODES.length;
 
 /**
- * Ensures that the reviewed 300-episode sample is present in the shared D1
+ * Ensures that the reviewed 300-episode sample is present in the shared
+ * Postgres database before the queue is returned.
+ *
+ * All 300 rows are sent as one parameterized multi-row upsert. This avoids 300
+ * network round trips from a serverless function while keeping transcript text
+ * out of SQL syntax and protected by bound parameters.
  * database before the queue is returned.
  *
  * The operation is idempotent. Once all rows carry the current dataset marker,
@@ -141,53 +146,56 @@ export const BUNDLED_EPISODE_COUNT = BUNDLED_EPISODES.length;
  * the next request safely resumes in small batches. Upserts update episode
  * metadata and text but never touch rater annotations stored in their own table.
  */
-export async function ensureBundledDataset(db: D1Database): Promise<void> {
+export async function ensureBundledDataset(db: AppDatabase): Promise<void> {
   const existing = await db
     .prepare("SELECT COUNT(*) AS count FROM episodes WHERE import_batch = ?")
     .bind(BUNDLED_DATASET_VERSION)
     .first<{ count: number | string }>();
   if (Number(existing?.count ?? 0) === BUNDLED_EPISODES.length) return;
 
-  for (let index = 0; index < BUNDLED_EPISODES.length; index += D1_BATCH_SIZE) {
-    const batch = BUNDLED_EPISODES.slice(index, index + D1_BATCH_SIZE);
-    await db.batch(
-      batch.map((episode) =>
-        db
-          .prepare(`
-            INSERT INTO episodes (
-              episode_id, student_status, language, module, treatment,
-              module_objective, prior_context, transcript,
-              privacy_review_status, language_review_status,
-              import_batch, imported_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'system')
-            ON CONFLICT(episode_id) DO UPDATE SET
-              student_status = excluded.student_status,
-              language = excluded.language,
-              module = excluded.module,
-              treatment = excluded.treatment,
-              module_objective = excluded.module_objective,
-              prior_context = excluded.prior_context,
-              transcript = excluded.transcript,
-              privacy_review_status = excluded.privacy_review_status,
-              language_review_status = excluded.language_review_status,
-              import_batch = excluded.import_batch,
-              imported_by = excluded.imported_by,
-              imported_at = CURRENT_TIMESTAMP
-          `)
-          .bind(
-            episode.episodeId,
-            episode.studentStatus,
-            episode.language,
-            episode.module,
-            episode.treatment,
-            episode.moduleObjective,
-            episode.priorContext,
-            episode.transcript,
-            episode.privacyReviewStatus,
-            episode.languageReviewStatus,
-            BUNDLED_DATASET_VERSION,
-          ),
-      ),
-    );
-  }
+  const values: DatabaseValue[] = [];
+  const rows = BUNDLED_EPISODES.map((episode) => {
+    const rowValues = [
+      episode.episodeId,
+      episode.studentStatus,
+      episode.language,
+      episode.module,
+      episode.treatment,
+      episode.moduleObjective,
+      episode.priorContext,
+      episode.transcript,
+      episode.privacyReviewStatus,
+      episode.languageReviewStatus,
+      BUNDLED_DATASET_VERSION,
+    ];
+    const start = values.length + 1;
+    values.push(...rowValues);
+    const placeholders = rowValues.map((_, offset) => `$${start + offset}`);
+    return `(${placeholders.join(", ")}, 'system')`;
+  });
+
+  await db.execute(
+    `
+      INSERT INTO episodes (
+        episode_id, student_status, language, module, treatment,
+        module_objective, prior_context, transcript,
+        privacy_review_status, language_review_status,
+        import_batch, imported_by
+      ) VALUES ${rows.join(",\n")}
+      ON CONFLICT(episode_id) DO UPDATE SET
+        student_status = excluded.student_status,
+        language = excluded.language,
+        module = excluded.module,
+        treatment = excluded.treatment,
+        module_objective = excluded.module_objective,
+        prior_context = excluded.prior_context,
+        transcript = excluded.transcript,
+        privacy_review_status = excluded.privacy_review_status,
+        language_review_status = excluded.language_review_status,
+        import_batch = excluded.import_batch,
+        imported_by = excluded.imported_by,
+        imported_at = CURRENT_TIMESTAMP
+    `,
+    values,
+  );
 }

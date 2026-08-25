@@ -375,7 +375,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [search, setSearch] = useState("");
   const [studentStatusFilter, setStudentStatusFilter] = useState("all");
   const [moduleFilter, setModuleFilter] = useState("all");
   const [treatmentFilter, setTreatmentFilter] = useState("all");
@@ -441,16 +440,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const hasUnknownTreatment = episodes.some((episode) => episode.treatment === "unknown");
 
   const filteredEpisodes = useMemo(() => {
-    const query = search.trim().toLowerCase();
     return episodes.filter((episode) => {
-      const matchesSearch =
-        !query ||
-        episode.episodeId.toLowerCase().includes(query) ||
-        episode.transcript.toLowerCase().includes(query) ||
-        studentStatusLabel(episode.studentStatus).toLowerCase().includes(query) ||
-        languageLabel(episode.language).toLowerCase().includes(query) ||
-        treatmentLabel(episode.treatment).toLowerCase().includes(query) ||
-        (MODULE_LABELS[episode.module] || episode.module).toLowerCase().includes(query);
       const matchesStudentStatus =
         studentStatusFilter === "all" || episode.studentStatus === studentStatusFilter;
       const matchesModule = moduleFilter === "all" || episode.module === moduleFilter;
@@ -461,9 +451,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         (viewFilter === "queue" && episode.annotationStatus !== "complete" && episode.completedRaterCount < 2) ||
         (viewFilter === "drafts" && episode.annotationStatus === "draft") ||
         (viewFilter === "completed" && episode.annotationStatus === "complete");
-      return matchesSearch && matchesStudentStatus && matchesModule && matchesTreatment && matchesView;
+      return matchesStudentStatus && matchesModule && matchesTreatment && matchesView;
     });
-  }, [episodes, moduleFilter, search, studentStatusFilter, treatmentFilter, viewFilter]);
+  }, [episodes, moduleFilter, studentStatusFilter, treatmentFilter, viewFilter]);
 
   useEffect(() => {
     if (filteredEpisodes.length && !filteredEpisodes.some((episode) => episode.episodeId === selectedId)) {
@@ -627,7 +617,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       const saved = await persist("draft", true);
       if (!saved) return;
     }
-    setSearch("");
     setStudentStatusFilter("all");
     setModuleFilter("all");
     setTreatmentFilter("all");
@@ -905,10 +894,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
         <div className="filter-stack">
           <label>
-            <span>Find an episode</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ID, module, or text" />
-          </label>
-          <label>
             <span>Student status</span>
             <select value={studentStatusFilter} onChange={(event) => setStudentStatusFilter(event.target.value)}>
               <option value="all">All student statuses</option>
@@ -953,12 +938,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         )}
 
         {progressOpen && (
-          <div
-            className="progress-overlay"
-            onMouseDown={(event) => {
-              if (event.currentTarget === event.target) setProgressOpen(false);
-            }}
-          >
+          <div className="progress-overlay">
+            <button
+              type="button"
+              className="progress-overlay-dismiss"
+              aria-label="Close review progress"
+              onClick={() => setProgressOpen(false)}
+            />
             <section
               className="progress-dialog"
               role="dialog"

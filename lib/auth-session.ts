@@ -4,9 +4,10 @@ import {
   sessionCookie,
   sessionExpiryEpoch,
 } from "@/lib/password-auth";
+import type { AppDatabase } from "@/db";
 
 /** Create a seven-day server-side session and return its HttpOnly cookie. */
-export async function issueSessionCookie(db: D1Database, userId: string): Promise<string> {
+export async function issueSessionCookie(db: AppDatabase, userId: string): Promise<string> {
   const token = createSessionToken();
   const tokenHash = await digestSessionToken(token);
   const expiresAt = sessionExpiryEpoch();

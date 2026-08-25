@@ -13,14 +13,14 @@ function bytesToBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-function base64UrlToBytes(value: string): Uint8Array {
+function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
   const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
   const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
   const binary = atob(padded);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-function randomBytes(length: number): Uint8Array {
+function randomBytes(length: number): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   return bytes;
@@ -28,7 +28,7 @@ function randomBytes(length: number): Uint8Array {
 
 async function derivePasswordKey(
   password: string,
-  salt: Uint8Array,
+  salt: Uint8Array<ArrayBuffer>,
   iterations: number,
 ): Promise<Uint8Array> {
   const sourceKey = await crypto.subtle.importKey(
@@ -96,7 +96,7 @@ export function passwordValidationError(password: string): string | null {
   return null;
 }
 
-/** Generate an unguessable session token. Only its digest is stored in D1. */
+/** Generate an unguessable session token. Only its digest is stored. */
 export function createSessionToken(): string {
   return bytesToBase64Url(randomBytes(32));
 }

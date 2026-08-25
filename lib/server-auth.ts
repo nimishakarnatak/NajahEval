@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 
-import { ensureNajahSchema, getD1 } from "@/db";
+import { ensureNajahSchema, getDatabase } from "@/db";
 import { digestSessionToken, readSessionToken } from "@/lib/password-auth";
 
 export type RaterIdentity = {
@@ -38,16 +38,16 @@ export async function getRaterIdentity(request?: Request): Promise<RaterIdentity
   const token = readSessionToken(requestHeaders.get("cookie"));
   if (!token) return null;
 
-  const db = getD1();
+  const db = getDatabase();
   await ensureNajahSchema(db);
   const tokenHash = await digestSessionToken(token);
   const now = Math.floor(Date.now() / 1000);
   const user = await db
     .prepare(`
       SELECT
-        users.user_id AS id,
+        users.user_id AS "id",
         users.email,
-        users.display_name AS displayName,
+        users.display_name AS "displayName",
         users.role
       FROM auth_sessions
       INNER JOIN users ON users.user_id = auth_sessions.user_id

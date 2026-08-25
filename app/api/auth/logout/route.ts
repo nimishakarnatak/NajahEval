@@ -1,4 +1,4 @@
-import { ensureNajahSchema, getD1 } from "@/db";
+import { ensureNajahSchema, getDatabase } from "@/db";
 import {
   digestSessionToken,
   expiredSessionCookie,
@@ -8,7 +8,7 @@ import {
 export async function POST(request: Request) {
   const token = readSessionToken(request.headers.get("cookie"));
   if (token) {
-    const db = getD1();
+    const db = getDatabase();
     await ensureNajahSchema(db);
     await db
       .prepare("DELETE FROM auth_sessions WHERE session_hash = ?")

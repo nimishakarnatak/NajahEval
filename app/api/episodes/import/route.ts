@@ -1,4 +1,4 @@
-import { ensureNajahSchema, getD1 } from "@/db";
+import { ensureNajahSchema, getDatabase } from "@/db";
 import { normalizeStudentStatus, normalizeTreatment } from "@/lib/episode-dimensions";
 import { resolveEpisodeLanguage } from "@/lib/language";
 import { getRaterIdentity } from "@/lib/server-auth";
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   }
 
   if (accepted.length) {
-    const db = getD1();
+    const db = getDatabase();
     await ensureNajahSchema(db);
     await db.batch(
       accepted.map((episode) =>

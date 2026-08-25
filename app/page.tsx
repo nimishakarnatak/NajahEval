@@ -12,6 +12,9 @@ export const metadata: Metadata = {
 
 export default async function Home() {
   const rater = await getRaterIdentity();
-  if (!rater) return <AuthScreen />;
+  if (!rater) {
+    const googleClientId = (process.env.GOOGLE_CLIENT_ID ?? "").trim();
+    return <AuthScreen googleClientId={googleClientId} />;
+  }
   return <AnnotatorApp initialRater={rater} />;
 }

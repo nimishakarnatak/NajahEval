@@ -1,6 +1,4 @@
-import { env } from "cloudflare:workers";
-
-import { ensureNajahSchema, getD1 } from "@/db";
+import { ensureNajahSchema, getDatabase } from "@/db";
 import { issueSessionCookie } from "@/lib/auth-session";
 import { hashPassword, verifyPassword } from "@/lib/password-auth";
 
@@ -24,18 +22,18 @@ export async function POST(request: Request) {
     return Response.json({ error: "Enter your email and password." }, { status: 400 });
   }
 
-  const db = getD1();
+  const db = getDatabase();
   await ensureNajahSchema(db);
   const user = await db
     .prepare(`
       SELECT
-        user_id AS userId,
+        user_id AS "userId",
         email,
-        display_name AS displayName,
-        password_hash AS passwordHash,
+        display_name AS "displayName",
+        password_hash AS "passwordHash",
         role,
-        failed_login_count AS failedLoginCount,
-        locked_until AS lockedUntil
+        failed_login_count AS "failedLoginCount",
+        locked_until AS "lockedUntil"
       FROM users
       WHERE email = ?
     `)
@@ -70,9 +68,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Email or password is incorrect." }, { status: 401 });
   }
 
-  const adminEmail = ((env as unknown as { ADMIN_EMAIL?: string }).ADMIN_EMAIL ?? "")
-    .trim()
-    .toLowerCase();
+  const adminEmail = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
   if (adminEmail && user.email === adminEmail && user.role !== "admin") {
     await db.prepare("UPDATE users SET role = 'admin' WHERE user_id = ?").bind(user.userId).run();
     user.role = "admin";

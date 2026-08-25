@@ -1,4 +1,4 @@
-import { ensureNajahSchema, getD1 } from "@/db";
+import { ensureNajahSchema, getDatabase } from "@/db";
 import {
   CRITICAL_FLAGS,
   CRITICAL_FLAG_KEYS,
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
     if (error) return Response.json({ error }, { status: 400 });
   }
 
-  const db = getD1();
+  const db = getDatabase();
   await ensureNajahSchema(db);
   const episode = await db
     .prepare("SELECT episode_id FROM episodes WHERE episode_id = ?")

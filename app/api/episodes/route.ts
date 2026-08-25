@@ -1,4 +1,4 @@
-import { ensureNajahSchema, getD1 } from "@/db";
+import { ensureNajahSchema, getDatabase } from "@/db";
 import { ensureBundledDataset } from "@/lib/bundled-dataset";
 import { normalizeStudentStatus, normalizeTreatment } from "@/lib/episode-dimensions";
 import { resolveEpisodeLanguage } from "@/lib/language";
@@ -12,10 +12,10 @@ import {
 import { getRaterIdentity } from "@/lib/server-auth";
 
 /**
- * Reads a JSON object stored in D1 while providing every expected key. A bad or
+ * Reads a JSON object stored in Postgres while providing every expected key. A bad or
  * old value becomes a blank draft instead of breaking the annotator queue.
  */
-function parseKeyedJson<T, K extends readonly string[]>(
+function parseKeyedJson<T, K extends readonly string[] = readonly string[]>(
   value: unknown,
   keys: K,
   defaultValue: () => T,
@@ -32,7 +32,7 @@ function parseKeyedJson<T, K extends readonly string[]>(
     }
   }
   const result = keyedRecord(keys, defaultValue);
-  for (const key of keys) {
+  for (const key of keys as readonly K[number][]) {
     if (Object.hasOwn(parsed, key)) result[key] = parsed[key] as T;
   }
   return result;
@@ -44,38 +44,38 @@ export async function GET(request: Request) {
     return Response.json({ error: "Sign in is required." }, { status: 401 });
   }
 
-  const db = getD1();
+  const db = getDatabase();
   await ensureNajahSchema(db);
   await ensureBundledDataset(db);
 
   const result = await db
     .prepare(`
       SELECT
-        e.episode_id AS episodeId,
-        e.student_status AS studentStatus,
+        e.episode_id AS "episodeId",
+        e.student_status AS "studentStatus",
         e.language,
         e.module,
         e.treatment,
-        e.module_objective AS moduleObjective,
-        e.prior_context AS priorContext,
+        e.module_objective AS "moduleObjective",
+        e.prior_context AS "priorContext",
         e.transcript,
-        e.privacy_review_status AS privacyReviewStatus,
-        e.language_review_status AS languageReviewStatus,
+        e.privacy_review_status AS "privacyReviewStatus",
+        e.language_review_status AS "languageReviewStatus",
         (
           SELECT COUNT(*) FROM rubric_annotations completed
           WHERE completed.episode_id = e.episode_id
             AND completed.status = 'complete'
-        ) AS completedRaterCount,
-        current.scores_json AS scoresJson,
-        current.evidence_turns_json AS evidenceTurnsJson,
-        current.justifications_json AS justificationsJson,
-        current.critical_flags_json AS criticalFlagsJson,
-        current.critical_evidence_json AS criticalEvidenceJson,
-        current.episode_end_reason AS episodeEndReason,
+        ) AS "completedRaterCount",
+        current.scores_json AS "scoresJson",
+        current.evidence_turns_json AS "evidenceTurnsJson",
+        current.justifications_json AS "justificationsJson",
+        current.critical_flags_json AS "criticalFlagsJson",
+        current.critical_evidence_json AS "criticalEvidenceJson",
+        current.episode_end_reason AS "episodeEndReason",
         current.comments,
-        current.rubric_version AS rubricVersion,
-        current.status AS annotationStatus,
-        current.updated_at AS annotationUpdatedAt
+        current.rubric_version AS "rubricVersion",
+        current.status AS "annotationStatus",
+        current.updated_at AS "annotationUpdatedAt"
       FROM episodes e
       LEFT JOIN rubric_annotations current
         ON current.episode_id = e.episode_id

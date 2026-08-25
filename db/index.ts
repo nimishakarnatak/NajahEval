@@ -1,122 +1,155 @@
-import { env } from "cloudflare:workers";
+import { getDatabase as getNetlifyDatabase } from "@netlify/database";
 
-export function getD1(): D1Database {
-  if (!env.DB) {
-    throw new Error("The Najah annotation database is unavailable.");
-  }
-  return env.DB;
+/** Values accepted by the parameterized SQL adapter. */
+export type DatabaseValue = string | number | boolean | null | Date | Uint8Array;
+
+/** Shape returned by the small D1-compatible query layer used by the app. */
+export type QueryResult<T extends Record<string, unknown>> = {
+  results: T[];
+};
+
+/**
+ * Convert the SQLite-style `?` placeholders used by the original application
+ * to PostgreSQL's numbered placeholders. All values remain separately bound;
+ * this function never interpolates user-provided content into SQL text.
+ */
+export function postgresPlaceholders(sql: string): string {
+  let parameter = 0;
+  return sql.replace(/\?/g, () => `$${(parameter += 1)}`);
 }
 
-export async function ensureNajahSchema(db: D1Database): Promise<void> {
-  await db.batch([
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS users (
-        user_id TEXT PRIMARY KEY,
-        email TEXT NOT NULL UNIQUE,
-        display_name TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL CHECK (role IN ('admin', 'rater')),
-        failed_login_count INTEGER NOT NULL DEFAULT 0,
-        locked_until INTEGER,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `),
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS auth_sessions (
-        session_hash TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        expires_at INTEGER NOT NULL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `),
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS episodes (
-        episode_id TEXT PRIMARY KEY,
-        student_status TEXT NOT NULL DEFAULT 'unknown',
-        language TEXT NOT NULL,
-        module TEXT NOT NULL,
-        treatment TEXT NOT NULL DEFAULT 'unknown',
-        module_objective TEXT NOT NULL DEFAULT '',
-        prior_context TEXT NOT NULL DEFAULT '',
-        transcript TEXT NOT NULL,
-        privacy_review_status TEXT NOT NULL,
-        language_review_status TEXT NOT NULL,
-        import_batch TEXT NOT NULL DEFAULT 'manual-import',
-        imported_by TEXT NOT NULL,
-        imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `),
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS annotations (
-        episode_id TEXT NOT NULL REFERENCES episodes(episode_id) ON DELETE CASCADE,
-        rater_id TEXT NOT NULL,
-        rater_email TEXT NOT NULL,
-        task_achievement INTEGER,
-        relevance INTEGER,
-        actionability INTEGER,
-        clarity INTEGER,
-        safety_privacy INTEGER,
-        cultural_gender_sensitivity INTEGER,
-        overall_quality INTEGER,
-        completion_judgment TEXT NOT NULL DEFAULT '',
-        critical_issue_flag TEXT NOT NULL DEFAULT '',
-        rater_confidence INTEGER,
-        comments TEXT NOT NULL DEFAULT '',
-        status TEXT NOT NULL DEFAULT 'draft',
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (episode_id, rater_id)
-      )
-    `),
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS rubric_annotations (
-        episode_id TEXT NOT NULL REFERENCES episodes(episode_id) ON DELETE CASCADE,
-        rater_id TEXT NOT NULL,
-        rater_email TEXT NOT NULL,
-        scores_json TEXT NOT NULL DEFAULT '{}',
-        evidence_turns_json TEXT NOT NULL DEFAULT '{}',
-        justifications_json TEXT NOT NULL DEFAULT '{}',
-        critical_flags_json TEXT NOT NULL DEFAULT '{}',
-        critical_evidence_json TEXT NOT NULL DEFAULT '{}',
-        episode_end_reason TEXT NOT NULL DEFAULT '',
-        comments TEXT NOT NULL DEFAULT '',
-        rubric_version TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'draft',
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (episode_id, rater_id)
-      )
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_episodes_language_module
-      ON episodes(language, module)
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_episodes_student_module_treatment
-      ON episodes(student_status, module, treatment)
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_annotations_episode_status
-      ON annotations(episode_id, status)
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_annotations_rater_status
-      ON annotations(rater_id, status)
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_rubric_annotations_episode_status
-      ON rubric_annotations(episode_id, status)
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_rubric_annotations_rater_status
-      ON rubric_annotations(rater_id, status)
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
-      ON auth_sessions(user_id)
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry
-      ON auth_sessions(expires_at)
-    `),
-  ]);
-  await db.prepare("PRAGMA optimize").run();
+/**
+ * A prepared, parameterized query. The methods intentionally mirror the small
+ * subset of Cloudflare D1 that the application used before its Netlify move.
+ * Keeping that surface narrow makes the migration auditable and prevents SQL
+ * differences from leaking into the annotation routes.
+ */
+export class PreparedQuery {
+  private values: DatabaseValue[] = [];
+
+  constructor(
+    private readonly database: ReturnType<typeof getNetlifyDatabase>,
+    private readonly sql: string,
+  ) {}
+
+  /** Return a new prepared query with values bound in placeholder order. */
+  bind(...values: DatabaseValue[]): PreparedQuery {
+    const query = new PreparedQuery(this.database, this.sql);
+    query.values = values;
+    return query;
+  }
+
+  /** Execute a read query and return its first row, or `null` when empty. */
+  async first<T extends Record<string, unknown>>(): Promise<T | null> {
+    const rows = await this.rows<T>();
+    return rows[0] ?? null;
+  }
+
+  /** Execute a read query and return rows in the shape expected by callers. */
+  async all<T extends Record<string, unknown> = Record<string, unknown>>(): Promise<QueryResult<T>> {
+    return { results: await this.rows<T>() };
+  }
+
+  /** Execute a mutation or DDL statement. */
+  async run(): Promise<{ success: true }> {
+    await this.rows();
+    return { success: true };
+  }
+
+  /** SQL text and values used internally for transactions. */
+  compiled(): { text: string; values: DatabaseValue[] } {
+    return { text: postgresPlaceholders(this.sql), values: this.values };
+  }
+
+  private async rows<T extends Record<string, unknown> = Record<string, unknown>>(): Promise<T[]> {
+    const query = this.compiled();
+    const rows = await this.database.sql.unsafe(query.text, query.values);
+    return rows as T[];
+  }
+}
+
+/**
+ * Application database facade backed by Netlify Database (managed Postgres).
+ * It supports prepared queries, atomic batches, and an escape hatch for a
+ * single large parameterized statement such as the bundled dataset upsert.
+ */
+export class AppDatabase {
+  constructor(private readonly database: ReturnType<typeof getNetlifyDatabase>) {}
+
+  prepare(sql: string): PreparedQuery {
+    return new PreparedQuery(this.database, sql);
+  }
+
+  /** Run several prepared statements in one PostgreSQL transaction. */
+  async batch(queries: PreparedQuery[]): Promise<void> {
+    const client = await this.database.pool.connect();
+    try {
+      await client.query("BEGIN");
+      for (const query of queries) {
+        const compiled = query.compiled();
+        await client.query(compiled.text, compiled.values);
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Execute arbitrary SQL with separately bound values. */
+  async execute<T extends Record<string, unknown> = Record<string, unknown>>(
+    sql: string,
+    values: DatabaseValue[] = [],
+  ): Promise<T[]> {
+    const rows = await this.database.sql.unsafe(sql, values);
+    return rows as T[];
+  }
+}
+
+let appDatabase: AppDatabase | null = null;
+
+/**
+ * Return the shared database client.
+ *
+ * On Netlify the package automatically selects the production database or the
+ * isolated deploy-preview branch. `DATABASE_URL` is supported as an explicit
+ * override for local development and for a portable external Postgres host.
+ */
+export function getDatabase(): AppDatabase {
+  if (!appDatabase) {
+    const connectionString = process.env.DATABASE_URL?.trim();
+    const database = getNetlifyDatabase(
+      connectionString ? { connectionString } : undefined,
+    );
+    appDatabase = new AppDatabase(database);
+  }
+  return appDatabase;
+}
+
+let schemaCheck: Promise<void> | null = null;
+
+/**
+ * Confirm that the versioned database migration has run.
+ *
+ * Netlify applies files in `netlify/database/migrations` before publishing a
+ * deploy. This inexpensive, once-per-runtime check produces a useful error for
+ * developers who run `next dev` against an uninitialized external database.
+ */
+export async function ensureNajahSchema(db: AppDatabase): Promise<void> {
+  if (!schemaCheck) {
+    schemaCheck = db
+      .prepare("SELECT user_id FROM users LIMIT 1")
+      .first()
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        schemaCheck = null;
+        throw new Error(
+          "The Najah database schema is missing. Run `netlify dev` or apply the migration in netlify/database/migrations.",
+          { cause: error },
+        );
+      });
+  }
+  await schemaCheck;
 }

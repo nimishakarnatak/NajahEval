@@ -1,6 +1,4 @@
-import { env } from "cloudflare:workers";
-
-import { ensureNajahSchema, getD1 } from "@/db";
+import { ensureNajahSchema, getDatabase } from "@/db";
 import { issueSessionCookie } from "@/lib/auth-session";
 import { hashPassword, passwordValidationError } from "@/lib/password-auth";
 
@@ -19,9 +17,7 @@ function validEmail(email: string): boolean {
 }
 
 function configuredAdminEmail(): string {
-  return ((env as unknown as { ADMIN_EMAIL?: string }).ADMIN_EMAIL ?? "")
-    .trim()
-    .toLowerCase();
+  return (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
 }
 
 export async function POST(request: Request) {
@@ -40,7 +36,7 @@ export async function POST(request: Request) {
   if (passwordError) {
     return Response.json({ error: passwordError }, { status: 400 });
   }
-  const db = getD1();
+  const db = getDatabase();
   await ensureNajahSchema(db);
   const existing = await db.prepare("SELECT user_id FROM users WHERE email = ?").bind(email).first();
   if (existing) {

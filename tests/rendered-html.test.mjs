@@ -16,6 +16,8 @@ const dimensionsPath = new URL("../lib/episode-dimensions.ts", import.meta.url);
 const rubricPath = new URL("../lib/rubric.ts", import.meta.url);
 const importRoutePath = new URL("../app/api/episodes/import/route.ts", import.meta.url);
 const registerRoutePath = new URL("../app/api/auth/register/route.ts", import.meta.url);
+const googleRoutePath = new URL("../app/api/auth/google/route.ts", import.meta.url);
+const googleIdentityPath = new URL("../lib/google-identity.ts", import.meta.url);
 
 test("ships Najah-specific metadata without starter preview markers", async () => {
   const [page, layout] = await Promise.all([
@@ -93,6 +95,16 @@ test("opens a personal progress list with direct episode navigation", async () =
   assert.match(component, /Select any episode to open it in the evaluation workspace/);
 });
 
+test("uses queue and progress lists instead of a conflicting episode search", async () => {
+  const component = await readFile(componentPath, "utf8");
+  assert.doesNotMatch(component, /Find an episode/);
+  assert.doesNotMatch(component, /episodeSearchRank|openEpisodeFromSearch/);
+  assert.match(component, /My queue/);
+  assert.match(component, /Drafts/);
+  assert.match(component, /Completed/);
+  assert.match(component, /openEpisodeFromProgress/);
+});
+
 test("separates flattened transcripts into legible participant and Najah turns", async () => {
   const [component, styles] = await Promise.all([
     readFile(componentPath, "utf8"),
@@ -160,4 +172,23 @@ test("provides open account creation and independent server sessions", async () 
   assert.doesNotMatch(authScreen, /response\.json\(\)/);
   assert.doesNotMatch(serverAuth, /getChatGPTUser/);
   assert.match(importRoute, /rater\.role !== "admin"/);
+});
+
+test("offers Google sign-in without depending on a ChatGPT account", async () => {
+  const [authScreen, page, googleRoute, googleIdentity] = await Promise.all([
+    readFile(authScreenPath, "utf8"),
+    readFile(pagePath, "utf8"),
+    readFile(googleRoutePath, "utf8"),
+    readFile(googleIdentityPath, "utf8"),
+  ]);
+  assert.match(authScreen, /Continue with Google/);
+  assert.match(authScreen, /no ChatGPT account is required/);
+  assert.match(authScreen, /accounts\.google\.com\/gsi\/client/);
+  assert.match(page, /GOOGLE_CLIENT_ID/);
+  assert.match(googleRoute, /verifyGoogleIdToken/);
+  assert.match(googleRoute, /UPDATE rubric_annotations SET rater_id/);
+  assert.match(googleIdentity, /RSASSA-PKCS1-v1_5/);
+  assert.match(googleIdentity, /GOOGLE_ISSUERS/);
+  assert.match(googleIdentity, /audienceMatches/);
+  assert.match(googleIdentity, /email_verified !== true/);
 });

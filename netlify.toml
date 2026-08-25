@@ -1,0 +1,9 @@
+[build]
+  command = "pnpm build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  included_files = ["data/najah_final_annotation_dataset.csv"]
