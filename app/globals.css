@@ -300,7 +300,6 @@ button:disabled { cursor: not-allowed; opacity: 0.48; }
 }
 .progress-row-status.status-complete { background: var(--green-soft); color: var(--green-dark); }
 .progress-row-status.status-draft { background: #fff2d7; color: #785817; }
-.progress-episode-row .language-badge { justify-self: end; }
 .progress-open-arrow { color: #86a398; font-size: 15px; }
 .progress-list-empty { min-height: 230px; display: grid; place-content: center; justify-items: center; color: var(--muted); }
 .progress-list-empty span { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--green-soft); color: var(--green); font-size: 18px; }
@@ -363,7 +362,7 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 
 .episode-toolbar { justify-content: space-between; max-width: 1320px; margin: 0 auto 14px; }
 .episode-toolbar > div:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
-.student-status-badge, .language-badge, .module-badge, .treatment-badge, .episode-id {
+.student-status-badge, .module-badge, .treatment-badge, .episode-id {
   display: inline-flex;
   align-items: center;
   min-height: 26px;
@@ -373,9 +372,6 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   font-weight: 750;
 }
 .student-status-badge { background: #e4eef7; color: #345d7c; }
-.language-badge { background: var(--green); color: white; }
-.language-fr { background: #496d9b; }
-.language-en { background: #7c5f99; }
 .module-badge { background: var(--sand); color: #70501b; }
 .treatment-badge { background: #eee9f5; color: #655078; }
 .treatment-gender_sensitive { background: #f5e6ee; color: #7f3f60; }
@@ -854,7 +850,7 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   .progress-list-heading { padding: 9px 16px 6px; }
   .progress-episode-list { padding: 0 10px 15px; }
   .progress-episode-row { grid-template-columns: 8px minmax(0, 1fr) auto; gap: 9px; }
-  .progress-episode-row .language-badge, .progress-open-arrow { display: none; }
+  .progress-open-arrow { display: none; }
   .admin-main { width: min(100% - 24px, 1180px); padding: 27px 0 38px; }
   .admin-page-heading { grid-template-columns: 1fr; gap: 19px; }
   .admin-page-heading h1 { font-size: 34px; }
