@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getAdminProgress } from "@/lib/admin-progress";
 import { getRaterIdentity } from "@/lib/server-auth";
 import { AdminParticipantManager } from "./AdminParticipantManager";
+import { AdminRatingExports } from "./AdminRatingExports";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,7 @@ export default async function AdminDashboardPage() {
         </section>
 
         <AdminParticipantManager adminEmail={admin.email} />
+        <AdminRatingExports evaluators={progress.evaluators} />
 
         <section className="admin-summary-grid" aria-label="Evaluation summary">
           <article>
