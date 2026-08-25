@@ -1,4 +1,7 @@
-CREATE TABLE users (
+-- Reference/manual migration for external PostgreSQL hosts.
+-- The application also applies this idempotent schema on first use.
+
+CREATE TABLE IF NOT EXISTS users (
   user_id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   display_name TEXT NOT NULL,
@@ -9,14 +12,14 @@ CREATE TABLE users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE auth_sessions (
+CREATE TABLE IF NOT EXISTS auth_sessions (
   session_hash TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   expires_at BIGINT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE episodes (
+CREATE TABLE IF NOT EXISTS episodes (
   episode_id TEXT PRIMARY KEY,
   student_status TEXT NOT NULL DEFAULT 'unknown',
   language TEXT NOT NULL,
@@ -32,7 +35,7 @@ CREATE TABLE episodes (
   imported_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE annotations (
+CREATE TABLE IF NOT EXISTS annotations (
   episode_id TEXT NOT NULL REFERENCES episodes(episode_id) ON DELETE CASCADE,
   rater_id TEXT NOT NULL,
   rater_email TEXT NOT NULL,
@@ -52,7 +55,7 @@ CREATE TABLE annotations (
   PRIMARY KEY (episode_id, rater_id)
 );
 
-CREATE TABLE rubric_annotations (
+CREATE TABLE IF NOT EXISTS rubric_annotations (
   episode_id TEXT NOT NULL REFERENCES episodes(episode_id) ON DELETE CASCADE,
   rater_id TEXT NOT NULL,
   rater_email TEXT NOT NULL,
@@ -69,19 +72,19 @@ CREATE TABLE rubric_annotations (
   PRIMARY KEY (episode_id, rater_id)
 );
 
-CREATE INDEX idx_episodes_language_module
+CREATE INDEX IF NOT EXISTS idx_episodes_language_module
   ON episodes(language, module);
-CREATE INDEX idx_episodes_student_module_treatment
+CREATE INDEX IF NOT EXISTS idx_episodes_student_module_treatment
   ON episodes(student_status, module, treatment);
-CREATE INDEX idx_annotations_episode_status
+CREATE INDEX IF NOT EXISTS idx_annotations_episode_status
   ON annotations(episode_id, status);
-CREATE INDEX idx_annotations_rater_status
+CREATE INDEX IF NOT EXISTS idx_annotations_rater_status
   ON annotations(rater_id, status);
-CREATE INDEX idx_rubric_annotations_episode_status
+CREATE INDEX IF NOT EXISTS idx_rubric_annotations_episode_status
   ON rubric_annotations(episode_id, status);
-CREATE INDEX idx_rubric_annotations_rater_status
+CREATE INDEX IF NOT EXISTS idx_rubric_annotations_rater_status
   ON rubric_annotations(rater_id, status);
-CREATE INDEX idx_auth_sessions_user
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
   ON auth_sessions(user_id);
-CREATE INDEX idx_auth_sessions_expiry
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry
   ON auth_sessions(expires_at);

@@ -1,12 +1,16 @@
-import { getDatabase as getNetlifyDatabase } from "@netlify/database";
+import { neon } from "@neondatabase/serverless";
+
+import { NAJAH_SCHEMA_STATEMENTS } from "@/db/schema";
 
 /** Values accepted by the parameterized SQL adapter. */
 export type DatabaseValue = string | number | boolean | null | Date | Uint8Array;
 
-/** Shape returned by the small D1-compatible query layer used by the app. */
+/** Shape returned by the small database query layer used by the app. */
 export type QueryResult<T extends Record<string, unknown>> = {
   results: T[];
 };
+
+type NeonDatabase = ReturnType<typeof neon>;
 
 /**
  * Convert the SQLite-style `?` placeholders used by the original application
@@ -28,7 +32,7 @@ export class PreparedQuery {
   private values: DatabaseValue[] = [];
 
   constructor(
-    private readonly database: ReturnType<typeof getNetlifyDatabase>,
+    private readonly database: NeonDatabase,
     private readonly sql: string,
   ) {}
 
@@ -63,39 +67,32 @@ export class PreparedQuery {
 
   private async rows<T extends Record<string, unknown> = Record<string, unknown>>(): Promise<T[]> {
     const query = this.compiled();
-    const rows = await this.database.sql.unsafe(query.text, query.values);
+    const rows = await this.database.query(query.text, query.values);
     return rows as T[];
   }
 }
 
 /**
- * Application database facade backed by Netlify Database (managed Postgres).
- * It supports prepared queries, atomic batches, and an escape hatch for a
- * single large parameterized statement such as the bundled dataset upsert.
+ * Application database facade backed by Neon Postgres.
+ *
+ * The HTTP-based Neon driver is designed for serverless functions and avoids
+ * keeping a TCP connection pool alive between separate Netlify invocations.
  */
 export class AppDatabase {
-  constructor(private readonly database: ReturnType<typeof getNetlifyDatabase>) {}
+  constructor(private readonly database: NeonDatabase) {}
 
   prepare(sql: string): PreparedQuery {
     return new PreparedQuery(this.database, sql);
   }
 
-  /** Run several prepared statements in one PostgreSQL transaction. */
+  /** Run several prepared statements in one non-interactive transaction. */
   async batch(queries: PreparedQuery[]): Promise<void> {
-    const client = await this.database.pool.connect();
-    try {
-      await client.query("BEGIN");
-      for (const query of queries) {
+    await this.database.transaction(
+      queries.map((query) => {
         const compiled = query.compiled();
-        await client.query(compiled.text, compiled.values);
-      }
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+        return this.database.query(compiled.text, compiled.values);
+      }),
+    );
   }
 
   /** Execute arbitrary SQL with separately bound values. */
@@ -103,53 +100,48 @@ export class AppDatabase {
     sql: string,
     values: DatabaseValue[] = [],
   ): Promise<T[]> {
-    const rows = await this.database.sql.unsafe(sql, values);
+    const rows = await this.database.query(sql, values);
     return rows as T[];
   }
 }
 
 let appDatabase: AppDatabase | null = null;
 
-/**
- * Return the shared database client.
- *
- * On Netlify the package automatically selects the production database or the
- * isolated deploy-preview branch. `DATABASE_URL` is supported as an explicit
- * override for local development and for a portable external Postgres host.
- */
+/** Return the shared Neon HTTP query client for this serverless runtime. */
 export function getDatabase(): AppDatabase {
   if (!appDatabase) {
     const connectionString = process.env.DATABASE_URL?.trim();
-    const database = getNetlifyDatabase(
-      connectionString ? { connectionString } : undefined,
-    );
-    appDatabase = new AppDatabase(database);
+    if (!connectionString) {
+      throw new Error(
+        "DATABASE_URL is not configured. Add the Neon Postgres connection string in Netlify environment variables.",
+      );
+    }
+    appDatabase = new AppDatabase(neon(connectionString));
   }
   return appDatabase;
 }
 
-let schemaCheck: Promise<void> | null = null;
+let schemaReady: Promise<void> | null = null;
 
 /**
- * Confirm that the versioned database migration has run.
+ * Ensure a newly created external Postgres database has the required tables.
  *
- * Netlify applies files in `netlify/database/migrations` before publishing a
- * deploy. This inexpensive, once-per-runtime check produces a useful error for
- * developers who run `next dev` against an uninitialized external database.
+ * The fast path is one harmless read. If the schema is absent, all idempotent
+ * DDL statements run atomically under a transaction-scoped advisory lock. The
+ * lock prevents simultaneous first requests from racing to create the tables.
  */
 export async function ensureNajahSchema(db: AppDatabase): Promise<void> {
-  if (!schemaCheck) {
-    schemaCheck = db
-      .prepare("SELECT user_id FROM users LIMIT 1")
-      .first()
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        schemaCheck = null;
-        throw new Error(
-          "The Najah database schema is missing. Run `netlify dev` or apply the migration in netlify/database/migrations.",
-          { cause: error },
-        );
-      });
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      try {
+        await db.prepare("SELECT user_id FROM users LIMIT 1").first();
+      } catch {
+        await db.batch(NAJAH_SCHEMA_STATEMENTS.map((statement) => db.prepare(statement)));
+      }
+    })().catch((error: unknown) => {
+      schemaReady = null;
+      throw error;
+    });
   }
-  await schemaCheck;
+  await schemaReady;
 }
