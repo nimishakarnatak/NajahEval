@@ -41,7 +41,6 @@ export default async function AdminDashboardPage() {
     <div className="admin-shell">
       <header className="topbar admin-topbar">
         <Link href="/" className="brand-lockup brand-link" aria-label="Najah Review Studio home">
-          <div className="brand-mark" aria-hidden="true">ن</div>
           <div>
             <strong>Najah Review Studio</strong>
             <span>Administration workspace</span>

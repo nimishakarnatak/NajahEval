@@ -195,7 +195,6 @@ export function AuthScreen({ googleClientId }: { googleClientId: string }) {
     <main className="auth-shell">
       <section className="auth-introduction">
         <div className="auth-brand">
-          <div className="auth-brand-mark" aria-hidden="true">ن</div>
           <span>Najah Review Studio</span>
         </div>
         <div className="auth-introduction-copy">

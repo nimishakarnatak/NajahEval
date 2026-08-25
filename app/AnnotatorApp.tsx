@@ -938,7 +938,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">ن</div>
           <div>
             <strong>Najah Review Studio</strong>
             <span>Human evaluation workspace</span>
