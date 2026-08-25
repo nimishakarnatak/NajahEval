@@ -67,7 +67,14 @@ test("lets administrators manage raters and read-only viewers without deleting r
   assert.match(route, /Administrator access is required/);
   assert.match(route, /UPDATE users SET is_active = FALSE/);
   assert.match(route, /DELETE FROM auth_sessions/);
-  assert.doesNotMatch(route, /DELETE FROM rubric_annotations/);
+  assert.match(route, /if \(permanent\)/);
+  assert.match(route, /if \(target\.isActive\)/);
+  assert.match(route, /DELETE FROM rubric_annotations/);
+  assert.match(route, /DELETE FROM annotations/);
+  assert.match(route, /DELETE FROM users/);
+  assert.match(manager, /Delete permanently/);
+  assert.match(manager, /Type \$\{user\.email\} to confirm/);
+  assert.match(manager, /mode: "permanent"/);
   assert.match(schema, /'admin', 'rater', 'viewer'/);
   assert.match(schema, /is_active BOOLEAN NOT NULL DEFAULT TRUE/);
   assert.match(annotations, /Viewer accounts can read conversations but cannot save ratings/);
