@@ -74,7 +74,9 @@ export async function GET(request: Request) {
         current.justifications_json AS "justificationsJson",
         current.critical_flags_json AS "criticalFlagsJson",
         current.critical_evidence_json AS "criticalEvidenceJson",
-        current.episode_end_reason AS "episodeEndReason",
+        current.task_status AS "taskStatus",
+        current.task_incomplete_reason AS "taskIncompleteReason",
+        current.episode_end_reason AS "legacyEpisodeEndReason",
         current.comments,
         current.rubric_version AS "rubricVersion",
         current.status AS "annotationStatus",
@@ -109,8 +111,11 @@ export async function GET(request: Request) {
       justifications: parseKeyedJson<string>(episode.justificationsJson, DIMENSION_KEYS, () => ""),
       criticalFlags: parseKeyedJson<CriticalFlagValue>(episode.criticalFlagsJson, CRITICAL_FLAG_KEYS, () => null),
       criticalEvidence: parseKeyedJson<string>(episode.criticalEvidenceJson, CRITICAL_FLAG_KEYS, () => ""),
-      episodeEndReason:
-        typeof episode.episodeEndReason === "string" ? episode.episodeEndReason : "",
+      taskStatus: typeof episode.taskStatus === "string" ? episode.taskStatus : "",
+      taskIncompleteReason:
+        typeof episode.taskIncompleteReason === "string" ? episode.taskIncompleteReason : "",
+      legacyEpisodeEndReason:
+        typeof episode.legacyEpisodeEndReason === "string" ? episode.legacyEpisodeEndReason : "",
       studentStatus: normalizeStudentStatus(episode.studentStatus),
       treatment: normalizeTreatment(episode.treatment),
       language: resolveEpisodeLanguage(

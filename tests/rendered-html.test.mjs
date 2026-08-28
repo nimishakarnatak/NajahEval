@@ -143,9 +143,11 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(component, /Evidence turn number\(s\)/);
   assert.match(component, /Critical-failure flags/);
   assert.match(component, /Evidence turn numbers and written score justifications are optional/);
-  assert.match(component, /Why did the observed module episode end/);
-  assert.match(rubric, /Participant stopped replying before a final output/);
-  assert.match(rubric, /Final output delivered—user completion unconfirmed/);
+  assert.match(component, /Task status/);
+  assert.match(component, /Why was the task not completed/);
+  assert.match(rubric, /No further participant reply was observed/);
+  assert.match(rubric, /Output delivered, but not acknowledged/);
+  assert.match(rubric, /The available conversation does not provide enough evidence/);
   assert.match(rubric, /Cannot determine/);
   assert.match(component, /Submit & next/);
   assert.match(component, /reviewed episodes are built in/);
@@ -156,15 +158,17 @@ test("includes the core annotation workflow without temporary release or review 
   );
 });
 
-test("aligns episode-ending controls and keeps outcome choices mutually distinct", async () => {
-  const [rubric, styles] = await Promise.all([
+test("separates task status from the conditional reason an incomplete task stopped", async () => {
+  const [component, rubric, styles] = await Promise.all([
+    readFile(componentPath, "utf8"),
     readFile(rubricPath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(rubric, /najah-evidence-v4/);
-  assert.match(rubric, /Task completed—confirmed or clearly evident/);
-  assert.match(rubric, /Participant changed modules before completion/);
-  assert.match(rubric, /Najah stopped replying after a participant message/);
+  assert.match(rubric, /najah-evidence-v5/);
+  assert.match(rubric, /Completed and acknowledged/);
+  assert.match(rubric, /Participant moved to another module/);
+  assert.match(rubric, /No further Najah reply was observed/);
+  assert.match(component, /status === "not_completed"/);
   assert.match(styles, /\.episode-end-options label \{[^}]*grid-template-columns: 16px minmax\(0, 1fr\)/);
   assert.match(styles, /\.episode-end-options input \{[^}]*width: 16px; height: 16px/);
 });
@@ -179,7 +183,8 @@ test("keeps submission validation visible and reveals the first incomplete field
   assert.match(component, /role="alert"/);
   assert.match(component, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
   assert.match(component, /id=\{`evidence-\$\{dimension\.key\}`\}/);
-  assert.match(component, /id="episode-end-reason"/);
+  assert.match(component, /id="task-status"/);
+  assert.match(component, /id="task-incomplete-reason"/);
   assert.match(styles, /\.submit-error/);
   assert.match(styles, /\.score-card:focus-within/);
 });

@@ -37,10 +37,12 @@ test("defines all nine evidence-based dimensions and six critical flags", async 
   }
 });
 
-test("keeps score evidence optional while enforcing episode ending and critical flags", async () => {
+test("keeps score evidence optional while enforcing task status and critical flags", async () => {
   const route = await readFile(annotationRoutePath, "utf8");
   assert.doesNotMatch(route, /Add the relevant turn number\(s\)/);
-  assert.match(route, /Select why the observed module episode ended/);
+  assert.match(route, /Select the task status/);
+  assert.match(route, /Select why the task was not completed/);
+  assert.match(route, /annotation\.taskStatus === "not_completed"/);
   assert.doesNotMatch(route, /received a score of/);
   assert.doesNotMatch(route, /genuinely cannot be assessed/);
   assert.match(route, /Select Yes or No/);
@@ -53,6 +55,8 @@ test("keeps evidence-rubric results separate from legacy pilot annotations", asy
     readFile(schemaPath, "utf8"),
   ]);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS rubric_annotations/);
+  assert.match(schema, /task_status TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /task_incomplete_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(episodeRoute, /FROM rubric_annotations completed/);
   assert.match(episodeRoute, /LEFT JOIN rubric_annotations current/);
 });

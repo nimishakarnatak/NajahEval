@@ -11,7 +11,9 @@ export type ExportAnnotationRow = {
   treatment: string;
   language: string;
   status: string;
-  episodeEndReason: string;
+  taskStatus: string;
+  taskIncompleteReason: string;
+  legacyEpisodeEndReason: string;
   scoresJson: string;
   evidenceTurnsJson: string;
   justificationsJson: string;
@@ -59,7 +61,9 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     "treatment",
     "language",
     "annotation_status",
-    "episode_end_reason",
+    "task_status",
+    "task_incomplete_reason",
+    "legacy_episode_end_reason",
     ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
       `${dimension.key}_score`,
       `${dimension.key}_evidence_turns`,
@@ -91,7 +95,9 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
       treatmentLabel(row.treatment),
       row.language,
       row.status,
-      row.episodeEndReason,
+      row.taskStatus,
+      row.taskIncompleteReason,
+      row.legacyEpisodeEndReason,
       ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
         scores[dimension.key],
         evidenceTurns[dimension.key],

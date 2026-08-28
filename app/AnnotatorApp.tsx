@@ -16,11 +16,13 @@ import {
   DIMENSION_KEYS,
   DimensionKey,
   DimensionScore,
-  EPISODE_END_REASONS,
-  EpisodeEndReason,
   RUBRIC_DIMENSIONS,
   RubricDimension,
   RubricSection,
+  TASK_INCOMPLETE_REASONS,
+  TASK_STATUSES,
+  TaskIncompleteReason,
+  TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
 import { type UserRole, userRoleLabel } from "@/lib/user-roles";
@@ -31,7 +33,8 @@ type AnnotationDraft = {
   justifications: Record<DimensionKey, string>;
   criticalFlags: Record<CriticalFlagKey, CriticalFlagValue>;
   criticalEvidence: Record<CriticalFlagKey, string>;
-  episodeEndReason: EpisodeEndReason | "";
+  taskStatus: TaskStatus | "";
+  taskIncompleteReason: TaskIncompleteReason | "";
   comments: string;
 };
 
@@ -49,6 +52,7 @@ type Episode = AnnotationDraft & {
   completedRaterCount: number;
   annotationStatus: "draft" | "complete" | null;
   annotationUpdatedAt: string | null;
+  legacyEpisodeEndReason: string;
 };
 
 type Rater = { displayName: string; email: string; role: UserRole };
@@ -100,7 +104,8 @@ function emptyDraft(): AnnotationDraft {
     justifications: keyedRecord(DIMENSION_KEYS, () => ""),
     criticalFlags: keyedRecord(CRITICAL_FLAG_KEYS, () => null),
     criticalEvidence: keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
-    episodeEndReason: "",
+    taskStatus: "",
+    taskIncompleteReason: "",
     comments: "",
   };
 }
@@ -123,10 +128,17 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
     }
   }
 
-  if (!draft.episodeEndReason) {
+  if (!draft.taskStatus) {
     return {
-      message: "Select why the observed module episode ended.",
-      targetId: "episode-end-reason",
+      message: "Select the task status.",
+      targetId: "task-status",
+    };
+  }
+
+  if (draft.taskStatus === "not_completed" && !draft.taskIncompleteReason) {
+    return {
+      message: "Select why the task was not completed.",
+      targetId: "task-incomplete-reason",
     };
   }
 
@@ -158,7 +170,8 @@ function draftFromEpisode(episode: Episode | undefined): AnnotationDraft {
     justifications: { ...emptyDraft().justifications, ...episode.justifications },
     criticalFlags: { ...emptyDraft().criticalFlags, ...episode.criticalFlags },
     criticalEvidence: { ...emptyDraft().criticalEvidence, ...episode.criticalEvidence },
-    episodeEndReason: episode.episodeEndReason ?? "",
+    taskStatus: episode.taskStatus ?? "",
+    taskIncompleteReason: episode.taskIncompleteReason ?? "",
     comments: episode.comments ?? "",
   };
 }
@@ -336,33 +349,72 @@ function ScoreCard({
   );
 }
 
-/** Records the rater's observable explanation for the module boundary. */
-function EpisodeEndReasonCard({
-  value,
-  onChange,
+/**
+ * Records task progress separately from the observable event that interrupted
+ * an incomplete task. The second question appears only when it is logically
+ * applicable, keeping the exported fields mutually interpretable.
+ */
+function TaskStatusCard({
+  status,
+  incompleteReason,
+  onStatusChange,
+  onIncompleteReasonChange,
 }: {
-  value: EpisodeEndReason | "";
-  onChange: (value: EpisodeEndReason) => void;
+  status: TaskStatus | "";
+  incompleteReason: TaskIncompleteReason | "";
+  onStatusChange: (value: TaskStatus) => void;
+  onIncompleteReasonChange: (value: TaskIncompleteReason) => void;
 }) {
   return (
-    <fieldset className="episode-end-card" id="episode-end-reason">
-      <legend>Why did the observed module episode end?</legend>
-      <p>Select the option best supported by the available conversation.</p>
-      <div className="episode-end-options">
-        {EPISODE_END_REASONS.map((reason) => (
-          <label key={reason.value} className={value === reason.value ? "selected" : ""}>
-            <input
-              type="radio"
-              name="episode-end-reason"
-              value={reason.value}
-              checked={value === reason.value}
-              onChange={() => onChange(reason.value)}
-            />
-            <span>{reason.label}</span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
+    <div className="task-status-stack">
+      <fieldset className="episode-end-card" id="task-status">
+        <legend>Task status</legend>
+        <p>How far did the participant get with the task?</p>
+        <div className="episode-end-options">
+          {TASK_STATUSES.map((option) => (
+            <label key={option.value} className={status === option.value ? "selected" : ""}>
+              <input
+                type="radio"
+                name="task-status"
+                value={option.value}
+                checked={status === option.value}
+                aria-label={option.label}
+                onChange={() => onStatusChange(option.value)}
+              />
+              <span className="episode-option-copy">
+                <strong>{option.label}</strong>
+                <small>{option.description}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      {status === "not_completed" && (
+        <fieldset className="episode-end-card conditional-card" id="task-incomplete-reason">
+          <legend>Why was the task not completed?</legend>
+          <p>Select the option best supported by the available conversation.</p>
+          <div className="episode-end-options">
+            {TASK_INCOMPLETE_REASONS.map((reason) => (
+              <label key={reason.value} className={incompleteReason === reason.value ? "selected" : ""}>
+                <input
+                  type="radio"
+                  name="task-incomplete-reason"
+                  value={reason.value}
+                  checked={incompleteReason === reason.value}
+                  aria-label={reason.label}
+                  onChange={() => onIncompleteReasonChange(reason.value)}
+                />
+                <span className="episode-option-copy">
+                  <strong>{reason.label}</strong>
+                  <small>{reason.description}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+    </div>
   );
 }
 
@@ -555,10 +607,22 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setSaveState("unsaved");
   }
 
-  /** Saves the observed episode-ending classification in the current draft. */
-  function updateEpisodeEndReason(value: EpisodeEndReason) {
+  /** Saves task progress and clears an inapplicable incomplete-task reason. */
+  function updateTaskStatus(value: TaskStatus) {
     clearSubmissionFeedback();
-    setDraft((previous) => ({ ...previous, episodeEndReason: value }));
+    setDraft((previous) => ({
+      ...previous,
+      taskStatus: value,
+      taskIncompleteReason: value === "not_completed" ? previous.taskIncompleteReason : "",
+    }));
+    setDirty(true);
+    setSaveState("unsaved");
+  }
+
+  /** Records the observable interruption only for an incomplete task. */
+  function updateTaskIncompleteReason(value: TaskIncompleteReason) {
+    clearSubmissionFeedback();
+    setDraft((previous) => ({ ...previous, taskIncompleteReason: value }));
     setDirty(true);
     setSaveState("unsaved");
   }
@@ -856,7 +920,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       "treatment",
       "language",
       "annotation_status",
-      "episode_end_reason",
+      "task_status",
+      "task_incomplete_reason",
+      "legacy_episode_end_reason",
       ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
         `${dimension.key}_score`,
         `${dimension.key}_evidence_turns`,
@@ -877,7 +943,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         treatmentLabel(episode.treatment),
         episode.language,
         episode.annotationStatus,
-        episode.episodeEndReason,
+        episode.taskStatus,
+        episode.taskIncompleteReason,
+        episode.legacyEpisodeEndReason,
         ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
           episode.scores[dimension.key],
           episode.evidenceTurns[dimension.key],
@@ -1279,12 +1347,14 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
                 <section className="rubric-section episode-ending-section">
                   <div className="rubric-section-heading">
-                    <p className="eyebrow">Episode ending</p>
-                    <span>Classify only what can be observed in the available record.</span>
+                    <p className="eyebrow">Task outcome</p>
+                    <span>Record task progress first, then the observable reason only when the task was not completed.</span>
                   </div>
-                  <EpisodeEndReasonCard
-                    value={draft.episodeEndReason}
-                    onChange={updateEpisodeEndReason}
+                  <TaskStatusCard
+                    status={draft.taskStatus}
+                    incompleteReason={draft.taskIncompleteReason}
+                    onStatusChange={updateTaskStatus}
+                    onIncompleteReasonChange={updateTaskIncompleteReason}
                   />
                 </section>
 

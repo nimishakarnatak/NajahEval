@@ -4,47 +4,84 @@
  * Keeping a version in each saved row makes future rubric revisions auditable
  * and prevents results from different instruments being silently combined.
  */
-export const RUBRIC_VERSION = "najah-evidence-v4";
+export const RUBRIC_VERSION = "najah-evidence-v5";
 
 /**
- * Mutually exclusive, observable reasons that a module episode stopped.
+ * Mutually exclusive judgments about how far the participant's module task
+ * progressed within the available record.
  *
- * The labels avoid attributing an unobserved motive to the participant. For
- * example, `no_further_participant_reply_observed` records what is present in
- * the transcript without claiming that the participant chose to disengage.
+ * Task status is intentionally separated from the observable event that
+ * interrupted an incomplete task. This prevents a missing reply from being
+ * treated as evidence that a final output was or was not delivered.
  */
-export const EPISODE_END_REASONS = [
+export const TASK_STATUSES = [
   {
-    value: "task_completed",
-    label: "Task completed—confirmed or clearly evident",
+    value: "completed_acknowledged",
+    label: "Completed and acknowledged",
+    description:
+      "The intended output or outcome was delivered, and the participant confirmed, accepted, or expressed satisfaction with it.",
   },
   {
-    value: "output_delivered_unconfirmed",
-    label: "Final output delivered—user completion unconfirmed",
+    value: "output_delivered_unacknowledged",
+    label: "Output delivered, but not acknowledged",
+    description:
+      "Najah delivered the final output or a substantive result, but no participant confirmation was observed.",
   },
   {
-    value: "participant_moved_module",
-    label: "Participant changed modules before completion",
-  },
-  {
-    value: "no_further_participant_reply_observed",
-    label: "Participant stopped replying before a final output",
-  },
-  {
-    value: "no_further_najah_reply_observed",
-    label: "Najah stopped replying after a participant message",
-  },
-  {
-    value: "system_or_technical_failure",
-    label: "Technical failure interrupted the episode",
+    value: "not_completed",
+    label: "Not completed",
+    description:
+      "The interaction stopped before the task objective was achieved or a final output was delivered.",
   },
   {
     value: "cannot_determine",
     label: "Cannot determine",
+    description:
+      "The available conversation does not provide enough evidence to determine the task status.",
   },
 ] as const;
 
-export type EpisodeEndReason = (typeof EPISODE_END_REASONS)[number]["value"];
+export type TaskStatus = (typeof TASK_STATUSES)[number]["value"];
+
+/**
+ * Observable reasons why a task classified as `not_completed` could not
+ * continue. The wording records only what appears in the available transcript
+ * and never attributes an unobserved intention to the participant or Najah.
+ */
+export const TASK_INCOMPLETE_REASONS = [
+  {
+    value: "no_further_participant_reply_observed",
+    label: "No further participant reply was observed",
+    description:
+      "Najah requested information, clarification, a document, or another action needed to continue, but the available record contains no subsequent participant response.",
+  },
+  {
+    value: "no_further_najah_reply_observed",
+    label: "No further Najah reply was observed",
+    description:
+      "The participant provided information, asked a question, or completed a requested action, but the available record contains no subsequent Najah response.",
+  },
+  {
+    value: "participant_moved_module",
+    label: "Participant moved to another module",
+    description:
+      "The participant began a different career-guidance task before the current module objective was completed.",
+  },
+  {
+    value: "technical_failure",
+    label: "Technical failure interrupted the interaction",
+    description:
+      "A visible system error, failed upload, broken response, processing failure, or another technical problem prevented the task from continuing.",
+  },
+  {
+    value: "other_or_unclear",
+    label: "Other or unclear reason",
+    description:
+      "The task was not completed, but the reason does not match the options above or cannot be determined confidently from the available record.",
+  },
+] as const;
+
+export type TaskIncompleteReason = (typeof TASK_INCOMPLETE_REASONS)[number]["value"];
 
 export const DIMENSION_KEYS = [
   "contextualAppropriateness",

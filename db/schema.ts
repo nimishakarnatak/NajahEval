@@ -75,6 +75,8 @@ export const NAJAH_SCHEMA_STATEMENTS = [
       critical_flags_json TEXT NOT NULL DEFAULT '{}',
       critical_evidence_json TEXT NOT NULL DEFAULT '{}',
       episode_end_reason TEXT NOT NULL DEFAULT '',
+      task_status TEXT NOT NULL DEFAULT '',
+      task_incomplete_reason TEXT NOT NULL DEFAULT '',
       comments TEXT NOT NULL DEFAULT '',
       rubric_version TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'draft',
@@ -101,6 +103,8 @@ export const NAJAH_SCHEMA_STATEMENTS = [
  */
 export const NAJAH_SCHEMA_MIGRATION_STATEMENTS = [
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+  "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_status TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_incomplete_reason TEXT NOT NULL DEFAULT ''",
   `
     DO $$
     DECLARE
