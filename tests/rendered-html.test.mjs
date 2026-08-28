@@ -164,7 +164,7 @@ test("separates task status from the conditional reason an incomplete task stopp
     readFile(rubricPath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(rubric, /najah-evidence-v5/);
+  assert.match(rubric, /najah-evidence-v6/);
   assert.match(rubric, /Completed and acknowledged/);
   assert.match(rubric, /Participant moved to another module/);
   assert.match(rubric, /No further Najah reply was observed/);
