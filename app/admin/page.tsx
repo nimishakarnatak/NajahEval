@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { getAdminProgress } from "@/lib/admin-progress";
 import { getRaterIdentity } from "@/lib/server-auth";
+import { userAccessLabel } from "@/lib/user-roles";
 import { AdminParticipantManager } from "./AdminParticipantManager";
 import { AdminRatingExports } from "./AdminRatingExports";
 
@@ -51,7 +52,7 @@ export default async function AdminDashboardPage() {
             <span className="avatar">{admin.displayName.slice(0, 1).toUpperCase()}</span>
             <span>
               <strong>{admin.displayName}</strong>
-              <small>{admin.email} · Admin</small>
+              <small>{admin.email} · {userAccessLabel(admin.role, admin.canRate)}</small>
             </span>
           </div>
           <Link href="/" className="admin-back-link">Back to ratings</Link>

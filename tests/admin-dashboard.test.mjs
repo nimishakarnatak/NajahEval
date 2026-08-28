@@ -17,18 +17,20 @@ test("protects evaluator progress on both the admin page and API", async () => {
   assert.match(route, /status: 403/);
 });
 
-test("calculates progress for every rater and excludes administrator accounts", async () => {
+test("calculates progress for raters including dual-role administrators", async () => {
   const progress = await readFile(projectFile("lib/admin-progress.ts"), "utf8");
 
   assert.match(progress, /ensureBundledDataset\(db\)/);
-  assert.match(progress, /WHERE u\.role = 'rater'/);
+  assert.match(progress, /WHERE u\.can_rate = TRUE/);
+  assert.match(progress, /saved\.rater_id = u\.user_id/);
+  assert.match(progress, /u\.can_rate AS "canRate"/);
   assert.match(progress, /FILTER \(WHERE ra\.status = 'complete'\)/);
   assert.match(progress, /FILTER \(WHERE ra\.status = 'draft'\)/);
   assert.match(progress, /notStartedCount/);
   assert.match(progress, /completionPercentage/);
   assert.match(progress, /twoOrMoreCompletedRatings/);
   assert.match(progress, /expectedRatings: totalEpisodes \* 2/);
-  assert.match(progress, /rating_user\.role = 'rater'/);
+  assert.doesNotMatch(progress, /rating_user\.role = 'rater'/);
 });
 
 test("shows the dashboard link only to administrators and renders evaluator detail", async () => {
@@ -73,15 +75,21 @@ test("lets administrators manage raters and read-only viewers without deleting r
   assert.match(route, /DELETE FROM annotations/);
   assert.match(route, /DELETE FROM users/);
   assert.match(manager, /Delete permanently/);
+  assert.match(manager, /Remove rater status/);
+  assert.match(manager, /Add rater status/);
+  assert.match(manager, /mode: "rating_access"/);
   assert.match(manager, /Type \$\{user\.email\} to confirm/);
   assert.match(manager, /mode: "permanent"/);
   assert.match(schema, /'admin', 'rater', 'viewer'/);
   assert.match(schema, /is_active BOOLEAN NOT NULL DEFAULT TRUE/);
-  assert.match(annotations, /Viewer accounts can read conversations but cannot save ratings/);
+  assert.match(schema, /can_rate BOOLEAN NOT NULL DEFAULT FALSE/);
+  assert.match(annotations, /Rater status is required to save or submit ratings/);
+  assert.match(annotations, /!rater\.canRate/);
   assert.match(app, /Read-only dataset/);
   assert.match(app, /!readOnly &&/);
+  assert.match(app, /userAccessLabel\(rater\.role, rater\.canRate\)/);
   assert.match(serverAuth, /ADMIN_EMAIL/);
-  assert.match(serverAuth, /UPDATE users SET role = 'admin'/);
+  assert.match(serverAuth, /role = 'admin', can_rate = TRUE/);
 });
 
 test("provides one administrator CSV per rater plus a combined analysis file", async () => {
@@ -100,9 +108,13 @@ test("provides one administrator CSV per rater plus a combined analysis file", a
   assert.match(exportsPanel, /both drafts and completed ratings/);
   assert.match(exportsRoute, /admin\.role !== "admin"/);
   assert.match(exportsRoute, /scope"\) === "combined"/);
+  assert.doesNotMatch(exportsRoute, /annotation_user\.role <> 'admin'/);
+  assert.match(exportsRoute, /can_rate = TRUE/);
   assert.match(exportsRoute, /content-disposition/);
   assert.match(exportsRoute, /private, no-store/);
   assert.match(exporter, /rater_email/);
+  assert.match(exporter, /rater_status_active/);
+  assert.match(exporter, /raterCanRate/);
   assert.match(exporter, /rubric_version/);
   assert.match(exporter, /spreadsheet-formula prefixes/);
   assert.match(app, /Open export centre/);

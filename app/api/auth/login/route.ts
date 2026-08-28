@@ -11,6 +11,7 @@ type LoginUser = {
   displayName: string;
   passwordHash: string;
   role: UserRole;
+  canRate: boolean;
   isActive: boolean;
   failedLoginCount: number;
   lockedUntil: number | null;
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
         display_name AS "displayName",
         password_hash AS "passwordHash",
         role,
+        can_rate AS "canRate",
         is_active AS "isActive",
         failed_login_count AS "failedLoginCount",
         locked_until AS "lockedUntil"
@@ -73,8 +75,12 @@ export async function POST(request: Request) {
 
   const adminEmail = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
   if (adminEmail && user.email === adminEmail && user.role !== "admin") {
-    await db.prepare("UPDATE users SET role = 'admin' WHERE user_id = ?").bind(user.userId).run();
+    await db
+      .prepare("UPDATE users SET role = 'admin', can_rate = TRUE WHERE user_id = ?")
+      .bind(user.userId)
+      .run();
     user.role = "admin";
+    user.canRate = true;
   }
 
   await db
@@ -85,7 +91,12 @@ export async function POST(request: Request) {
   return Response.json(
     {
       ok: true,
-      rater: { displayName: user.displayName, email: user.email, role: user.role },
+      rater: {
+        displayName: user.displayName,
+        email: user.email,
+        role: user.role,
+        canRate: user.canRate,
+      },
     },
     { headers: { "set-cookie": cookie } },
   );

@@ -8,6 +8,7 @@ export type EvaluatorProgress = {
   raterId: string;
   displayName: string;
   email: string;
+  canRate: boolean;
   joinedAt: string | null;
   completedCount: number;
   draftCount: number;
@@ -37,6 +38,7 @@ type RawEvaluatorProgress = {
   raterId: string;
   displayName: string;
   email: string;
+  canRate: boolean;
   joinedAt: string | Date | null;
   completedCount: number | string;
   draftCount: number | string;
@@ -63,11 +65,13 @@ function timestampToIso(value: string | Date | null): string | null {
 /**
  * Builds the administrator's evaluator-progress view from saved annotations.
  *
- * Each registered rater is included even when they have not opened an episode.
+ * Each account with rater status is included even when it has not opened an
+ * episode. Accounts with saved ratings remain visible after rater status is
+ * removed, so historical work never disappears from progress or CSV exports.
  * A completed annotation counts as completed, a saved incomplete annotation
  * counts as a draft, and every remaining episode is "not started" for that
- * evaluator. Administrator accounts are intentionally excluded because this
- * dashboard is for monitoring the independent evaluation team.
+ * evaluator. Administrative and rating permissions are independent, allowing
+ * the configured owner to participate in a demo as an Admin + Rater.
  *
  * The bundled dataset is seeded first so a newly deployed site reports the
  * correct denominator before any evaluator has visited the review workspace.
@@ -87,6 +91,7 @@ export async function getAdminProgress(): Promise<AdminProgress> {
         u.user_id AS "raterId",
         u.display_name AS "displayName",
         u.email,
+        u.can_rate AS "canRate",
         u.created_at AS "joinedAt",
         COUNT(active_episode.episode_id) FILTER (WHERE ra.status = 'complete') AS "completedCount",
         COUNT(active_episode.episode_id) FILTER (WHERE ra.status = 'draft') AS "draftCount",
@@ -96,8 +101,12 @@ export async function getAdminProgress(): Promise<AdminProgress> {
       LEFT JOIN episodes active_episode
         ON active_episode.episode_id = ra.episode_id
        AND active_episode.import_batch = ?
-      WHERE u.role = 'rater'
-      GROUP BY u.user_id, u.display_name, u.email, u.created_at
+      WHERE u.can_rate = TRUE
+         OR EXISTS (
+           SELECT 1 FROM rubric_annotations saved
+           WHERE saved.rater_id = u.user_id
+         )
+      GROUP BY u.user_id, u.display_name, u.email, u.can_rate, u.created_at
       ORDER BY
         COUNT(active_episode.episode_id) FILTER (WHERE ra.status = 'complete') DESC,
         LOWER(u.display_name),
@@ -116,7 +125,6 @@ export async function getAdminProgress(): Promise<AdminProgress> {
         LEFT JOIN rubric_annotations ra ON ra.episode_id = e.episode_id
         LEFT JOIN users rating_user
           ON rating_user.user_id = ra.rater_id
-         AND rating_user.role = 'rater'
         WHERE e.import_batch = ?
         GROUP BY e.episode_id
       ) episode_coverage
@@ -136,6 +144,7 @@ export async function getAdminProgress(): Promise<AdminProgress> {
       raterId: row.raterId,
       displayName: row.displayName,
       email: row.email,
+      canRate: row.canRate,
       joinedAt: timestampToIso(row.joinedAt),
       completedCount,
       draftCount,

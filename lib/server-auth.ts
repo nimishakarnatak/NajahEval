@@ -9,6 +9,7 @@ export type RaterIdentity = {
   email: string;
   displayName: string;
   role: UserRole;
+  canRate: boolean;
 };
 
 function hostnameFromHeaders(requestHeaders: Headers): string {
@@ -33,6 +34,7 @@ export async function getRaterIdentity(request?: Request): Promise<RaterIdentity
       email: "local-preview@najah.invalid",
       displayName: "Local preview",
       role: "admin",
+      canRate: true,
     };
   }
 
@@ -49,7 +51,8 @@ export async function getRaterIdentity(request?: Request): Promise<RaterIdentity
         users.user_id AS "id",
         users.email,
         users.display_name AS "displayName",
-        users.role
+        users.role,
+        users.can_rate AS "canRate"
       FROM auth_sessions
       INNER JOIN users ON users.user_id = auth_sessions.user_id
       WHERE auth_sessions.session_hash = ?
@@ -67,8 +70,12 @@ export async function getRaterIdentity(request?: Request): Promise<RaterIdentity
   // its next request, so the administrator does not need a database edit.
   const adminEmail = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
   if (adminEmail && user.email.toLowerCase() === adminEmail && user.role !== "admin") {
-    await db.prepare("UPDATE users SET role = 'admin' WHERE user_id = ?").bind(user.id).run();
+    await db
+      .prepare("UPDATE users SET role = 'admin', can_rate = TRUE WHERE user_id = ?")
+      .bind(user.id)
+      .run();
     user.role = "admin";
+    user.canRate = true;
   }
 
   return user;

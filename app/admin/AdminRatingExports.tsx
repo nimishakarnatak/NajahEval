@@ -32,7 +32,9 @@ export function AdminRatingExports({ evaluators }: { evaluators: EvaluatorProgre
           <article key={evaluator.raterId}>
             <span>Rater {index + 1}</span>
             <strong>{evaluator.displayName}</strong>
-            <small>{evaluator.completedCount} completed · {evaluator.draftCount} drafts</small>
+            <small>
+              {evaluator.completedCount} completed · {evaluator.draftCount} drafts · {evaluator.canRate ? "rater status active" : "historical ratings"}
+            </small>
             <a href={`/api/admin/exports?raterId=${encodeURIComponent(evaluator.raterId)}`}>
               Download rater {index + 1} CSV
             </a>

@@ -5,6 +5,11 @@ Najah module episodes. The repository includes the final 300-participant annotat
 sample, independent rater accounts, drafts, completed ratings, progress views,
 CSV export, and optional Google sign-in.
 
+Administrative and rating permissions are independent. The configured owner
+can be an **Admin + Rater**, submit demo or study ratings under the same account,
+and enable or remove only their rater status from the dashboard. Removing rater
+status never removes administrator access or historical CSV rows.
+
 ## Important privacy note
 
 The repository contains `data/najah_final_annotation_dataset.csv`. Keep the
@@ -107,7 +112,8 @@ redeploy.
 ### 5. Deploy and verify before inviting raters
 
 1. Select **Retry deploy** in Netlify after saving the environment variables.
-2. Create the administrator account using `ADMIN_EMAIL`.
+2. Create the administrator account using `ADMIN_EMAIL`. It initially receives
+   both Admin and Rater access.
 3. Confirm the queue shows 300 episodes.
 4. Save one draft, sign out and back in, and confirm it is still present.
 5. Submit one rating and export **My work**.
@@ -141,6 +147,10 @@ do not expose the production `DATABASE_URL` to untrusted preview deployments.
 ## Annotation and import behavior
 
 - Raters filter by student status, module, treatment, and personal work state.
+- Admin + Rater annotations appear in the administrator's individual rater CSV
+  and in the combined CSV. Historical ratings remain exportable if that account's
+  rater status is later removed; export columns identify the account role and
+  whether its rater status is currently active.
 - Score justifications and routine evidence turn numbers are optional. Evidence
   remains required for critical-failure flags set to **Yes**.
 - Every completed rating records task status. If the task was not completed, a

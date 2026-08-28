@@ -5,6 +5,8 @@ export type ExportAnnotationRow = {
   raterId: string;
   raterName: string;
   raterEmail: string;
+  raterRole: string;
+  raterCanRate: boolean;
   episodeId: string;
   studentStatus: string;
   module: string;
@@ -55,6 +57,8 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     "rater_id",
     "rater_name",
     "rater_email",
+    "rater_role",
+    "rater_status_active",
     "episode_id",
     "student_status",
     "module",
@@ -89,6 +93,8 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
       row.raterId,
       row.raterName,
       row.raterEmail,
+      row.raterRole,
+      row.raterCanRate,
       row.episodeId,
       studentStatusLabel(row.studentStatus),
       row.module,

@@ -46,7 +46,14 @@ export async function GET(request: Request) {
           display_name AS "displayName",
           email
         FROM users
-        WHERE user_id = ? AND role = 'rater'
+        WHERE user_id = ?
+          AND (
+            can_rate = TRUE
+            OR EXISTS (
+              SELECT 1 FROM rubric_annotations saved
+              WHERE saved.rater_id = users.user_id
+            )
+          )
       `)
       .bind(raterId)
       .first<ExportRater>();
@@ -56,13 +63,15 @@ export async function GET(request: Request) {
   }
 
   const whereClause = combined
-    ? "WHERE e.import_batch = ? AND annotation_user.role <> 'admin'"
+    ? "WHERE e.import_batch = ?"
     : "WHERE e.import_batch = ? AND ra.rater_id = ?";
   const query = db.prepare(`
     SELECT
       ra.rater_id AS "raterId",
       annotation_user.display_name AS "raterName",
       ra.rater_email AS "raterEmail",
+      annotation_user.role AS "raterRole",
+      annotation_user.can_rate AS "raterCanRate",
       ra.episode_id AS "episodeId",
       e.student_status AS "studentStatus",
       e.module,

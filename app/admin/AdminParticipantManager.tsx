@@ -6,6 +6,7 @@ import {
   PARTICIPANT_ROLES,
   type ParticipantRole,
   type UserRole,
+  userAccessLabel,
   userRoleLabel,
 } from "@/lib/user-roles";
 
@@ -14,6 +15,7 @@ type ManagedUser = {
   email: string;
   displayName: string;
   role: UserRole;
+  canRate: boolean;
   isActive: boolean;
   invited: boolean;
   createdAt: string;
@@ -107,6 +109,30 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
     }
   }
 
+  /** Toggle only rating permission; the configured administrator stays admin. */
+  async function changeAdminRaterStatus(user: ManagedUser, canRate: boolean) {
+    setBusyUserId(user.userId);
+    setError("");
+    setMessage("");
+    try {
+      await mutate("PATCH", {
+        userId: user.userId,
+        mode: "rating_access",
+        canRate,
+      });
+      setMessage(
+        canRate
+          ? `${user.displayName} is now an ${userAccessLabel(user.role, true)}.`
+          : `${user.displayName}'s rater status was removed. Admin access and saved ratings were preserved.`,
+      );
+      await loadUsers();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to change rater status.");
+    } finally {
+      setBusyUserId("");
+    }
+  }
+
   async function removeParticipant(user: ManagedUser) {
     if (!window.confirm(`Remove ${user.displayName}'s access? Their saved ratings will be preserved.`)) return;
     setBusyUserId(user.userId);
@@ -176,7 +202,7 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
       <div className="admin-role-guide">
         <div><strong>Rater</strong><span>Can read conversations and submit evaluations.</span></div>
         <div><strong>Viewer</strong><span>Can read conversations but cannot save or submit ratings.</span></div>
-        <div><strong>Admin</strong><span>Manages access and monitors progress. Assigned to {adminEmail}.</span></div>
+        <div><strong>Admin + Rater</strong><span>Manages the study and can also submit ratings under the same account. Assigned to {adminEmail}.</span></div>
       </div>
 
       <form className="admin-add-participant" onSubmit={addParticipant}>
@@ -242,7 +268,10 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
                     </td>
                     <td>
                       {isAdmin ? (
-                        <span className="admin-fixed-role">Admin</span>
+                        <span className="admin-access-actions">
+                          <span className="admin-fixed-role">Admin</span>
+                          {user.canRate && <span className="admin-fixed-role">Rater</span>}
+                        </span>
                       ) : (
                         <select
                           className="admin-role-select"
@@ -264,7 +293,22 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
                     </td>
                     <td>
                       {isAdmin ? (
-                        <span className="admin-protected-access">Protected</span>
+                        <span className="admin-access-actions">
+                          <span className="admin-protected-access">Admin protected</span>
+                          <button
+                            type="button"
+                            className={user.canRate ? "remove-access-button" : "restore-access-button"}
+                            disabled={busy}
+                            aria-label={`${user.canRate ? "Remove" : "Add"} rater status for ${user.displayName}`}
+                            onClick={() => void changeAdminRaterStatus(user, !user.canRate)}
+                          >
+                            {busy
+                              ? "Updating…"
+                              : user.canRate
+                                ? "Remove rater status"
+                                : "Add rater status"}
+                          </button>
+                        </span>
                       ) : user.isActive ? (
                         <button
                           type="button"

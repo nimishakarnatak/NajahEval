@@ -14,6 +14,7 @@ type ExistingUser = {
   userId: string;
   passwordHash: string;
   role: UserRole;
+  canRate: boolean;
   isActive: boolean;
 };
 
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
         user_id AS "userId",
         password_hash AS "passwordHash",
         role,
+        can_rate AS "canRate",
         is_active AS "isActive"
       FROM users
       WHERE email = ?
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
   const role: UserRole = email === configuredAdminEmail()
     ? "admin"
     : existing?.role ?? "rater";
+  const canRate = role !== "viewer";
   let passwordHash: string;
   try {
     passwordHash = await hashPassword(password);
@@ -84,18 +87,18 @@ export async function POST(request: Request) {
         .prepare(`
           UPDATE users
           SET display_name = ?, password_hash = ?, is_active = TRUE,
-              failed_login_count = 0, locked_until = NULL
+              role = ?, can_rate = ?, failed_login_count = 0, locked_until = NULL
           WHERE user_id = ?
         `)
-        .bind(displayName, passwordHash, userId)
+        .bind(displayName, passwordHash, role, canRate, userId)
         .run();
     } else {
       await db
         .prepare(`
-          INSERT INTO users (user_id, email, display_name, password_hash, role)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO users (user_id, email, display_name, password_hash, role, can_rate)
+          VALUES (?, ?, ?, ?, ?, ?)
         `)
-        .bind(userId, email, displayName, passwordHash, role)
+        .bind(userId, email, displayName, passwordHash, role, canRate)
         .run();
     }
   } catch {
@@ -118,7 +121,7 @@ export async function POST(request: Request) {
 
   const cookie = await issueSessionCookie(db, userId);
   return Response.json(
-    { ok: true, rater: { displayName, email, role } },
+    { ok: true, rater: { displayName, email, role, canRate } },
     { headers: { "set-cookie": cookie } },
   );
 }
