@@ -12,6 +12,7 @@ export const NAJAH_SCHEMA_STATEMENTS = [
       display_name TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('admin', 'rater', 'viewer')),
+      can_rate BOOLEAN NOT NULL DEFAULT FALSE,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       failed_login_count INTEGER NOT NULL DEFAULT 0,
       locked_until BIGINT,
@@ -103,6 +104,10 @@ export const NAJAH_SCHEMA_STATEMENTS = [
  */
 export const NAJAH_SCHEMA_MIGRATION_STATEMENTS = [
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS can_rate BOOLEAN",
+  "UPDATE users SET can_rate = (role IN ('admin', 'rater')) WHERE can_rate IS NULL",
+  "ALTER TABLE users ALTER COLUMN can_rate SET DEFAULT FALSE",
+  "ALTER TABLE users ALTER COLUMN can_rate SET NOT NULL",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_status TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_incomplete_reason TEXT NOT NULL DEFAULT ''",
   `

@@ -13,6 +13,12 @@ export function userRoleLabel(role: UserRole): string {
   return "Rater";
 }
 
+/** Describe the effective workspace permissions, including dual-role admins. */
+export function userAccessLabel(role: UserRole, canRate: boolean): string {
+  if (role === "admin") return canRate ? "Admin + Rater" : "Admin";
+  return userRoleLabel(role);
+}
+
 /** Return true only for a role an administrator may assign to a participant. */
 export function isParticipantRole(value: unknown): value is ParticipantRole {
   return PARTICIPANT_ROLES.some((role) => role === value);

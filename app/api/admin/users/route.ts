@@ -11,7 +11,8 @@ type ParticipantPayload = {
   displayName?: string;
   email?: string;
   role?: ParticipantRole;
-  mode?: "remove" | "permanent";
+  canRate?: boolean;
+  mode?: "remove" | "permanent" | "rating_access";
 };
 
 type UserRow = {
@@ -19,6 +20,7 @@ type UserRow = {
   email: string;
   displayName: string;
   role: UserRole;
+  canRate: boolean;
   isActive: boolean;
   invited: boolean;
   createdAt: string | Date;
@@ -60,6 +62,7 @@ export async function GET(request: Request) {
         email,
         display_name AS "displayName",
         role,
+        can_rate AS "canRate",
         is_active AS "isActive",
         (password_hash LIKE ?) AS invited,
         created_at AS "createdAt"
@@ -133,20 +136,27 @@ export async function POST(request: Request) {
     await db
       .prepare(`
         UPDATE users
-        SET display_name = ?, role = ?, is_active = TRUE,
+        SET display_name = ?, role = ?, can_rate = ?, is_active = TRUE,
             failed_login_count = 0, locked_until = NULL
         WHERE user_id = ?
       `)
-      .bind(displayName, role, existing.userId)
+      .bind(displayName, role, role === "rater", existing.userId)
       .run();
   } else {
     await db
       .prepare(`
         INSERT INTO users (
-          user_id, email, display_name, password_hash, role, is_active
-        ) VALUES (?, ?, ?, ?, ?, TRUE)
+          user_id, email, display_name, password_hash, role, can_rate, is_active
+        ) VALUES (?, ?, ?, ?, ?, ?, TRUE)
       `)
-      .bind(crypto.randomUUID(), email, displayName, invitedPasswordPlaceholder(), role)
+      .bind(
+        crypto.randomUUID(),
+        email,
+        displayName,
+        invitedPasswordPlaceholder(),
+        role,
+        role === "rater",
+      )
       .run();
   }
 
@@ -162,12 +172,33 @@ export async function PATCH(request: Request) {
 
   const payload = await readPayload(request);
   const userId = payload?.userId?.trim() ?? "";
-  if (!userId || !isParticipantRole(payload?.role)) {
-    return Response.json({ error: "Choose a participant and a valid role." }, { status: 400 });
+  if (!userId) {
+    return Response.json({ error: "Choose an account." }, { status: 400 });
   }
 
   const db = getDatabase();
   await ensureNajahSchema(db);
+
+  // Administrative access remains protected while the owner independently
+  // enables or disables their own ability to create ratings.
+  if (payload?.mode === "rating_access") {
+    if (userId !== admin.id || typeof payload.canRate !== "boolean") {
+      return Response.json(
+        { error: "Administrators may change only their own rater status." },
+        { status: 400 },
+      );
+    }
+    await db
+      .prepare("UPDATE users SET can_rate = ? WHERE user_id = ? AND role = 'admin'")
+      .bind(payload.canRate, userId)
+      .run();
+    return Response.json({ ok: true, canRate: payload.canRate });
+  }
+
+  if (!isParticipantRole(payload?.role)) {
+    return Response.json({ error: "Choose a participant and a valid role." }, { status: 400 });
+  }
+
   const target = await db
     .prepare(`SELECT email, role FROM users WHERE user_id = ? AND is_active = TRUE`)
     .bind(userId)
@@ -178,7 +209,10 @@ export async function PATCH(request: Request) {
     return Response.json({ error: "Administrator access cannot be changed here." }, { status: 400 });
   }
 
-  await db.prepare("UPDATE users SET role = ? WHERE user_id = ?").bind(payload.role, userId).run();
+  await db
+    .prepare("UPDATE users SET role = ?, can_rate = ? WHERE user_id = ?")
+    .bind(payload.role, payload.role === "rater", userId)
+    .run();
   return Response.json({ ok: true });
 }
 

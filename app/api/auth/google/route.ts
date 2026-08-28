@@ -11,6 +11,7 @@ type ExistingUser = {
   displayName: string;
   passwordHash: string;
   role: UserRole;
+  canRate: boolean;
   isActive: boolean;
 };
 
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
         display_name AS "displayName",
         password_hash AS "passwordHash",
         role,
+        can_rate AS "canRate",
         is_active AS "isActive"
       FROM users
       WHERE email = ?
@@ -88,8 +90,8 @@ export async function POST(request: Request) {
     const passwordHash = `google-identity-only$${googleIdentity.subject}`;
     await db
       .prepare(`
-        INSERT INTO users (user_id, email, display_name, password_hash, role)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO users (user_id, email, display_name, password_hash, role, can_rate)
+        VALUES (?, ?, ?, ?, ?, TRUE)
       `)
       .bind(userId, googleIdentity.email, googleIdentity.displayName, passwordHash, role)
       .run();
@@ -99,6 +101,7 @@ export async function POST(request: Request) {
       displayName: googleIdentity.displayName,
       passwordHash,
       role,
+      canRate: true,
       isActive: true,
     };
   } else if (!user.isActive) {
@@ -107,8 +110,12 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   } else if (role === "admin" && user.role !== "admin") {
-    await db.prepare("UPDATE users SET role = 'admin' WHERE user_id = ?").bind(user.userId).run();
+    await db
+      .prepare("UPDATE users SET role = 'admin', can_rate = TRUE WHERE user_id = ?")
+      .bind(user.userId)
+      .run();
     user.role = "admin";
+    user.canRate = true;
   }
 
   // A participant invited from the admin dashboard can claim the placeholder
@@ -138,7 +145,12 @@ export async function POST(request: Request) {
   return Response.json(
     {
       ok: true,
-      rater: { displayName: user.displayName, email: user.email, role: user.role },
+      rater: {
+        displayName: user.displayName,
+        email: user.email,
+        role: user.role,
+        canRate: user.canRate,
+      },
     },
     { headers: { "set-cookie": cookie } },
   );

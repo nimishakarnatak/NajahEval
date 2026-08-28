@@ -171,9 +171,9 @@ export async function POST(request: Request) {
   if (!rater) {
     return Response.json({ error: "Sign in is required." }, { status: 401 });
   }
-  if (rater.role === "viewer") {
+  if (!rater.canRate) {
     return Response.json(
-      { error: "Viewer accounts can read conversations but cannot save ratings." },
+      { error: "Rater status is required to save or submit ratings." },
       { status: 403 },
     );
   }

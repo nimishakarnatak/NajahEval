@@ -25,7 +25,7 @@ import {
   TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
-import { type UserRole, userRoleLabel } from "@/lib/user-roles";
+import { type UserRole, userAccessLabel } from "@/lib/user-roles";
 
 type AnnotationDraft = {
   scores: Record<DimensionKey, DimensionScore>;
@@ -55,7 +55,7 @@ type Episode = AnnotationDraft & {
   legacyEpisodeEndReason: string;
 };
 
-type Rater = { displayName: string; email: string; role: UserRole };
+type Rater = { displayName: string; email: string; role: UserRole; canRate: boolean };
 type SaveState = "saved" | "saving" | "unsaved" | "error";
 type ViewFilter = "queue" | "drafts" | "completed" | "all";
 type ProgressView = "queue" | "not_started" | "draft" | "complete" | "all";
@@ -468,7 +468,7 @@ function CriticalFlagCard({
 export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [rater, setRater] = useState(initialRater);
-  const readOnly = rater.role === "viewer";
+  const readOnly = !rater.canRate;
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<AnnotationDraft>(emptyDraft);
   const [dirty, setDirty] = useState(false);
@@ -481,7 +481,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [moduleFilter, setModuleFilter] = useState("all");
   const [treatmentFilter, setTreatmentFilter] = useState("all");
   const [viewFilter, setViewFilter] = useState<ViewFilter>(
-    initialRater.role === "viewer" ? "all" : "queue",
+    initialRater.canRate ? "queue" : "all",
   );
   const [progressOpen, setProgressOpen] = useState(false);
   const [progressView, setProgressView] = useState<ProgressView>("not_started");
@@ -504,7 +504,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       setEpisodes(loaded);
       const loadedRater = (payload.rater ?? initialRater) as Rater;
       setRater(loadedRater);
-      if (loadedRater.role === "viewer") setViewFilter("all");
+      if (!loadedRater.canRate) setViewFilter("all");
       setSelectedId((current) => preferredId || current || loaded[0]?.episodeId || "");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to load episodes.");
@@ -914,6 +914,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
   function exportMyWork() {
     const columns = [
+      "rater_email",
+      "rater_access",
       "episode_id",
       "student_status",
       "module",
@@ -937,6 +939,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     const rows = episodes
       .filter((episode) => episode.annotationStatus)
       .map((episode) => [
+        rater.email,
+        userAccessLabel(rater.role, rater.canRate),
         episode.episodeId,
         studentStatusLabel(episode.studentStatus),
         episode.module,
@@ -1016,7 +1020,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
             <span className="avatar">{rater.displayName.slice(0, 1).toUpperCase()}</span>
             <span>
               <strong>{rater.displayName}</strong>
-              <small>{rater.email} · {userRoleLabel(rater.role)}</small>
+              <small>{rater.email} · {userAccessLabel(rater.role, rater.canRate)}</small>
             </span>
           </div>
           {rater.role === "admin" && (
@@ -1029,9 +1033,14 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       <aside className="sidebar">
         {readOnly ? (
           <section className="viewer-access-card">
-            <p className="eyebrow">Viewer access</p>
-            <h2>Read-only dataset</h2>
-            <p>You can inspect every conversation, use filters, and view translations. Ratings cannot be changed or submitted.</p>
+            <p className="eyebrow">{rater.role === "admin" ? "Admin access" : "Viewer access"}</p>
+            <h2>{rater.role === "admin" ? "Rater status is off" : "Read-only dataset"}</h2>
+            <p>
+              You can inspect every conversation, use filters, and view translations.
+              {rater.role === "admin"
+                ? " Add rater status from the dashboard to save or submit ratings."
+                : " Ratings cannot be changed or submitted."}
+            </p>
           </section>
         ) : (
           <>
@@ -1098,9 +1107,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         <section className="data-tools">
           <h2>Dataset</h2>
           <p><strong>{episodes.length}</strong> reviewed episodes are built in and shared with every rater or viewer.</p>
-          {rater.role === "admin" ? (
+          {rater.role === "admin" && (
             <Link className="text-button" href="/admin#rating-exports">Open export centre</Link>
-          ) : !readOnly && (
+          )}
+          {!readOnly && (
             <button className="text-button" onClick={exportMyWork} disabled={!draftsByMe && !completedByMe}>Export my work</button>
           )}
         </section>

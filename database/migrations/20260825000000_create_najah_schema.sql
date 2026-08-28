@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'rater', 'viewer')),
+  can_rate BOOLEAN NOT NULL DEFAULT FALSE,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   failed_login_count INTEGER NOT NULL DEFAULT 0,
   locked_until BIGINT,
@@ -16,6 +17,18 @@ CREATE TABLE IF NOT EXISTS users (
 -- Upgrade installations created before Viewer access and reversible removal.
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Rating permission is independent from the administrative role so one
+-- account may be both an administrator and a rater.
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS can_rate BOOLEAN;
+UPDATE users
+  SET can_rate = (role IN ('admin', 'rater'))
+  WHERE can_rate IS NULL;
+ALTER TABLE users
+  ALTER COLUMN can_rate SET DEFAULT FALSE;
+ALTER TABLE users
+  ALTER COLUMN can_rate SET NOT NULL;
 
 DO $$
 DECLARE
