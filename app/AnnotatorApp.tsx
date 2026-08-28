@@ -289,6 +289,7 @@ function ScoreCard({
         <h4>{dimension.label}</h4>
         <span>{score === null ? "Not scored" : score === "na" ? "N/A selected" : `Score ${score}`}</span>
       </div>
+      {dimension.question && <p className="dimension-question">{dimension.question}</p>}
 
       <details className="rubric-anchors">
         <summary>View scoring anchors</summary>
@@ -296,10 +297,26 @@ function ScoreCard({
           {([3, 2, 1] as const).map((anchorScore) => (
             <div key={anchorScore}>
               <dt>{anchorScore}</dt>
-              <dd>{dimension.anchors[anchorScore]}</dd>
+              <dd>
+                {dimension.anchorLabels?.[anchorScore] && (
+                  <strong>{dimension.anchorLabels[anchorScore]}: </strong>
+                )}
+                {dimension.anchors[anchorScore]}
+              </dd>
             </div>
           ))}
         </dl>
+        {dimension.illustrativeExamples && (
+          <div className="rubric-examples">
+            <strong>Illustrative examples—not exhaustive</strong>
+            <p>{dimension.illustrativeExamples}</p>
+          </div>
+        )}
+        {dimension.guidanceNote && (
+          <p className="rubric-guidance-note">
+            <strong>Gender-sensitive guidance note:</strong> {dimension.guidanceNote}
+          </p>
+        )}
       </details>
 
       <fieldset className="score-choice">

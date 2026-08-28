@@ -458,6 +458,7 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .dimension-heading { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .dimension-heading h4 { margin: 0; font-size: 11px; }
 .dimension-heading > span { color: var(--muted); font-size: 8px; }
+.dimension-question { margin: 5px 0 0; color: #53615d; font-size: 9px; line-height: 1.45; }
 .rubric-anchors { margin-top: 8px; }
 .rubric-anchors summary { cursor: pointer; color: var(--green); font-size: 9px; font-weight: 700; }
 .rubric-anchors dl { display: grid; gap: 7px; margin: 9px 0 2px; }
@@ -474,6 +475,20 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   font-weight: 800;
 }
 .rubric-anchors dd { margin: 0; color: #5f6b68; font-size: 8px; line-height: 1.5; }
+.rubric-anchors dd strong { color: #42534e; }
+.rubric-examples, .rubric-guidance-note {
+  margin: 9px 0 0;
+  padding: 8px 9px;
+  border-radius: 7px;
+  color: #596762;
+  font-size: 8px;
+  line-height: 1.5;
+}
+.rubric-examples { border: 1px solid #e1e7e5; background: #f7faf9; }
+.rubric-examples strong { color: #42534e; }
+.rubric-examples p { margin: 3px 0 0; }
+.rubric-guidance-note { border-left: 3px solid var(--gold); background: #fffaf0; }
+.rubric-guidance-note strong { color: #665c49; }
 .score-choice { margin: 11px 0 0; padding: 0; border: 0; }
 .score-choice legend { color: #4f5c59; font-size: 9px; font-weight: 750; }
 .score-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 7px; }

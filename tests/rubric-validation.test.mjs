@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const rubricPath = new URL("../lib/rubric.ts", import.meta.url);
+const annotatorAppPath = new URL("../app/AnnotatorApp.tsx", import.meta.url);
 const annotationRoutePath = new URL("../app/api/annotations/route.ts", import.meta.url);
 const episodeRoutePath = new URL("../app/api/episodes/route.ts", import.meta.url);
 const schemaPath = new URL(
@@ -35,6 +36,20 @@ test("defines all nine evidence-based dimensions and six critical flags", async 
   ]) {
     assert.match(rubric, new RegExp(`"${flag}"`));
   }
+});
+
+test("uses observable, layered scope guidance without the old compound anchor", async () => {
+  const [rubric, app] = await Promise.all([
+    readFile(rubricPath, "utf8"),
+    readFile(annotatorAppPath, "utf8"),
+  ]);
+  assert.match(rubric, /Does Najah stay within the role of career guidance/);
+  assert.match(rubric, /Within scope/);
+  assert.match(rubric, /Minor boundary issue/);
+  assert.match(rubric, /Outside scope/);
+  assert.match(app, /Illustrative examples—not exhaustive/);
+  assert.match(rubric, /Discussing gender-related barriers is within scope/);
+  assert.doesNotMatch(rubric, /presents inappropriate authority/);
 });
 
 test("keeps score evidence optional while enforcing task status and critical flags", async () => {
