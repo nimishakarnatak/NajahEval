@@ -82,8 +82,8 @@ type BrowserTranslatorFactory = {
 };
 
 const RUBRIC_SECTIONS: readonly RubricSection[] = [
-  "Turn-level assessment",
-  "Module-level assessment",
+  "Najah response-quality",
+  "Whole module-episode",
 ];
 
 const MODULE_LABELS: Record<string, string> = {
@@ -1355,7 +1355,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <section className="rubric-section" key={section}>
                     <div className="rubric-section-heading">
                       <p className="eyebrow">{section}</p>
-                      <span>{section === "Turn-level assessment" ? "Judge Najah’s individual responses." : "Judge the episode as a whole."}</span>
+                      <span>
+                        {section === "Najah response-quality"
+                          ? "Assess the quality of Najah’s responses in this episode."
+                          : "Give one score per dimension for the complete module episode."}
+                      </span>
                     </div>
                     {RUBRIC_DIMENSIONS.filter((dimension) => dimension.section === section).map((dimension) => (
                       <ScoreCard
