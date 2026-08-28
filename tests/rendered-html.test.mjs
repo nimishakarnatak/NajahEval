@@ -164,10 +164,14 @@ test("separates task status from the conditional reason an incomplete task stopp
     readFile(rubricPath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(rubric, /najah-evidence-v6/);
+  assert.match(rubric, /najah-evidence-v7/);
   assert.match(rubric, /Completed and acknowledged/);
   assert.match(rubric, /Participant moved to another module/);
   assert.match(rubric, /No further Najah reply was observed/);
+  assert.match(rubric, /Najah response-quality/);
+  assert.match(rubric, /Whole module-episode/);
+  assert.match(component, /Assess the quality of Najah’s responses in this episode/);
+  assert.match(component, /Give one score per dimension for the complete module episode/);
   assert.match(component, /status === "not_completed"/);
   assert.match(styles, /\.episode-end-options label \{[^}]*grid-template-columns: 16px minmax\(0, 1fr\)/);
   assert.match(styles, /\.episode-end-options input \{[^}]*width: 16px; height: 16px/);
