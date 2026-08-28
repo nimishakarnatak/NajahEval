@@ -141,10 +141,10 @@ do not expose the production `DATABASE_URL` to untrusted preview deployments.
 ## Annotation and import behavior
 
 - Raters filter by student status, module, treatment, and personal work state.
-- Score justifications are optional. Evidence turn numbers remain required for
-  assessed dimensions, and evidence is required for critical-failure flags set
-  to **Yes**.
-- Every completed rating records why the observed module episode ended.
+- Score justifications and routine evidence turn numbers are optional. Evidence
+  remains required for critical-failure flags set to **Yes**.
+- Every completed rating records task status. If the task was not completed, a
+  second required field records the observable reason the interaction stopped.
 - Annotators never see another rater's scores; they see only the count of
   independent completed ratings.
 - Privacy and language-review fields are retained as metadata but currently do

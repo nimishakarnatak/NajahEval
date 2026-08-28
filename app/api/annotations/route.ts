@@ -11,10 +11,12 @@ import {
   DIMENSION_KEYS,
   DimensionKey,
   DimensionScore,
-  EPISODE_END_REASONS,
-  EpisodeEndReason,
   RUBRIC_DIMENSIONS,
   RUBRIC_VERSION,
+  TASK_INCOMPLETE_REASONS,
+  TASK_STATUSES,
+  TaskIncompleteReason,
+  TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
 import { getRaterIdentity } from "@/lib/server-auth";
@@ -26,7 +28,8 @@ type AnnotationPayload = {
   justifications?: Partial<Record<DimensionKey, string>>;
   criticalFlags?: Partial<Record<CriticalFlagKey, CriticalFlagValue>>;
   criticalEvidence?: Partial<Record<CriticalFlagKey, string>>;
-  episodeEndReason?: EpisodeEndReason | "";
+  taskStatus?: TaskStatus | "";
+  taskIncompleteReason?: TaskIncompleteReason | "";
   comments?: string;
   status?: "draft" | "complete";
 };
@@ -37,7 +40,8 @@ type NormalizedAnnotation = {
   justifications: Record<DimensionKey, string>;
   criticalFlags: Record<CriticalFlagKey, CriticalFlagValue>;
   criticalEvidence: Record<CriticalFlagKey, string>;
-  episodeEndReason: EpisodeEndReason | "";
+  taskStatus: TaskStatus | "";
+  taskIncompleteReason: TaskIncompleteReason | "";
   comments: string;
 };
 
@@ -56,11 +60,19 @@ function validCriticalFlag(value: unknown): value is CriticalFlagValue {
   return value === null || value === "yes" || value === "no";
 }
 
-/** Drafts may leave the ending blank; completed ratings must select one. */
-function validEpisodeEndReason(value: unknown): value is EpisodeEndReason | "" {
+/** Drafts may leave task status blank; completed ratings must select one. */
+function validTaskStatus(value: unknown): value is TaskStatus | "" {
   return (
     value === "" ||
-    EPISODE_END_REASONS.some((reason) => reason.value === value)
+    TASK_STATUSES.some((status) => status.value === value)
+  );
+}
+
+/** The conditional reason accepts only the instrument's observable options. */
+function validTaskIncompleteReason(value: unknown): value is TaskIncompleteReason | "" {
+  return (
+    value === "" ||
+    TASK_INCOMPLETE_REASONS.some((reason) => reason.value === value)
   );
 }
 
@@ -75,8 +87,9 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     (payload.justifications !== undefined && !isRecord(payload.justifications)) ||
     (payload.criticalFlags !== undefined && !isRecord(payload.criticalFlags)) ||
     (payload.criticalEvidence !== undefined && !isRecord(payload.criticalEvidence)) ||
-    (payload.episodeEndReason !== undefined &&
-      !validEpisodeEndReason(payload.episodeEndReason)) ||
+    (payload.taskStatus !== undefined && !validTaskStatus(payload.taskStatus)) ||
+    (payload.taskIncompleteReason !== undefined &&
+      !validTaskIncompleteReason(payload.taskIncompleteReason)) ||
     (payload.comments !== undefined && typeof payload.comments !== "string")
   ) {
     return null;
@@ -119,7 +132,9 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     justifications,
     criticalFlags,
     criticalEvidence,
-    episodeEndReason: payload.episodeEndReason ?? "",
+    taskStatus: payload.taskStatus ?? "",
+    taskIncompleteReason:
+      payload.taskStatus === "not_completed" ? payload.taskIncompleteReason ?? "" : "",
     comments: payload.comments?.trim() ?? "",
   };
 }
@@ -134,8 +149,11 @@ function completionError(annotation: NormalizedAnnotation): string | null {
     if (score === null) return `Select a score or N/A for ${dimension.label}.`;
   }
 
-  if (!annotation.episodeEndReason) {
-    return "Select why the observed module episode ended.";
+  if (!annotation.taskStatus) {
+    return "Select the task status.";
+  }
+  if (annotation.taskStatus === "not_completed" && !annotation.taskIncompleteReason) {
+    return "Select why the task was not completed.";
   }
 
   for (const flag of CRITICAL_FLAGS) {
@@ -205,8 +223,8 @@ export async function POST(request: Request) {
       INSERT INTO rubric_annotations (
         episode_id, rater_id, rater_email, scores_json, evidence_turns_json,
         justifications_json, critical_flags_json, critical_evidence_json,
-        episode_end_reason, comments, rubric_version, status, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        task_status, task_incomplete_reason, comments, rubric_version, status, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(episode_id, rater_id) DO UPDATE SET
         rater_email = excluded.rater_email,
         scores_json = excluded.scores_json,
@@ -214,7 +232,8 @@ export async function POST(request: Request) {
         justifications_json = excluded.justifications_json,
         critical_flags_json = excluded.critical_flags_json,
         critical_evidence_json = excluded.critical_evidence_json,
-        episode_end_reason = excluded.episode_end_reason,
+        task_status = excluded.task_status,
+        task_incomplete_reason = excluded.task_incomplete_reason,
         comments = excluded.comments,
         rubric_version = excluded.rubric_version,
         status = excluded.status,
@@ -229,7 +248,8 @@ export async function POST(request: Request) {
       JSON.stringify(annotation.justifications),
       JSON.stringify(annotation.criticalFlags),
       JSON.stringify(annotation.criticalEvidence),
-      annotation.episodeEndReason,
+      annotation.taskStatus,
+      annotation.taskIncompleteReason,
       annotation.comments,
       RUBRIC_VERSION,
       status,
