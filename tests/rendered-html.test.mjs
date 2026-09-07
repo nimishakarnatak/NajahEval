@@ -44,18 +44,19 @@ test("classifies code-switched conversations while keeping language labels out o
   assert.match(language, /englishScore >= 3/);
 });
 
-test("filters the review queue by the requested three analysis dimensions", async () => {
+test("filters the review queue by module and treatment without exposing student status", async () => {
   const [component, dimensions, bundledDataset] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(dimensionsPath, "utf8"),
     readFile(bundledDatasetPath, "utf8"),
   ]);
-  assert.match(component, /Student status/);
+  assert.doesNotMatch(component, /Student status/);
+  assert.doesNotMatch(component, /All student statuses/);
+  assert.doesNotMatch(component, /studentStatusFilter/);
+  assert.doesNotMatch(component, /student-status-badge/);
   assert.match(component, /Module/);
   assert.match(component, /Treatment assignment/);
-  assert.match(component, /student_status/);
   assert.doesNotMatch(component, /All languages/);
-  assert.doesNotMatch(component, /Status not supplied/);
   assert.match(dimensions, /Graduated student/);
   assert.match(dimensions, /Current student/);
   assert.match(dimensions, /Gender-sensitive/);
