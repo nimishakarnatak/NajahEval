@@ -55,6 +55,7 @@ test("filters the review queue by the requested three analysis dimensions", asyn
   assert.match(component, /Treatment assignment/);
   assert.match(component, /student_status/);
   assert.doesNotMatch(component, /All languages/);
+  assert.doesNotMatch(component, /Status not supplied/);
   assert.match(dimensions, /Graduated student/);
   assert.match(dimensions, /Current student/);
   assert.match(dimensions, /Gender-sensitive/);

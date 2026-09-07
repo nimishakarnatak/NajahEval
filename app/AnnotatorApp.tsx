@@ -629,7 +629,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     () => Array.from(new Set(episodes.map((episode) => episode.module))).sort(),
     [episodes],
   );
-  const hasUnknownStudentStatus = episodes.some((episode) => episode.studentStatus === "unknown");
   const hasUnknownTreatment = episodes.some((episode) => episode.treatment === "unknown");
 
   const filteredEpisodes = useMemo(() => {
@@ -1298,7 +1297,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
               {STUDENT_STATUS_VALUES.map((status) => (
                 <option key={status} value={status}>{studentStatusLabel(status)}</option>
               ))}
-              {hasUnknownStudentStatus && <option value="unknown">Status not supplied</option>}
             </select>
           </label>
           <label>
