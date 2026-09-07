@@ -124,12 +124,18 @@ test("offers a browser-local English translation toggle without replacing origin
   ]);
   assert.match(component, /English translation/);
   assert.match(component, /globalThis[\s\S]*Translator\?: BrowserTranslatorFactory/);
+  assert.match(component, /Translator!\.availability/);
   assert.match(component, /targetLanguage: "en"/);
   assert.match(component, /setTranscriptView\("original"\)/);
+  assert.match(component, /current\.priorContext/);
+  assert.match(component, /translatedPriorContext/);
+  assert.match(component, /Promise\.allSettled/);
+  assert.match(component, /Translation unavailable — original shown/);
   assert.match(component, /Machine translation for reading support/);
   assert.match(component, /turn numbers are unchanged/);
   assert.match(styles, /\.translation-view-options/);
   assert.match(styles, /\.translation-progress/);
+  assert.match(styles, /\.turn-translation-status/);
 });
 
 test("includes the core annotation workflow without temporary release or review gates", async () => {
