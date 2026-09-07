@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  STUDENT_STATUS_VALUES,
   TREATMENT_VALUES,
   studentStatusLabel,
   treatmentLabel,
@@ -544,7 +543,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [submitError, setSubmitError] = useState("");
-  const [studentStatusFilter, setStudentStatusFilter] = useState("all");
   const [moduleFilter, setModuleFilter] = useState("all");
   const [treatmentFilter, setTreatmentFilter] = useState("all");
   const [viewFilter, setViewFilter] = useState<ViewFilter>(
@@ -633,8 +631,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
   const filteredEpisodes = useMemo(() => {
     return episodes.filter((episode) => {
-      const matchesStudentStatus =
-        studentStatusFilter === "all" || episode.studentStatus === studentStatusFilter;
       const matchesModule = moduleFilter === "all" || episode.module === moduleFilter;
       const matchesTreatment =
         treatmentFilter === "all" || episode.treatment === treatmentFilter;
@@ -643,9 +639,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         (viewFilter === "queue" && episode.annotationStatus !== "complete" && episode.completedRaterCount < 2) ||
         (viewFilter === "drafts" && episode.annotationStatus === "draft") ||
         (viewFilter === "completed" && episode.annotationStatus === "complete");
-      return matchesStudentStatus && matchesModule && matchesTreatment && matchesView;
+      return matchesModule && matchesTreatment && matchesView;
     });
-  }, [episodes, moduleFilter, readOnly, studentStatusFilter, treatmentFilter, viewFilter]);
+  }, [episodes, moduleFilter, readOnly, treatmentFilter, viewFilter]);
 
   useEffect(() => {
     if (filteredEpisodes.length && !filteredEpisodes.some((episode) => episode.episodeId === selectedId)) {
@@ -910,7 +906,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       const saved = await persist("draft", true);
       if (!saved) return;
     }
-    setStudentStatusFilter("all");
     setModuleFilter("all");
     setTreatmentFilter("all");
     setViewFilter(
@@ -1291,15 +1286,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
         <div className="filter-stack">
           <label>
-            <span>Student status</span>
-            <select value={studentStatusFilter} onChange={(event) => setStudentStatusFilter(event.target.value)}>
-              <option value="all">All student statuses</option>
-              {STUDENT_STATUS_VALUES.map((status) => (
-                <option key={status} value={status}>{studentStatusLabel(status)}</option>
-              ))}
-            </select>
-          </label>
-          <label>
             <span>Module</span>
             <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)}>
               <option value="all">All modules</option>
@@ -1400,7 +1386,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     <span className="progress-episode-copy">
                       <strong>{episode.episodeId}</strong>
                       <small>
-                        {MODULE_LABELS[episode.module] || episode.module} · {studentStatusLabel(episode.studentStatus)} · {treatmentLabel(episode.treatment)}
+                        {MODULE_LABELS[episode.module] || episode.module} · {treatmentLabel(episode.treatment)}
                       </small>
                     </span>
                     <span className={`progress-row-status status-${episode.annotationStatus ?? "not_started"}`}>
@@ -1451,7 +1437,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           <>
             <div className="episode-toolbar">
               <div>
-                <span className="student-status-badge">{studentStatusLabel(current.studentStatus)}</span>
                 <span className="module-badge">{MODULE_LABELS[current.module] || current.module}</span>
                 <span className={`treatment-badge treatment-${current.treatment}`}>{treatmentLabel(current.treatment)}</span>
                 <span className="episode-id">{current.episodeId}</span>
