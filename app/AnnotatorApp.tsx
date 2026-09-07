@@ -561,6 +561,12 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [translationUnavailableCount, setTranslationUnavailableCount] = useState(0);
   const translationCache = useRef(new Map<string, EpisodeTranslation>());
   const translationRequest = useRef(0);
+  const hydratedEpisodeId = useRef("");
+  const draftRevision = useRef(0);
+  const latestSaveRequest = useRef(0);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const autosaveTimeout = useRef<number | null>(null);
+  const selectedIdRef = useRef(selectedId);
 
   const loadEpisodes = useCallback(async (preferredId?: string) => {
     setLoading(true);
@@ -592,9 +598,19 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const current = episodes.find((episode) => episode.episodeId === selectedId);
 
   useEffect(() => {
-    // A change of queue item intentionally resets the local form to the values
-    // saved for that item.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    const episodeId = current?.episodeId ?? "";
+
+    // Saving updates the episode object in the local list. Only hydrate when
+    // the episode ID changes so that an autosave response cannot reset newer
+    // selections made while the request was in flight.
+    if (hydratedEpisodeId.current === episodeId) return;
+    hydratedEpisodeId.current = episodeId;
+    draftRevision.current = 0;
+
     setDraft(draftFromEpisode(current));
     setDirty(false);
     setSaveState("saved");
@@ -613,7 +629,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     () => Array.from(new Set(episodes.map((episode) => episode.module))).sort(),
     [episodes],
   );
-  const hasUnknownStudentStatus = episodes.some((episode) => episode.studentStatus === "unknown");
   const hasUnknownTreatment = episodes.some((episode) => episode.treatment === "unknown");
 
   const filteredEpisodes = useMemo(() => {
@@ -647,6 +662,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setSubmitError("");
   }
 
+  /** Marks the local draft as newer than any save already in progress. */
+  function markDraftChanged() {
+    draftRevision.current += 1;
+    setDirty(true);
+    setSaveState("unsaved");
+  }
+
   /** Updates a single dimension without replacing evidence for other scores. */
   function updateDimensionText(
     field: "evidenceTurns" | "justifications",
@@ -658,8 +680,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       ...previous,
       [field]: { ...previous[field], [key]: value },
     }));
-    setDirty(true);
-    setSaveState("unsaved");
+    markDraftChanged();
   }
 
   /**
@@ -674,8 +695,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         ? { ...previous.evidenceTurns, [key]: "" }
         : previous.evidenceTurns,
     }));
-    setDirty(true);
-    setSaveState("unsaved");
+    markDraftChanged();
   }
 
   /** Saves task progress and clears an inapplicable incomplete-task reason. */
@@ -686,16 +706,14 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       taskStatus: value,
       taskIncompleteReason: value === "not_completed" ? previous.taskIncompleteReason : "",
     }));
-    setDirty(true);
-    setSaveState("unsaved");
+    markDraftChanged();
   }
 
   /** Records the observable interruption only for an incomplete task. */
   function updateTaskIncompleteReason(value: TaskIncompleteReason) {
     clearSubmissionFeedback();
     setDraft((previous) => ({ ...previous, taskIncompleteReason: value }));
-    setDirty(true);
-    setSaveState("unsaved");
+    markDraftChanged();
   }
 
   /** Updates one Yes/No flag or its associated evidence text. */
@@ -705,8 +723,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       ...previous,
       criticalEvidence: { ...previous.criticalEvidence, [key]: value },
     }));
-    setDirty(true);
-    setSaveState("unsaved");
+    markDraftChanged();
   }
 
   /** Selecting No clears any evidence that was entered for an earlier Yes. */
@@ -719,69 +736,106 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         ? { ...previous.criticalEvidence, [key]: "" }
         : previous.criticalEvidence,
     }));
-    setDirty(true);
-    setSaveState("unsaved");
+    markDraftChanged();
   }
 
   /** Updates the optional episode-level adjudication note. */
   function updateComments(value: string) {
     clearSubmissionFeedback();
     setDraft((previous) => ({ ...previous, comments: value }));
-    setDirty(true);
-    setSaveState("unsaved");
+    markDraftChanged();
   }
 
   async function persist(status: "draft" | "complete", quiet = false) {
     if (!current || readOnly) return false;
+    if (autosaveTimeout.current !== null) {
+      window.clearTimeout(autosaveTimeout.current);
+      autosaveTimeout.current = null;
+    }
+
+    const episodeId = current.episodeId;
+    const snapshot = draft;
+    const revision = draftRevision.current;
+    const requestId = ++latestSaveRequest.current;
     if (!quiet) setActiveSaveAction(status);
     setSaveState("saving");
-    try {
-      const response = await fetch("/api/annotations", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ episodeId: current.episodeId, ...draft, status }),
+
+    // Serialize requests so a slow, older autosave can never overwrite a newer
+    // selection on the server by completing out of order.
+    const operation = saveQueue.current
+      .catch(() => undefined)
+      .then(async () => {
+        const response = await fetch("/api/annotations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ episodeId, ...snapshot, status }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Unable to save this annotation.");
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Unable to save this annotation.");
+    saveQueue.current = operation.then(() => undefined, () => undefined);
+
+    try {
+      await operation;
 
       setEpisodes((previous) =>
         previous.map((episode) => {
-          if (episode.episodeId !== current.episodeId) return episode;
+          if (episode.episodeId !== episodeId) return episode;
           const newlyCompleted = status === "complete" && episode.annotationStatus !== "complete";
           return {
             ...episode,
-            ...draft,
+            ...snapshot,
             annotationStatus: status,
             completedRaterCount: episode.completedRaterCount + (newlyCompleted ? 1 : 0),
             annotationUpdatedAt: new Date().toISOString(),
           };
         }),
       );
-      setDirty(false);
-      setSaveState("saved");
-      if (status === "complete") {
-        setError("");
-        setSubmitError("");
+
+      const isLatestVisibleDraft =
+        selectedIdRef.current === episodeId &&
+        draftRevision.current === revision &&
+        latestSaveRequest.current === requestId;
+      if (isLatestVisibleDraft) {
+        setDirty(false);
+        setSaveState("saved");
+        if (status === "complete") {
+          setError("");
+          setSubmitError("");
+        }
+        if (!quiet) setNotice(status === "complete" ? "Rating submitted." : "Draft saved.");
       }
-      if (!quiet) setNotice(status === "complete" ? "Rating submitted." : "Draft saved.");
       return true;
     } catch (requestError) {
-      setSaveState("error");
-      if (!quiet) {
+      const isLatestVisibleRequest =
+        selectedIdRef.current === episodeId &&
+        draftRevision.current === revision &&
+        latestSaveRequest.current === requestId;
+      if (isLatestVisibleRequest) setSaveState("error");
+      if (!quiet && isLatestVisibleRequest) {
         const message = requestError instanceof Error ? requestError.message : "Unable to save.";
         setError(message);
         if (status === "complete") setSubmitError(message);
       }
       return false;
     } finally {
-      if (!quiet) setActiveSaveAction(null);
+      if (!quiet && latestSaveRequest.current === requestId) setActiveSaveAction(null);
     }
   }
 
   useEffect(() => {
     if (readOnly || !dirty || !current) return;
-    const timeout = window.setTimeout(() => void persist("draft", true), 1000);
-    return () => window.clearTimeout(timeout);
+    if (autosaveTimeout.current !== null) window.clearTimeout(autosaveTimeout.current);
+    autosaveTimeout.current = window.setTimeout(() => {
+      autosaveTimeout.current = null;
+      void persist("draft", true);
+    }, 1000);
+    return () => {
+      if (autosaveTimeout.current !== null) {
+        window.clearTimeout(autosaveTimeout.current);
+        autosaveTimeout.current = null;
+      }
+    };
     // `draft` is the intentional autosave trigger. Including `persist` would
     // recreate the timeout on every render because it closes over form state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1243,7 +1297,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
               {STUDENT_STATUS_VALUES.map((status) => (
                 <option key={status} value={status}>{studentStatusLabel(status)}</option>
               ))}
-              {hasUnknownStudentStatus && <option value="unknown">Status not supplied</option>}
             </select>
           </label>
           <label>

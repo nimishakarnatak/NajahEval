@@ -55,6 +55,7 @@ test("filters the review queue by the requested three analysis dimensions", asyn
   assert.match(component, /Treatment assignment/);
   assert.match(component, /student_status/);
   assert.doesNotMatch(component, /All languages/);
+  assert.doesNotMatch(component, /Status not supplied/);
   assert.match(dimensions, /Graduated student/);
   assert.match(dimensions, /Current student/);
   assert.match(dimensions, /Gender-sensitive/);
@@ -150,6 +151,16 @@ test("uses consistent, accessible button motion and immediate loading feedback",
   assert.match(component, /activeSaveAction === "draft" \? "Saving…"/);
   assert.match(component, /activeSaveAction === "complete" \? "Submitting…"/);
   assert.match(component, /aria-busy=\{navigationDirection === 1\}/);
+});
+
+test("keeps newer rating selections when an older autosave finishes", async () => {
+  const component = await readFile(componentPath, "utf8");
+  assert.match(component, /hydratedEpisodeId\.current === episodeId/);
+  assert.match(component, /Only hydrate when[\s\S]*episode ID changes/);
+  assert.match(component, /draftRevision\.current \+= 1/);
+  assert.match(component, /Serialize requests[\s\S]*saveQueue\.current/);
+  assert.match(component, /draftRevision\.current === revision/);
+  assert.match(component, /latestSaveRequest\.current === requestId/);
 });
 
 test("includes the core annotation workflow without temporary release or review gates", async () => {
