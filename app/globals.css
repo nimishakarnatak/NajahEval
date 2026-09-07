@@ -421,6 +421,7 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .speaker-row .speaker { color: #4b5855; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .turn p { margin: 0; padding: 14px 16px; border-radius: 5px 14px 14px 14px; background: #f0f4f2; font-size: 13px; line-height: 1.78; overflow-wrap: anywhere; white-space: pre-wrap; }
 .najah-turn p { border-radius: 14px 5px 14px 14px; background: var(--green-soft); color: #173f36; }
+.turn-translation-status { display: block; margin: 5px 4px 0; color: #8a5e0a; font-size: 8px; font-weight: 700; line-height: 1.4; }
 [dir="rtl"] .user-turn { justify-self: end; }
 [dir="rtl"] .najah-turn { justify-self: start; }
 [dir="rtl"] .user-turn p { border-radius: 14px 5px 14px 14px; }
