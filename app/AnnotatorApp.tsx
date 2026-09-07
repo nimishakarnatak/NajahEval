@@ -139,6 +139,12 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
         targetId: `rating-${dimension.key}`,
       };
     }
+    if (!draft.justifications[dimension.key].trim()) {
+      return {
+        message: `Provide a written justification for ${dimension.label}.`,
+        targetId: `justification-${dimension.key}`,
+      };
+    }
   }
 
   if (!draft.taskStatus) {
@@ -309,7 +315,8 @@ function translationChunks(text: string, maximumLength = 3200): string[] {
 
 /**
  * Renders one anchored dimension together with the evidence needed to audit the
- * judgment. Written justification remains available but is always optional.
+ * judgment. A written justification is required for every submitted score,
+ * including N/A, while evidence turn numbers remain optional.
  */
 function ScoreCard({
   dimension,
@@ -399,13 +406,15 @@ function ScoreCard({
       {hasSelectedScore && (
         <label className="evidence-field">
           <span>
-            {isNotApplicable ? "Why this cannot be assessed" : `Justification for score ${score}`} <small>optional</small>
+            {isNotApplicable ? "Why this cannot be assessed" : `Justification for score ${score}`} <small>required</small>
           </span>
           <textarea
+            id={`justification-${dimension.key}`}
             value={justification}
             onChange={(event) => onJustificationChange(event.target.value)}
             placeholder={isNotApplicable ? "Explain why the transcript provides no valid basis for this dimension." : "Briefly explain the evidence supporting this score."}
             rows={3}
+            required
           />
         </label>
       )}
@@ -539,6 +548,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [activeSaveAction, setActiveSaveAction] = useState<"draft" | "complete" | null>(null);
   const [navigationDirection, setNavigationDirection] = useState<-1 | 1 | null>(null);
+  const [skipping, setSkipping] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -679,9 +689,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     markDraftChanged();
   }
 
-  /**
-   * Changes a dimension score while preserving optional rater notes.
-   */
+  /** Changes a dimension score while preserving any existing rater notes. */
   function updateScore(key: DimensionKey, score: DimensionScore) {
     clearSubmissionFeedback();
     setDraft((previous) => ({
@@ -895,6 +903,40 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     const currentIndex = filteredEpisodes.findIndex((episode) => episode.episodeId === selectedId);
     const next = filteredEpisodes[currentIndex + 1] || filteredEpisodes[0];
     if (next && next.episodeId !== selectedId) setSelectedId(next.episodeId);
+  }
+
+  /**
+   * Leaves the current episode available for later review and opens the next
+   * visible episode. Partial answers are saved as a draft before navigation;
+   * a completely untouched episode remains not started in the rater's queue.
+   */
+  async function skipAndAdvance() {
+    if (!current || filteredEpisodes.length < 2 || skipping) {
+      if (filteredEpisodes.length < 2) {
+        setNotice("There is no other episode in the current list to open.");
+      }
+      return;
+    }
+
+    setSkipping(true);
+    setError("");
+    setSubmitError("");
+    try {
+      if (dirty) {
+        const saved = await persist("draft", true);
+        if (!saved) return;
+      }
+      const currentIndex = filteredEpisodes.findIndex(
+        (episode) => episode.episodeId === current.episodeId,
+      );
+      const nextIndex = currentIndex >= 0
+        ? (currentIndex + 1) % filteredEpisodes.length
+        : 0;
+      setSelectedId(filteredEpisodes[nextIndex].episodeId);
+      setNotice("Episode skipped. You can return to it from My queue.");
+    } finally {
+      setSkipping(false);
+    }
   }
 
   /**
@@ -1561,7 +1603,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <span>1 · Material failure</span><span>2 · Partial / minor issue</span><span>3 · Meets anchor</span>
                 </div>
                 <p className="rubric-instruction">
-                  Evidence turn numbers and written score justifications are optional. Use N/A only when the dimension genuinely cannot be assessed.
+                  A written justification is required for every score. Evidence turn numbers are optional. Use N/A only when the dimension genuinely cannot be assessed.
                 </p>
 
                 {RUBRIC_SECTIONS.map((section) => (
@@ -1634,15 +1676,23 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <button
                     className="secondary-button"
                     onClick={() => void persist("draft")}
-                    disabled={saveState === "saving"}
+                    disabled={saveState === "saving" || skipping}
                     aria-busy={activeSaveAction === "draft"}
                   >
                     {activeSaveAction === "draft" ? "Saving…" : "Save draft"}
                   </button>
                   <button
+                    className="secondary-button skip-button"
+                    onClick={() => void skipAndAdvance()}
+                    disabled={saveState === "saving" || skipping || filteredEpisodes.length < 2}
+                    aria-busy={skipping}
+                  >
+                    {skipping ? "Skipping…" : <>Skip &amp; next <span>→</span></>}
+                  </button>
+                  <button
                     className="primary-button"
                     onClick={() => void submitAndAdvance()}
-                    disabled={saveState === "saving"}
+                    disabled={saveState === "saving" || skipping}
                     aria-busy={activeSaveAction === "complete"}
                   >
                     {activeSaveAction === "complete" ? "Submitting…" : <>Submit &amp; next <span>→</span></>}

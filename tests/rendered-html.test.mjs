@@ -174,7 +174,8 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(rubric, /Task effectiveness/);
   assert.match(component, /Evidence turn number\(s\)/);
   assert.match(component, /Critical-failure flags/);
-  assert.match(component, /Evidence turn numbers and written score justifications are optional/);
+  assert.match(component, /A written justification is required for every score/);
+  assert.match(component, /Evidence turn numbers are optional/);
   assert.match(component, /Task status/);
   assert.match(component, /Why was the task not completed/);
   assert.match(rubric, /No further participant reply was observed/);
@@ -196,7 +197,7 @@ test("separates task status from the conditional reason an incomplete task stopp
     readFile(rubricPath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(rubric, /najah-evidence-v7/);
+  assert.match(rubric, /najah-evidence-v8/);
   assert.match(rubric, /Completed and acknowledged/);
   assert.match(rubric, /Participant moved to another module/);
   assert.match(rubric, /No further Najah reply was observed/);
@@ -215,14 +216,24 @@ test("keeps submission validation visible and reveals the first incomplete field
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(component, /firstSubmissionProblem/);
+  assert.match(component, /Provide a written justification for/);
   assert.match(component, /Rating not submitted/);
   assert.match(component, /role="alert"/);
   assert.match(component, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
   assert.match(component, /id=\{`evidence-\$\{dimension\.key\}`\}/);
+  assert.match(component, /id=\{`justification-\$\{dimension\.key\}`\}/);
   assert.match(component, /id="task-status"/);
   assert.match(component, /id="task-incomplete-reason"/);
   assert.match(styles, /\.submit-error/);
   assert.match(styles, /\.score-card:focus-within/);
+});
+
+test("lets raters skip an episode without marking it complete", async () => {
+  const component = await readFile(componentPath, "utf8");
+  assert.match(component, /skipAndAdvance/);
+  assert.match(component, /Skip (?:&|&amp;) next/);
+  assert.match(component, /Episode skipped\. You can return to it from My queue\./);
+  assert.match(component, /persist\("draft", true\)/);
 });
 
 test("provides open account creation and independent server sessions", async () => {
