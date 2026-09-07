@@ -538,6 +538,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [draft, setDraft] = useState<AnnotationDraft>(emptyDraft);
   const [dirty, setDirty] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [activeSaveAction, setActiveSaveAction] = useState<"draft" | "complete" | null>(null);
+  const [navigationDirection, setNavigationDirection] = useState<-1 | 1 | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -731,6 +733,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
   async function persist(status: "draft" | "complete", quiet = false) {
     if (!current || readOnly) return false;
+    if (!quiet) setActiveSaveAction(status);
     setSaveState("saving");
     try {
       const response = await fetch("/api/annotations", {
@@ -770,6 +773,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         if (status === "complete") setSubmitError(message);
       }
       return false;
+    } finally {
+      if (!quiet) setActiveSaveAction(null);
     }
   }
 
@@ -794,17 +799,25 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   }, [progressOpen]);
 
   async function navigate(direction: -1 | 1) {
-    if (!filteredEpisodes.length) return;
-    if (dirty) await persist("draft", true);
-    const currentIndex = Math.max(
-      0,
-      filteredEpisodes.findIndex((episode) => episode.episodeId === selectedId),
-    );
-    const nextIndex = Math.min(
-      filteredEpisodes.length - 1,
-      Math.max(0, currentIndex + direction),
-    );
-    setSelectedId(filteredEpisodes[nextIndex].episodeId);
+    if (!filteredEpisodes.length || navigationDirection !== null) return;
+    setNavigationDirection(direction);
+    try {
+      if (dirty) {
+        const saved = await persist("draft", true);
+        if (!saved) return;
+      }
+      const currentIndex = Math.max(
+        0,
+        filteredEpisodes.findIndex((episode) => episode.episodeId === selectedId),
+      );
+      const nextIndex = Math.min(
+        filteredEpisodes.length - 1,
+        Math.max(0, currentIndex + direction),
+      );
+      setSelectedId(filteredEpisodes[nextIndex].episodeId);
+    } finally {
+      setNavigationDirection(null);
+    }
   }
 
   async function submitAndAdvance() {
@@ -1392,8 +1405,22 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
               </div>
               <div className="episode-nav">
                 <span>{currentIndex + 1} of {filteredEpisodes.length}</span>
-                <button onClick={() => void navigate(-1)} disabled={currentIndex <= 0} aria-label="Previous episode">←</button>
-                <button onClick={() => void navigate(1)} disabled={currentIndex >= filteredEpisodes.length - 1} aria-label="Next episode">→</button>
+                <button
+                  onClick={() => void navigate(-1)}
+                  disabled={currentIndex <= 0 || navigationDirection !== null}
+                  aria-label="Previous episode"
+                  aria-busy={navigationDirection === -1}
+                >
+                  {navigationDirection === -1 ? "…" : "←"}
+                </button>
+                <button
+                  onClick={() => void navigate(1)}
+                  disabled={currentIndex >= filteredEpisodes.length - 1 || navigationDirection !== null}
+                  aria-label="Next episode"
+                  aria-busy={navigationDirection === 1}
+                >
+                  {navigationDirection === 1 ? "…" : "→"}
+                </button>
               </div>
             </div>
 
@@ -1566,8 +1593,22 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                       <span>{submitError}</span>
                     </div>
                   )}
-                  <button className="secondary-button" onClick={() => void persist("draft")} disabled={saveState === "saving"}>Save draft</button>
-                  <button className="primary-button" onClick={() => void submitAndAdvance()} disabled={saveState === "saving"}>Submit & next <span>→</span></button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => void persist("draft")}
+                    disabled={saveState === "saving"}
+                    aria-busy={activeSaveAction === "draft"}
+                  >
+                    {activeSaveAction === "draft" ? "Saving…" : "Save draft"}
+                  </button>
+                  <button
+                    className="primary-button"
+                    onClick={() => void submitAndAdvance()}
+                    disabled={saveState === "saving"}
+                    aria-busy={activeSaveAction === "complete"}
+                  >
+                    {activeSaveAction === "complete" ? "Submitting…" : <>Submit &amp; next <span>→</span></>}
+                  </button>
                 </div>
               </aside>
               )}
