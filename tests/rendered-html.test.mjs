@@ -138,6 +138,20 @@ test("offers a browser-local English translation toggle without replacing origin
   assert.match(styles, /\.turn-translation-status/);
 });
 
+test("uses consistent, accessible button motion and immediate loading feedback", async () => {
+  const [component, styles] = await Promise.all([
+    readFile(componentPath, "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(styles, /button:not\(:disabled\):active/);
+  assert.match(styles, /transform 120ms cubic-bezier/);
+  assert.match(styles, /button:focus-visible/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(component, /activeSaveAction === "draft" \? "Saving…"/);
+  assert.match(component, /activeSaveAction === "complete" \? "Submitting…"/);
+  assert.match(component, /aria-busy=\{navigationDirection === 1\}/);
+});
+
 test("includes the core annotation workflow without temporary release or review gates", async () => {
   const [component, rubric, importRoute] = await Promise.all([
     readFile(componentPath, "utf8"),
@@ -155,7 +169,7 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(rubric, /Output delivered, but not acknowledged/);
   assert.match(rubric, /The available conversation does not provide enough evidence/);
   assert.match(rubric, /Cannot determine/);
-  assert.match(component, /Submit & next/);
+  assert.match(component, /Submit (?:&|&amp;) next/);
   assert.match(component, /reviewed episodes are built in/);
   assert.doesNotMatch(`${component}\n${importRoute}`, /do_not_release|doNotRelease/);
   assert.doesNotMatch(
