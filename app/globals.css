@@ -290,11 +290,32 @@ button:focus-visible,
   font-size: 11px;
 }
 .progress-list-heading span { color: var(--muted); font-size: 10px; }
+.draft-bulk-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 18px 6px;
+  padding: 10px 11px;
+  border: 1px solid #eadfdc;
+  border-radius: 10px;
+  background: #fffdfc;
+}
+.draft-bulk-toolbar label { display: inline-flex; align-items: center; gap: 7px; color: #4d5b57; font-size: 9px; font-weight: 750; }
+.draft-bulk-toolbar input, .draft-row-selector input { accent-color: var(--green); }
+.draft-bulk-toolbar > span { margin-right: auto; color: var(--muted); font-size: 9px; }
+.danger-text-button { min-height: 30px; padding: 0 9px; border: 1px solid #e4bbb5; border-radius: 7px; background: white; color: #a63d35; font-size: 9px; font-weight: 750; }
+.danger-text-button:hover:not(:disabled) { border-color: #c9766b; background: #fff6f4; }
 .progress-episode-list {
   min-height: 220px;
   overflow-y: auto;
   padding: 0 18px 20px;
 }
+.progress-episode-row-shell { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; margin-top: 7px; }
+.progress-episode-row-shell.selectable { grid-template-columns: 34px minmax(0, 1fr); }
+.progress-episode-row-shell .progress-episode-row { margin-top: 0; }
+.draft-row-selector { align-self: stretch; display: grid; place-items: center; border: 1px solid #e0e7e4; border-right: 0; border-radius: 11px 0 0 11px; background: #fffaf0; cursor: pointer; }
+.draft-row-selector + .progress-episode-row { border-radius: 0 11px 11px 0; }
 .progress-episode-row {
   width: 100%;
   display: grid;
@@ -603,12 +624,23 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   border-color: #69a895;
   box-shadow: 0 0 0 3px rgba(18, 110, 90, .1);
 }
-.primary-button, .secondary-button, .text-button { min-height: 39px; border-radius: 9px; padding: 0 13px; font-size: 11px; font-weight: 750; }
+.primary-button, .secondary-button, .danger-secondary-button, .danger-button, .text-button { min-height: 39px; border-radius: 9px; padding: 0 13px; font-size: 11px; font-weight: 750; }
 .primary-button { border: 1px solid var(--green); background: var(--green); color: white; box-shadow: 0 6px 16px rgba(18,110,90,.18); }
 .primary-button:hover { background: var(--green-dark); }
 .secondary-button { border: 1px solid #ccd8d4; background: white; color: #35433f; }
 .secondary-button:hover { border-color: #86ad9f; }
+.danger-secondary-button { border: 1px solid #e4bbb5; background: white; color: #9b3c34; }
+.danger-secondary-button:hover:not(:disabled) { border-color: #c9766b; background: #fff6f4; }
+.danger-button { border: 1px solid #a63d35; background: #a63d35; color: white; }
+.danger-button:hover:not(:disabled) { background: #843029; }
 .text-button { border: 0; background: transparent; color: var(--green); }
+
+.confirmation-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 22px; }
+.confirmation-overlay-dismiss { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgba(11, 31, 27, .62); backdrop-filter: blur(6px); cursor: default; }
+.confirmation-dialog { position: relative; width: min(520px, 100%); padding: 24px; border: 1px solid #e1d4d1; border-radius: 18px; background: white; box-shadow: 0 28px 90px rgba(8, 31, 25, .3); }
+.confirmation-dialog h2 { margin: 0; font: 600 22px/1.25 Georgia, serif; }
+.confirmation-dialog > p:last-of-type { margin: 12px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.confirmation-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; margin-top: 20px; }
 
 .loading-state, .empty-state { min-height: calc(100vh - 150px); display: grid; place-items: center; align-content: center; gap: 12px; text-align: center; color: var(--muted); }
 .spinner { width: 24px; height: 24px; border: 3px solid #dce6e2; border-top-color: var(--green); border-radius: 50%; animation: spin .8s linear infinite; }
