@@ -24,11 +24,16 @@ test("uses standard Next.js and external Neon Postgres for a durable deployment"
 });
 
 test("ships a versioned Postgres schema and traces the bundled dataset", async () => {
-  const [migration, nextConfig, bundledDataset, episodesRoute, progress, exportsRoute] = await Promise.all([
+  const [migration, skipReasonMigration, schema, nextConfig, bundledDataset, episodesRoute, progress, exportsRoute] = await Promise.all([
     readFile(
       projectFile("database/migrations/20260825000000_create_najah_schema.sql"),
       "utf8",
     ),
+    readFile(
+      projectFile("database/migrations/20260908000000_add_skip_reason.sql"),
+      "utf8",
+    ),
+    readFile(projectFile("db/schema.ts"), "utf8"),
     readFile(projectFile("next.config.ts"), "utf8"),
     readFile(projectFile("lib/bundled-dataset.ts"), "utf8"),
     readFile(projectFile("app/api/episodes/route.ts"), "utf8"),
@@ -39,6 +44,8 @@ test("ships a versioned Postgres schema and traces the bundled dataset", async (
   for (const table of ["users", "auth_sessions", "episodes", "annotations", "rubric_annotations"]) {
     assert.match(migration, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   }
+  assert.match(skipReasonMigration, /ADD COLUMN IF NOT EXISTS skip_reason/);
+  assert.match(schema, /ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS skip_reason/);
   assert.match(nextConfig, /outputFileTracingIncludes/);
   assert.match(nextConfig, /najah_final_annotation_dataset\.csv/);
   assert.match(bundledDataset, /parameterized multi-row upsert/);

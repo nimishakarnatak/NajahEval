@@ -74,6 +74,7 @@ test("keeps evidence-rubric results separate from legacy pilot annotations", asy
   assert.match(schema, /CREATE TABLE IF NOT EXISTS rubric_annotations/);
   assert.match(schema, /task_status TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /task_incomplete_reason TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /skip_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(episodeRoute, /FROM rubric_annotations completed/);
   assert.match(episodeRoute, /LEFT JOIN rubric_annotations current/);
 });

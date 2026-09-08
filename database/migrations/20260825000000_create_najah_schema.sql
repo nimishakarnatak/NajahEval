@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS rubric_annotations (
   episode_end_reason TEXT NOT NULL DEFAULT '',
   task_status TEXT NOT NULL DEFAULT '',
   task_incomplete_reason TEXT NOT NULL DEFAULT '',
+  skip_reason TEXT NOT NULL DEFAULT '',
   comments TEXT NOT NULL DEFAULT '',
   rubric_version TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'draft',

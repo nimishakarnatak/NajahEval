@@ -232,8 +232,12 @@ test("lets raters skip an episode without marking it complete", async () => {
   const component = await readFile(componentPath, "utf8");
   assert.match(component, /skipAndAdvance/);
   assert.match(component, /Skip (?:&|&amp;) next/);
+  assert.match(component, /Reason for skipping this episode/);
+  assert.match(component, /required to skip/);
+  assert.match(component, /Enter a reason before skipping this episode/);
+  assert.match(component, /id="skip-reason"/);
   assert.match(component, /Episode skipped\. You can return to it from My queue\./);
-  assert.match(component, /persist\("draft", true\)/);
+  assert.match(component, /persist\("draft", true, "skip"\)/);
 });
 
 test("provides open account creation and independent server sessions", async () => {

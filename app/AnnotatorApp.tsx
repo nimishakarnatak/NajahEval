@@ -34,6 +34,7 @@ type AnnotationDraft = {
   criticalEvidence: Record<CriticalFlagKey, string>;
   taskStatus: TaskStatus | "";
   taskIncompleteReason: TaskIncompleteReason | "";
+  skipReason: string;
   comments: string;
 };
 
@@ -119,6 +120,7 @@ function emptyDraft(): AnnotationDraft {
     criticalEvidence: keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
     taskStatus: "",
     taskIncompleteReason: "",
+    skipReason: "",
     comments: "",
   };
 }
@@ -191,6 +193,7 @@ function draftFromEpisode(episode: Episode | undefined): AnnotationDraft {
     criticalEvidence: { ...emptyDraft().criticalEvidence, ...episode.criticalEvidence },
     taskStatus: episode.taskStatus ?? "",
     taskIncompleteReason: episode.taskIncompleteReason ?? "",
+    skipReason: episode.skipReason ?? "",
     comments: episode.comments ?? "",
   };
 }
@@ -406,7 +409,7 @@ function ScoreCard({
       {hasSelectedScore && (
         <label className="evidence-field">
           <span>
-            {isNotApplicable ? "Why this cannot be assessed" : `Justification for score ${score}`} <small>required</small>
+            {isNotApplicable ? "Why this cannot be assessed" : `Justification for score ${score}`} <small className="required-label">required</small>
           </span>
           <textarea
             id={`justification-${dimension.key}`}
@@ -553,6 +556,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [skipReasonError, setSkipReasonError] = useState("");
   const [moduleFilter, setModuleFilter] = useState("all");
   const [treatmentFilter, setTreatmentFilter] = useState("all");
   const [viewFilter, setViewFilter] = useState<ViewFilter>(
@@ -625,6 +629,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setTranscriptView("original");
     setTranslationMessage("");
     setTranslationProgress(0);
+    setSkipReasonError("");
     translationRequest.current += 1;
     const cached = current ? translationCache.current.get(current.episodeId) : undefined;
     setTranslatedTurns(cached?.transcriptTurns ?? []);
@@ -750,7 +755,19 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     markDraftChanged();
   }
 
-  async function persist(status: "draft" | "complete", quiet = false) {
+  /** Records the auditable explanation required before an episode is skipped. */
+  function updateSkipReason(value: string) {
+    clearSubmissionFeedback();
+    setSkipReasonError("");
+    setDraft((previous) => ({ ...previous, skipReason: value }));
+    markDraftChanged();
+  }
+
+  async function persist(
+    status: "draft" | "complete",
+    quiet = false,
+    action: "save" | "skip" = "save",
+  ) {
     if (!current || readOnly) return false;
     if (autosaveTimeout.current !== null) {
       window.clearTimeout(autosaveTimeout.current);
@@ -772,7 +789,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         const response = await fetch("/api/annotations", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ episodeId, ...snapshot, status }),
+          body: JSON.stringify({ episodeId, ...snapshot, status, action }),
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Unable to save this annotation.");
@@ -907,25 +924,33 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
   /**
    * Leaves the current episode available for later review and opens the next
-   * visible episode. Partial answers are saved as a draft before navigation;
-   * a completely untouched episode remains not started in the rater's queue.
+   * visible episode. The mandatory skip reason and any partial answers are
+   * saved as a draft before navigation.
    */
   async function skipAndAdvance() {
-    if (!current || filteredEpisodes.length < 2 || skipping) {
-      if (filteredEpisodes.length < 2) {
-        setNotice("There is no other episode in the current list to open.");
-      }
+    if (!current || skipping) return;
+    if (!draft.skipReason.trim()) {
+      setNotice("");
+      setSkipReasonError("Enter a reason before skipping this episode.");
+      window.requestAnimationFrame(() => {
+        const target = document.getElementById("skip-reason");
+        target?.scrollIntoView({ behavior: "smooth", block: "center" });
+        target?.focus({ preventScroll: true });
+      });
+      return;
+    }
+    if (filteredEpisodes.length < 2) {
+      setNotice("There is no other episode in the current list to open.");
       return;
     }
 
     setSkipping(true);
     setError("");
     setSubmitError("");
+    setSkipReasonError("");
     try {
-      if (dirty) {
-        const saved = await persist("draft", true);
-        if (!saved) return;
-      }
+      const saved = await persist("draft", true, "skip");
+      if (!saved) return;
       const currentIndex = filteredEpisodes.findIndex(
         (episode) => episode.episodeId === current.episodeId,
       );
@@ -1176,6 +1201,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       "annotation_status",
       "task_status",
       "task_incomplete_reason",
+      "skip_reason",
       "legacy_episode_end_reason",
       ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
         `${dimension.key}_score`,
@@ -1201,6 +1227,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         episode.annotationStatus,
         episode.taskStatus,
         episode.taskIncompleteReason,
+        episode.skipReason,
         episode.legacyEpisodeEndReason,
         ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
           episode.scores[dimension.key],
@@ -1666,6 +1693,24 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <textarea value={draft.comments} onChange={(event) => updateComments(event.target.value)} placeholder="Add context not already captured in the required evidence fields." rows={4} />
                 </label>
 
+                <label className="form-field skip-reason-field">
+                  <span>Reason for skipping this episode <small className="required-label">required to skip</small></span>
+                  <textarea
+                    id="skip-reason"
+                    value={draft.skipReason}
+                    onChange={(event) => updateSkipReason(event.target.value)}
+                    placeholder="Briefly explain why you cannot rate this episode now."
+                    rows={3}
+                    aria-describedby={skipReasonError ? "skip-reason-error" : undefined}
+                    aria-invalid={Boolean(skipReasonError)}
+                  />
+                  {skipReasonError && (
+                    <span className="skip-field-error" id="skip-reason-error" role="alert">
+                      {skipReasonError}
+                    </span>
+                  )}
+                </label>
+
                 <div className="rating-actions">
                   {submitError && (
                     <div className="submit-error" role="alert">
@@ -1684,7 +1729,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <button
                     className="secondary-button skip-button"
                     onClick={() => void skipAndAdvance()}
-                    disabled={saveState === "saving" || skipping || filteredEpisodes.length < 2}
+                    disabled={saveState === "saving" || skipping || filteredEpisodes.length < 2 || current.annotationStatus === "complete"}
                     aria-busy={skipping}
                   >
                     {skipping ? "Skipping…" : <>Skip &amp; next <span>→</span></>}
