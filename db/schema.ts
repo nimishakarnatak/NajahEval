@@ -78,6 +78,7 @@ export const NAJAH_SCHEMA_STATEMENTS = [
       episode_end_reason TEXT NOT NULL DEFAULT '',
       task_status TEXT NOT NULL DEFAULT '',
       task_incomplete_reason TEXT NOT NULL DEFAULT '',
+      skip_reason TEXT NOT NULL DEFAULT '',
       comments TEXT NOT NULL DEFAULT '',
       rubric_version TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'draft',
@@ -110,6 +111,7 @@ export const NAJAH_SCHEMA_MIGRATION_STATEMENTS = [
   "ALTER TABLE users ALTER COLUMN can_rate SET NOT NULL",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_status TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_incomplete_reason TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS skip_reason TEXT NOT NULL DEFAULT ''",
   `
     DO $$
     DECLARE

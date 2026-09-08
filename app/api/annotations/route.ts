@@ -30,8 +30,10 @@ type AnnotationPayload = {
   criticalEvidence?: Partial<Record<CriticalFlagKey, string>>;
   taskStatus?: TaskStatus | "";
   taskIncompleteReason?: TaskIncompleteReason | "";
+  skipReason?: string;
   comments?: string;
   status?: "draft" | "complete";
+  action?: "save" | "skip";
 };
 
 type NormalizedAnnotation = {
@@ -42,6 +44,7 @@ type NormalizedAnnotation = {
   criticalEvidence: Record<CriticalFlagKey, string>;
   taskStatus: TaskStatus | "";
   taskIncompleteReason: TaskIncompleteReason | "";
+  skipReason: string;
   comments: string;
 };
 
@@ -90,7 +93,9 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     (payload.taskStatus !== undefined && !validTaskStatus(payload.taskStatus)) ||
     (payload.taskIncompleteReason !== undefined &&
       !validTaskIncompleteReason(payload.taskIncompleteReason)) ||
-    (payload.comments !== undefined && typeof payload.comments !== "string")
+    (payload.skipReason !== undefined && typeof payload.skipReason !== "string") ||
+    (payload.comments !== undefined && typeof payload.comments !== "string") ||
+    (payload.action !== undefined && payload.action !== "save" && payload.action !== "skip")
   ) {
     return null;
   }
@@ -135,18 +140,22 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     taskStatus: payload.taskStatus ?? "",
     taskIncompleteReason:
       payload.taskStatus === "not_completed" ? payload.taskIncompleteReason ?? "" : "",
+    skipReason: payload.skipReason?.trim() ?? "",
     comments: payload.comments?.trim() ?? "",
   };
 }
 
 /**
  * Applies the submission-only requirements. Drafts may be incomplete, while a
- * completed rating must be independently reproducible from cited evidence.
+ * completed rating must contain every judgment and its written rationale.
  */
 function completionError(annotation: NormalizedAnnotation): string | null {
   for (const dimension of RUBRIC_DIMENSIONS) {
     const score = annotation.scores[dimension.key];
     if (score === null) return `Select a score or N/A for ${dimension.label}.`;
+    if (!annotation.justifications[dimension.key]) {
+      return `Provide a written justification for ${dimension.label}.`;
+    }
   }
 
   if (!annotation.taskStatus) {
@@ -184,6 +193,12 @@ export async function POST(request: Request) {
   const annotation = normalizePayload(payload);
   if (!episodeId || !annotation) {
     return Response.json({ error: "The annotation contains invalid values." }, { status: 400 });
+  }
+  if (payload.action === "skip" && !annotation.skipReason) {
+    return Response.json(
+      { error: "Enter a reason before skipping this episode." },
+      { status: 400 },
+    );
   }
 
   if (status === "complete") {
@@ -223,8 +238,8 @@ export async function POST(request: Request) {
       INSERT INTO rubric_annotations (
         episode_id, rater_id, rater_email, scores_json, evidence_turns_json,
         justifications_json, critical_flags_json, critical_evidence_json,
-        task_status, task_incomplete_reason, comments, rubric_version, status, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        task_status, task_incomplete_reason, skip_reason, comments, rubric_version, status, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(episode_id, rater_id) DO UPDATE SET
         rater_email = excluded.rater_email,
         scores_json = excluded.scores_json,
@@ -234,6 +249,7 @@ export async function POST(request: Request) {
         critical_evidence_json = excluded.critical_evidence_json,
         task_status = excluded.task_status,
         task_incomplete_reason = excluded.task_incomplete_reason,
+        skip_reason = excluded.skip_reason,
         comments = excluded.comments,
         rubric_version = excluded.rubric_version,
         status = excluded.status,
@@ -250,6 +266,7 @@ export async function POST(request: Request) {
       JSON.stringify(annotation.criticalEvidence),
       annotation.taskStatus,
       annotation.taskIncompleteReason,
+      annotation.skipReason,
       annotation.comments,
       RUBRIC_VERSION,
       status,

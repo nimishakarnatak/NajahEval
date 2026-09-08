@@ -76,6 +76,7 @@ export async function GET(request: Request) {
         current.critical_evidence_json AS "criticalEvidenceJson",
         current.task_status AS "taskStatus",
         current.task_incomplete_reason AS "taskIncompleteReason",
+        current.skip_reason AS "skipReason",
         current.episode_end_reason AS "legacyEpisodeEndReason",
         current.comments,
         current.rubric_version AS "rubricVersion",
@@ -114,6 +115,7 @@ export async function GET(request: Request) {
       taskStatus: typeof episode.taskStatus === "string" ? episode.taskStatus : "",
       taskIncompleteReason:
         typeof episode.taskIncompleteReason === "string" ? episode.taskIncompleteReason : "",
+      skipReason: typeof episode.skipReason === "string" ? episode.skipReason : "",
       legacyEpisodeEndReason:
         typeof episode.legacyEpisodeEndReason === "string" ? episode.legacyEpisodeEndReason : "",
       studentStatus: normalizeStudentStatus(episode.studentStatus),

@@ -580,6 +580,9 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .confidence-options label { height: 31px; display: grid; place-items: center; border-radius: 8px; background: #eef2f0; color: #5f6b68; font-size: 10px; font-weight: 750; }
 .confidence-options label.selected { background: var(--sand); color: #71511d; box-shadow: inset 0 0 0 1px #dbbf84; }
 .comments-field textarea { min-height: 92px; }
+.required-label { color: #b5473f !important; font-weight: 750 !important; }
+.skip-reason-field textarea { min-height: 72px; }
+.skip-field-error { color: #a63d35 !important; font-size: 9px !important; font-weight: 700 !important; letter-spacing: 0 !important; text-transform: none !important; }
 .rating-actions { gap: 9px; margin-top: 18px; }
 .rating-actions button { flex: 1; }
 .rating-actions { flex-wrap: wrap; }

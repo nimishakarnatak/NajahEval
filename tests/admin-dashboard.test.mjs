@@ -116,6 +116,7 @@ test("provides one administrator CSV per rater plus a combined analysis file", a
   assert.match(exporter, /rater_status_active/);
   assert.match(exporter, /raterCanRate/);
   assert.match(exporter, /rubric_version/);
+  assert.match(exporter, /skip_reason/);
   assert.match(exporter, /spreadsheet-formula prefixes/);
   assert.match(app, /Open export centre/);
 });

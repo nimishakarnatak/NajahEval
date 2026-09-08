@@ -80,6 +80,7 @@ export async function GET(request: Request) {
       ra.status,
       ra.task_status AS "taskStatus",
       ra.task_incomplete_reason AS "taskIncompleteReason",
+      ra.skip_reason AS "skipReason",
       ra.episode_end_reason AS "legacyEpisodeEndReason",
       ra.scores_json AS "scoresJson",
       ra.evidence_turns_json AS "evidenceTurnsJson",

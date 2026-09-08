@@ -52,9 +52,11 @@ test("uses observable, layered scope guidance without the old compound anchor", 
   assert.doesNotMatch(rubric, /presents inappropriate authority/);
 });
 
-test("keeps score evidence optional while enforcing task status and critical flags", async () => {
+test("requires score justifications while keeping turn evidence optional", async () => {
   const route = await readFile(annotationRoutePath, "utf8");
   assert.doesNotMatch(route, /Add the relevant turn number\(s\)/);
+  assert.match(route, /Provide a written justification for/);
+  assert.match(route, /annotation\.justifications\[dimension\.key\]/);
   assert.match(route, /Select the task status/);
   assert.match(route, /Select why the task was not completed/);
   assert.match(route, /annotation\.taskStatus === "not_completed"/);
@@ -72,6 +74,7 @@ test("keeps evidence-rubric results separate from legacy pilot annotations", asy
   assert.match(schema, /CREATE TABLE IF NOT EXISTS rubric_annotations/);
   assert.match(schema, /task_status TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /task_incomplete_reason TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /skip_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(episodeRoute, /FROM rubric_annotations completed/);
   assert.match(episodeRoute, /LEFT JOIN rubric_annotations current/);
 });

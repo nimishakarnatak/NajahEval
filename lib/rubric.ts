@@ -4,7 +4,7 @@
  * Keeping a version in each saved row makes future rubric revisions auditable
  * and prevents results from different instruments being silently combined.
  */
-export const RUBRIC_VERSION = "najah-evidence-v7";
+export const RUBRIC_VERSION = "najah-evidence-v8";
 
 /**
  * Mutually exclusive judgments about how far the participant's module task
