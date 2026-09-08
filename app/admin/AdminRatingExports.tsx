@@ -19,9 +19,7 @@ export function AdminRatingExports({ evaluators }: { evaluators: EvaluatorProgre
       <div className="admin-section-heading">
         <div>
           <p className="admin-eyebrow">Rating exports</p>
-          <h2 id="rating-exports-title">
-            {orderedEvaluators.length === 3 ? "Four analysis files" : "Rater and combined files"}
-          </h2>
+          <h2 id="rating-exports-title">{orderedEvaluators.length + 1} analysis files</h2>
           <p>Download each rater separately, plus one combined file for agreement and analysis.</p>
         </div>
         <span>{orderedEvaluators.length + 1} file{orderedEvaluators.length === 0 ? "" : "s"}</span>

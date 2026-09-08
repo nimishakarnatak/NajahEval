@@ -18,6 +18,7 @@ const importRoutePath = new URL("../app/api/episodes/import/route.ts", import.me
 const registerRoutePath = new URL("../app/api/auth/register/route.ts", import.meta.url);
 const googleRoutePath = new URL("../app/api/auth/google/route.ts", import.meta.url);
 const googleIdentityPath = new URL("../lib/google-identity.ts", import.meta.url);
+const ratingPolicyPath = new URL("../lib/rating-policy.ts", import.meta.url);
 
 test("ships Najah-specific metadata without starter preview markers", async () => {
   const [page, layout] = await Promise.all([
@@ -96,6 +97,20 @@ test("opens a personal progress list with direct episode navigation", async () =
   assert.match(component, /No drafts yet/);
   assert.match(component, /No completed episodes yet/);
   assert.match(component, /Select any episode to open it in the evaluation workspace/);
+});
+
+test("keeps every episode available until five independent ratings are complete", async () => {
+  const [component, policy, annotationRoute] = await Promise.all([
+    readFile(componentPath, "utf8"),
+    readFile(ratingPolicyPath, "utf8"),
+    readFile(new URL("../app/api/annotations/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(policy, /REQUIRED_RATINGS_PER_EPISODE = 5/);
+  assert.match(component, /completedRaterCount < REQUIRED_RATINGS_PER_EPISODE/);
+  assert.match(component, /completedRaterCount\}\/\{REQUIRED_RATINGS_PER_EPISODE\}/);
+  assert.match(component, /fully rated/);
+  assert.match(annotationRoute, /completed\?\.count \?\? 0\) >= REQUIRED_RATINGS_PER_EPISODE/);
+  assert.match(annotationRoute, /all five required independent ratings/);
 });
 
 test("uses queue and progress lists instead of a conflicting episode search", async () => {

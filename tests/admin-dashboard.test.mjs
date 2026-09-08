@@ -17,8 +17,11 @@ test("protects evaluator progress on both the admin page and API", async () => {
   assert.match(route, /status: 403/);
 });
 
-test("calculates progress for raters including dual-role administrators", async () => {
-  const progress = await readFile(projectFile("lib/admin-progress.ts"), "utf8");
+test("calculates progress for five raters including dual-role administrators", async () => {
+  const [progress, policy] = await Promise.all([
+    readFile(projectFile("lib/admin-progress.ts"), "utf8"),
+    readFile(projectFile("lib/rating-policy.ts"), "utf8"),
+  ]);
 
   assert.match(progress, /ensureBundledDataset\(db\)/);
   assert.match(progress, /WHERE u\.can_rate = TRUE/);
@@ -28,8 +31,10 @@ test("calculates progress for raters including dual-role administrators", async 
   assert.match(progress, /FILTER \(WHERE ra\.status = 'draft'\)/);
   assert.match(progress, /notStartedCount/);
   assert.match(progress, /completionPercentage/);
-  assert.match(progress, /twoOrMoreCompletedRatings/);
-  assert.match(progress, /expectedRatings: totalEpisodes \* 2/);
+  assert.match(policy, /REQUIRED_RATINGS_PER_EPISODE = 5/);
+  assert.match(progress, /partiallyRatedEpisodes/);
+  assert.match(progress, /fullyRatedEpisodes/);
+  assert.match(progress, /expectedRatings: totalEpisodes \* REQUIRED_RATINGS_PER_EPISODE/);
   assert.doesNotMatch(progress, /rating_user\.role = 'rater'/);
 });
 
@@ -102,7 +107,7 @@ test("provides one administrator CSV per rater plus a combined analysis file", a
   ]);
 
   assert.match(page, /AdminRatingExports/);
-  assert.match(exportsPanel, /Four analysis files/);
+  assert.match(exportsPanel, /analysis files/);
   assert.match(exportsPanel, /Rater \{index \+ 1\}/);
   assert.match(exportsPanel, /Download combined CSV/);
   assert.match(exportsPanel, /both drafts and completed ratings/);

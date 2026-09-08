@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getAdminProgress } from "@/lib/admin-progress";
+import { REQUIRED_RATINGS_PER_EPISODE } from "@/lib/rating-policy";
 import { getRaterIdentity } from "@/lib/server-auth";
 import { userAccessLabel } from "@/lib/user-roles";
 import { AdminParticipantManager } from "./AdminParticipantManager";
@@ -120,8 +121,14 @@ export default async function AdminDashboardPage() {
           </div>
           <div className="admin-coverage-stats">
             <div><strong>{progress.coverage.noCompletedRating}</strong><span>No completed rating</span></div>
-            <div><strong>{progress.coverage.oneCompletedRating}</strong><span>One completed rating</span></div>
-            <div className="coverage-complete"><strong>{progress.coverage.twoOrMoreCompletedRatings}</strong><span>Two or more ratings</span></div>
+            <div>
+              <strong>{progress.coverage.partiallyRatedEpisodes}</strong>
+              <span>1–{REQUIRED_RATINGS_PER_EPISODE - 1} completed ratings</span>
+            </div>
+            <div className="coverage-complete">
+              <strong>{progress.coverage.fullyRatedEpisodes}</strong>
+              <span>All {REQUIRED_RATINGS_PER_EPISODE} ratings</span>
+            </div>
           </div>
         </section>
 
