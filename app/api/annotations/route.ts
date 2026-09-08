@@ -275,3 +275,68 @@ export async function POST(request: Request) {
 
   return Response.json({ ok: true, status, rubricVersion: RUBRIC_VERSION });
 }
+
+/**
+ * Permanently deletes selected drafts owned by the signed-in rater.
+ *
+ * Completed ratings are protected by the SQL status condition, and the
+ * participant identifiers are always parameter-bound rather than interpolated.
+ */
+export async function DELETE(request: Request) {
+  const rater = await getRaterIdentity(request);
+  if (!rater) {
+    return Response.json({ error: "Sign in is required." }, { status: 401 });
+  }
+  if (!rater.canRate) {
+    return Response.json(
+      { error: "Rater status is required to delete drafts." },
+      { status: 403 },
+    );
+  }
+
+  let body: { episodeIds?: unknown };
+  try {
+    body = (await request.json()) as { episodeIds?: unknown };
+  } catch {
+    return Response.json({ error: "Choose one or more drafts to delete." }, { status: 400 });
+  }
+
+  if (!Array.isArray(body.episodeIds)) {
+    return Response.json({ error: "Choose one or more drafts to delete." }, { status: 400 });
+  }
+  const episodeIds = Array.from(new Set(body.episodeIds.map((value) => (
+    typeof value === "string" ? value.trim() : ""
+  ))));
+  if (
+    !episodeIds.length ||
+    episodeIds.length > 300 ||
+    episodeIds.some((episodeId) => !episodeId || episodeId.length > 120)
+  ) {
+    return Response.json({ error: "The draft selection is invalid." }, { status: 400 });
+  }
+
+  const db = getDatabase();
+  await ensureNajahSchema(db);
+  await ensureBundledDataset(db);
+  const placeholders = episodeIds.map(() => "?").join(", ");
+  const deleted = await db
+    .prepare(`
+      DELETE FROM rubric_annotations
+      WHERE rater_id = ?
+        AND status = 'draft'
+        AND episode_id IN (
+          SELECT episode_id FROM episodes
+          WHERE import_batch = ?
+            AND episode_id IN (${placeholders})
+        )
+      RETURNING episode_id AS "episodeId"
+    `)
+    .bind(rater.id, BUNDLED_DATASET_VERSION, ...episodeIds)
+    .all<{ episodeId: string }>();
+
+  return Response.json({
+    ok: true,
+    deletedCount: deleted.results.length,
+    deletedEpisodeIds: deleted.results.map((row) => row.episodeId),
+  });
+}

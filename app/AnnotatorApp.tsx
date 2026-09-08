@@ -72,6 +72,10 @@ type EpisodeTranslation = {
   unavailableCount: number;
 };
 type SubmissionProblem = { message: string; targetId: string };
+type DraftDeleteRequest = {
+  episodeIds: string[];
+  label: string;
+};
 
 type BrowserTranslator = {
   translate: (text: string) => Promise<string>;
@@ -557,6 +561,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [notice, setNotice] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [skipReasonError, setSkipReasonError] = useState("");
+  const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(() => new Set());
+  const [draftDeleteRequest, setDraftDeleteRequest] = useState<DraftDeleteRequest | null>(null);
+  const [deletingDrafts, setDeletingDrafts] = useState(false);
   const [moduleFilter, setModuleFilter] = useState("all");
   const [treatmentFilter, setTreatmentFilter] = useState("all");
   const [viewFilter, setViewFilter] = useState<ViewFilter>(
@@ -1006,6 +1013,99 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setProgressOpen(true);
   }
 
+  /** Adds or removes one draft from the bulk-deletion selection. */
+  function toggleDraftSelection(episodeId: string, selected: boolean) {
+    setSelectedDraftIds((previous) => {
+      const next = new Set(previous);
+      if (selected) next.add(episodeId);
+      else next.delete(episodeId);
+      return next;
+    });
+  }
+
+  /** Selects or clears every draft currently shown in the progress dialog. */
+  function toggleAllVisibleDrafts(selected: boolean) {
+    setSelectedDraftIds((previous) => {
+      const next = new Set(previous);
+      for (const episode of progressEpisodes) {
+        if (episode.annotationStatus !== "draft") continue;
+        if (selected) next.add(episode.episodeId);
+        else next.delete(episode.episodeId);
+      }
+      return next;
+    });
+  }
+
+  /**
+   * Opens the irreversible-deletion warning after ensuring that local edits to
+   * the current episode are represented by a server-side draft.
+   */
+  async function requestDraftDeletion(episodeIds: string[], label: string) {
+    const uniqueIds = Array.from(new Set(episodeIds.filter(Boolean)));
+    if (!uniqueIds.length) return;
+    if (dirty && current && uniqueIds.includes(current.episodeId)) {
+      const saved = await persist("draft", true);
+      if (!saved) return;
+    }
+    setError("");
+    setNotice("");
+    setDraftDeleteRequest({ episodeIds: uniqueIds, label });
+  }
+
+  /** Permanently removes only this signed-in rater's selected draft rows. */
+  async function deleteRequestedDrafts() {
+    if (!draftDeleteRequest || deletingDrafts) return;
+    setDeletingDrafts(true);
+    setError("");
+    try {
+      const response = await fetch("/api/annotations", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ episodeIds: draftDeleteRequest.episodeIds }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Unable to delete the selected drafts.");
+
+      const deletedIds = new Set<string>(
+        Array.isArray(payload.deletedEpisodeIds)
+          ? payload.deletedEpisodeIds
+          : draftDeleteRequest.episodeIds,
+      );
+      const deletedCurrent = current ? deletedIds.has(current.episodeId) : false;
+      setEpisodes((previous) => previous.map((episode) => (
+        deletedIds.has(episode.episodeId)
+          ? {
+              ...episode,
+              ...emptyDraft(),
+              annotationStatus: null,
+              annotationUpdatedAt: null,
+            }
+          : episode
+      )));
+      setSelectedDraftIds((previous) => {
+        const next = new Set(previous);
+        for (const episodeId of deletedIds) next.delete(episodeId);
+        return next;
+      });
+      if (deletedCurrent) {
+        draftRevision.current += 1;
+        latestSaveRequest.current += 1;
+        setDraft(emptyDraft());
+        setDirty(false);
+        setSaveState("saved");
+        setSkipReasonError("");
+        setSubmitError("");
+      }
+      setDraftDeleteRequest(null);
+      const deletedCount = Number(payload.deletedCount ?? deletedIds.size);
+      setNotice(`${deletedCount} draft${deletedCount === 1 ? "" : "s"} permanently deleted.`);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete drafts.");
+    } finally {
+      setDeletingDrafts(false);
+    }
+  }
+
   async function signOut() {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.assign("/");
@@ -1271,6 +1371,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     if (progressView === "draft") return episode.annotationStatus === "draft";
     return episode.annotationStatus === null;
   });
+  const selectedVisibleDraftIds = progressEpisodes
+    .filter((episode) => episode.annotationStatus === "draft" && selectedDraftIds.has(episode.episodeId))
+    .map((episode) => episode.episodeId);
+  const allVisibleDraftsSelected =
+    progressView === "draft" &&
+    progressEpisodes.length > 0 &&
+    selectedVisibleDraftIds.length === progressEpisodes.length;
   const progressListTitle =
     progressView === "all"
       ? "All episodes"
@@ -1440,35 +1547,135 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                 <span>{progressEpisodes.length} episode{progressEpisodes.length === 1 ? "" : "s"}</span>
               </div>
 
-              <div className="progress-episode-list">
-                {progressEpisodes.length ? progressEpisodes.map((episode) => (
+              {progressView === "draft" && progressEpisodes.length > 0 && (
+                <div className="draft-bulk-toolbar">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={allVisibleDraftsSelected}
+                      onChange={(event) => toggleAllVisibleDrafts(event.target.checked)}
+                    />
+                    <span>Select all drafts</span>
+                  </label>
+                  <span>{selectedVisibleDraftIds.length} selected</span>
                   <button
                     type="button"
-                    className="progress-episode-row"
-                    key={episode.episodeId}
-                    onClick={() => void openEpisodeFromProgress(episode)}
+                    className="danger-text-button"
+                    disabled={!selectedVisibleDraftIds.length}
+                    onClick={() => void requestDraftDeletion(
+                      selectedVisibleDraftIds,
+                      `${selectedVisibleDraftIds.length} selected draft${selectedVisibleDraftIds.length === 1 ? "" : "s"}`,
+                    )}
                   >
-                    <span
-                      className={`progress-status-dot status-${episode.annotationStatus ?? "not_started"}`}
-                      aria-hidden="true"
-                    />
-                    <span className="progress-episode-copy">
-                      <strong>{episode.episodeId}</strong>
-                      <small>
-                        {MODULE_LABELS[episode.module] || episode.module} · {treatmentLabel(episode.treatment)}
-                      </small>
-                    </span>
-                    <span className={`progress-row-status status-${episode.annotationStatus ?? "not_started"}`}>
-                      {episode.annotationStatus === "complete" ? "Done" : episode.annotationStatus === "draft" ? "Draft" : "Not started"}
-                    </span>
-                    <span className="progress-open-arrow" aria-hidden="true">→</span>
+                    Delete selected
                   </button>
+                  <button
+                    type="button"
+                    className="danger-text-button"
+                    onClick={() => void requestDraftDeletion(
+                      progressEpisodes.map((episode) => episode.episodeId),
+                      `all ${progressEpisodes.length} draft${progressEpisodes.length === 1 ? "" : "s"}`,
+                    )}
+                  >
+                    Clear all drafts
+                  </button>
+                </div>
+              )}
+
+              <div className="progress-episode-list">
+                {progressEpisodes.length ? progressEpisodes.map((episode) => (
+                  <div
+                    className={`progress-episode-row-shell ${progressView === "draft" ? "selectable" : ""}`}
+                    key={episode.episodeId}
+                  >
+                    {progressView === "draft" && (
+                      <label className="draft-row-selector" aria-label={`Select draft ${episode.episodeId}`}>
+                        <input
+                          type="checkbox"
+                          checked={selectedDraftIds.has(episode.episodeId)}
+                          onChange={(event) => toggleDraftSelection(episode.episodeId, event.target.checked)}
+                        />
+                      </label>
+                    )}
+                    <button
+                      type="button"
+                      className="progress-episode-row"
+                      onClick={() => void openEpisodeFromProgress(episode)}
+                    >
+                      <span
+                        className={`progress-status-dot status-${episode.annotationStatus ?? "not_started"}`}
+                        aria-hidden="true"
+                      />
+                      <span className="progress-episode-copy">
+                        <strong>{episode.episodeId}</strong>
+                        <small>
+                          {MODULE_LABELS[episode.module] || episode.module} · {treatmentLabel(episode.treatment)}
+                        </small>
+                      </span>
+                      <span className={`progress-row-status status-${episode.annotationStatus ?? "not_started"}`}>
+                        {episode.annotationStatus === "complete" ? "Done" : episode.annotationStatus === "draft" ? "Draft" : "Not started"}
+                      </span>
+                      <span className="progress-open-arrow" aria-hidden="true">→</span>
+                    </button>
+                  </div>
                 )) : (
                   <div className="progress-list-empty">
                     <span>✓</span>
                     <p>No episodes in this list.</p>
                   </div>
                 )}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {draftDeleteRequest && (
+          <div className="confirmation-overlay">
+            <button
+              type="button"
+              className="confirmation-overlay-dismiss"
+              aria-label="Cancel draft deletion"
+              onClick={() => !deletingDrafts && setDraftDeleteRequest(null)}
+            />
+            <section
+              className="confirmation-dialog"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="delete-drafts-title"
+              aria-describedby="delete-drafts-description"
+            >
+              <p className="eyebrow">Permanent deletion</p>
+              <h2 id="delete-drafts-title">Delete {draftDeleteRequest.label}?</h2>
+              <p id="delete-drafts-description">
+                This cannot be undone in Najah Review Studio. If you want to keep a copy,
+                download your export before deleting the draft data.
+              </p>
+              <div className="confirmation-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setDraftDeleteRequest(null)}
+                  disabled={deletingDrafts}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={exportMyWork}
+                  disabled={deletingDrafts}
+                >
+                  Download my export
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={() => void deleteRequestedDrafts()}
+                  disabled={deletingDrafts}
+                  aria-busy={deletingDrafts}
+                >
+                  {deletingDrafts ? "Deleting…" : "Delete permanently"}
+                </button>
               </div>
             </section>
           </div>
@@ -1717,6 +1924,15 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                       <strong>Rating not submitted</strong>
                       <span>{submitError}</span>
                     </div>
+                  )}
+                  {(current.annotationStatus === "draft" || dirty) && (
+                    <button
+                      className="danger-secondary-button"
+                      onClick={() => void requestDraftDeletion([current.episodeId], "this draft")}
+                      disabled={saveState === "saving" || skipping}
+                    >
+                      Clear draft
+                    </button>
                   )}
                   <button
                     className="secondary-button"

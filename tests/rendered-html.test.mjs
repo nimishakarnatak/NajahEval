@@ -240,6 +240,24 @@ test("lets raters skip an episode without marking it complete", async () => {
   assert.match(component, /persist\("draft", true, "skip"\)/);
 });
 
+test("supports confirmed deletion of current, selected, or all drafts", async () => {
+  const [component, styles] = await Promise.all([
+    readFile(componentPath, "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(component, /Clear draft/);
+  assert.match(component, /Select all drafts/);
+  assert.match(component, /Delete selected/);
+  assert.match(component, /Clear all drafts/);
+  assert.match(component, /role="alertdialog"/);
+  assert.match(component, /This cannot be undone in Najah Review Studio/);
+  assert.match(component, /Download my export/);
+  assert.match(component, /Delete permanently/);
+  assert.match(component, /method: "DELETE"/);
+  assert.match(styles, /\.confirmation-dialog/);
+  assert.match(styles, /\.danger-button/);
+});
+
 test("provides open account creation and independent server sessions", async () => {
   const [authScreen, serverAuth, passwordAuth, importRoute, registerRoute] = await Promise.all([
     readFile(authScreenPath, "utf8"),

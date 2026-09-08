@@ -66,6 +66,17 @@ test("requires score justifications while keeping turn evidence optional", async
   assert.match(route, /Provide turn evidence and an explanation/);
 });
 
+test("permanently deletes only the signed-in rater's selected drafts", async () => {
+  const route = await readFile(annotationRoutePath, "utf8");
+  assert.match(route, /export async function DELETE/);
+  assert.match(route, /Rater status is required to delete drafts/);
+  assert.match(route, /WHERE rater_id = \?/);
+  assert.match(route, /AND status = 'draft'/);
+  assert.match(route, /WHERE import_batch = \?/);
+  assert.match(route, /RETURNING episode_id AS "episodeId"/);
+  assert.match(route, /deletedEpisodeIds/);
+});
+
 test("keeps evidence-rubric results separate from legacy pilot annotations", async () => {
   const [episodeRoute, schema] = await Promise.all([
     readFile(episodeRoutePath, "utf8"),
