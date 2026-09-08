@@ -24,6 +24,7 @@ import {
   TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
+import { REQUIRED_RATINGS_PER_EPISODE } from "@/lib/rating-policy";
 import { type UserRole, userAccessLabel } from "@/lib/user-roles";
 
 type AnnotationDraft = {
@@ -658,7 +659,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         treatmentFilter === "all" || episode.treatment === treatmentFilter;
       const matchesView = readOnly ||
         viewFilter === "all" ||
-        (viewFilter === "queue" && episode.annotationStatus !== "complete" && episode.completedRaterCount < 2) ||
+        (viewFilter === "queue" && episode.annotationStatus !== "complete" && episode.completedRaterCount < REQUIRED_RATINGS_PER_EPISODE) ||
         (viewFilter === "drafts" && episode.annotationStatus === "draft") ||
         (viewFilter === "completed" && episode.annotationStatus === "complete");
       return matchesModule && matchesTreatment && matchesView;
@@ -1352,9 +1353,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const completedByMe = episodes.filter((episode) => episode.annotationStatus === "complete").length;
   const draftsByMe = episodes.filter((episode) => episode.annotationStatus === "draft").length;
   const notStartedByMe = episodes.length - completedByMe - draftsByMe;
-  const doubleRated = episodes.filter((episode) => episode.completedRaterCount >= 2).length;
+  const fullyRated = episodes.filter(
+    (episode) => episode.completedRaterCount >= REQUIRED_RATINGS_PER_EPISODE,
+  ).length;
   const queueCount = episodes.filter(
-    (episode) => episode.annotationStatus !== "complete" && episode.completedRaterCount < 2,
+    (episode) =>
+      episode.annotationStatus !== "complete" &&
+      episode.completedRaterCount < REQUIRED_RATINGS_PER_EPISODE,
   ).length;
   const viewCounts: Record<ViewFilter, number> = {
     queue: queueCount,
@@ -1365,7 +1370,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const progressEpisodes = episodes.filter((episode) => {
     if (progressView === "all") return true;
     if (progressView === "queue") {
-      return episode.annotationStatus !== "complete" && episode.completedRaterCount < 2;
+      return (
+        episode.annotationStatus !== "complete" &&
+        episode.completedRaterCount < REQUIRED_RATINGS_PER_EPISODE
+      );
     }
     if (progressView === "complete") return episode.annotationStatus === "complete";
     if (progressView === "draft") return episode.annotationStatus === "draft";
@@ -1444,7 +1452,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
               <div className="progress-track"><span style={{ width: `${episodes.length ? (completedByMe / episodes.length) * 100 : 0}%` }} /></div>
               <div className="progress-stats">
                 <span><strong>{draftsByMe}</strong> drafts</span>
-                <span><strong>{doubleRated}</strong> double-rated</span>
+                <span><strong>{fullyRated}</strong> fully rated</span>
               </div>
               <span className="progress-card-action">View episode list <span aria-hidden="true">→</span></span>
             </button>
@@ -1743,7 +1751,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                 <header>
                   <p className="eyebrow">Module objective</p>
                   <h1>{current.moduleObjective || `Evaluate the ${MODULE_LABELS[current.module] || current.module} guidance.`}</h1>
-                  <div className="independence-note"><span>◎</span> {current.completedRaterCount}/2 independent ratings complete</div>
+                  <div className="independence-note">
+                    <span>◎</span> {current.completedRaterCount}/{REQUIRED_RATINGS_PER_EPISODE} independent ratings complete
+                  </div>
                 </header>
 
                 <section className="translation-toolbar" aria-label="Conversation language view">

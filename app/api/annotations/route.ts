@@ -19,6 +19,7 @@ import {
   TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
+import { REQUIRED_RATINGS_PER_EPISODE } from "@/lib/rating-policy";
 import { getRaterIdentity } from "@/lib/server-auth";
 
 type AnnotationPayload = {
@@ -225,9 +226,9 @@ export async function POST(request: Request) {
       `)
       .bind(episodeId, rater.id)
       .first<{ count: number }>();
-    if ((completed?.count ?? 0) >= 2) {
+    if ((completed?.count ?? 0) >= REQUIRED_RATINGS_PER_EPISODE) {
       return Response.json(
-        { error: "This episode already has two independent completed ratings." },
+        { error: "This episode already has all five required independent ratings." },
         { status: 409 },
       );
     }

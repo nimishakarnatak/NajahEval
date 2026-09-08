@@ -3,6 +3,7 @@ import {
   BUNDLED_DATASET_VERSION,
   ensureBundledDataset,
 } from "@/lib/bundled-dataset";
+import { REQUIRED_RATINGS_PER_EPISODE } from "@/lib/rating-policy";
 
 export type EvaluatorProgress = {
   raterId: string;
@@ -26,8 +27,8 @@ export type AdminProgress = {
   expectedRatings: number;
   coverage: {
     noCompletedRating: number;
-    oneCompletedRating: number;
-    twoOrMoreCompletedRatings: number;
+    partiallyRatedEpisodes: number;
+    fullyRatedEpisodes: number;
   };
   evaluators: EvaluatorProgress[];
 };
@@ -47,8 +48,8 @@ type RawEvaluatorProgress = {
 
 type RawCoverage = {
   noCompletedRating: number | string;
-  oneCompletedRating: number | string;
-  twoOrMoreCompletedRatings: number | string;
+  partiallyRatedEpisodes: number | string;
+  fullyRatedEpisodes: number | string;
 };
 
 /**
@@ -115,8 +116,10 @@ export async function getAdminProgress(): Promise<AdminProgress> {
     db.prepare(`
       SELECT
         COUNT(*) FILTER (WHERE completed_count = 0) AS "noCompletedRating",
-        COUNT(*) FILTER (WHERE completed_count = 1) AS "oneCompletedRating",
-        COUNT(*) FILTER (WHERE completed_count >= 2) AS "twoOrMoreCompletedRatings"
+        COUNT(*) FILTER (
+          WHERE completed_count > 0 AND completed_count < ?
+        ) AS "partiallyRatedEpisodes",
+        COUNT(*) FILTER (WHERE completed_count >= ?) AS "fullyRatedEpisodes"
       FROM (
         SELECT
           e.episode_id,
@@ -128,7 +131,11 @@ export async function getAdminProgress(): Promise<AdminProgress> {
         WHERE e.import_batch = ?
         GROUP BY e.episode_id
       ) episode_coverage
-    `).bind(BUNDLED_DATASET_VERSION).first<RawCoverage>(),
+    `).bind(
+      REQUIRED_RATINGS_PER_EPISODE,
+      REQUIRED_RATINGS_PER_EPISODE,
+      BUNDLED_DATASET_VERSION,
+    ).first<RawCoverage>(),
   ]);
 
   const totalEpisodes = Number(episodeCountRow?.count ?? 0);
@@ -171,16 +178,12 @@ export async function getAdminProgress(): Promise<AdminProgress> {
     ).length,
     completedRatings,
     draftRatings,
-    // The protocol requires two independent completed ratings per episode.
-    // Using all-raters × all-episodes would make 100% impossible once a third
-    // evaluator joins because submission is deliberately capped at two.
-    expectedRatings: totalEpisodes * 2,
+    // Every episode is evaluated independently by all five study raters.
+    expectedRatings: totalEpisodes * REQUIRED_RATINGS_PER_EPISODE,
     coverage: {
       noCompletedRating: Number(coverageRow?.noCompletedRating ?? 0),
-      oneCompletedRating: Number(coverageRow?.oneCompletedRating ?? 0),
-      twoOrMoreCompletedRatings: Number(
-        coverageRow?.twoOrMoreCompletedRatings ?? 0,
-      ),
+      partiallyRatedEpisodes: Number(coverageRow?.partiallyRatedEpisodes ?? 0),
+      fullyRatedEpisodes: Number(coverageRow?.fullyRatedEpisodes ?? 0),
     },
     evaluators,
   };
