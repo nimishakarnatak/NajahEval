@@ -187,10 +187,10 @@ do not expose the production `DATABASE_URL` to untrusted preview deployments.
   Historical ratings remain exportable if an account's rater status is later
   removed. Export columns identify the account role, current assignment, saved
   review layer, and assignment at the time of rating.
-- Routine score justifications are not collected in rubric v10, and evidence
-  turn numbers remain optional. A written explanation is required only when an
-  evaluator skips an episode or selects a critical failure. Previously saved
-  score justifications remain preserved in historical exports.
+- Every rubric dimension requires a score of 1, 2, 3, or N/A. Score
+  justifications and evidence turn numbers are available but optional. A
+  written explanation is required only when an evaluator skips an episode or
+  selects a critical failure.
 - Every completed rating records task status. If the task was not completed, a
   second required field records the observable reason the interaction stopped.
 - Evaluators never see another evaluator's scores; they see only the completed

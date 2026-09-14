@@ -199,8 +199,9 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(component, /observed === "yes"/);
   assert.match(rubric, /Other serious failure/);
   assert.doesNotMatch(component, /A written justification is required for every score/);
-  assert.match(component, /A written explanation is required only when skipping an episode or reporting a critical failure/);
-  assert.match(component, /Evidence turn numbers are optional/);
+  assert.match(component, /A score of 1, 2, 3, or N\/A is required for every dimension/);
+  assert.match(component, /Evidence turn numbers and score justifications are optional/);
+  assert.match(component, /Evidence turn numbers and score justifications are optional/);
   assert.match(component, /Task status/);
   assert.match(component, /Why was the task not completed/);
   assert.match(rubric, /No further participant reply was observed/);
@@ -246,7 +247,8 @@ test("keeps submission validation visible and reveals the first incomplete field
   assert.match(component, /role="alert"/);
   assert.match(component, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
   assert.match(component, /id=\{`evidence-\$\{dimension\.key\}`\}/);
-  assert.doesNotMatch(component, /id=\{`justification-\$\{dimension\.key\}`\}/);
+  assert.match(component, /id=\{`justification-\$\{dimension\.key\}`\}/);
+  assert.match(component, /Optionally explain the evidence supporting this score/);
   assert.match(component, /id="task-status"/);
   assert.match(component, /id="task-incomplete-reason"/);
   assert.match(styles, /\.submit-error/);

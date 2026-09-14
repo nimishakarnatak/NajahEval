@@ -359,16 +359,21 @@ function ScoreCard({
   dimension,
   score,
   evidenceTurns,
+  justification,
   onScoreChange,
   onEvidenceChange,
+  onJustificationChange,
 }: {
   dimension: RubricDimension;
   score: DimensionScore;
   evidenceTurns: string;
+  justification: string;
   onScoreChange: (score: DimensionScore) => void;
   onEvidenceChange: (value: string) => void;
+  onJustificationChange: (value: string) => void;
 }) {
   const isNotApplicable = score === "na";
+  const hasSelectedScore = score !== null;
   return (
     <section className="score-card" id={`rating-${dimension.key}`}>
       <div className="dimension-heading">
@@ -431,6 +436,21 @@ function ScoreCard({
             value={evidenceTurns}
             onChange={(event) => onEvidenceChange(event.target.value)}
             placeholder="e.g. 002, 004–006"
+          />
+        </label>
+      )}
+
+      {hasSelectedScore && (
+        <label className="evidence-field">
+          <span>
+            {isNotApplicable ? "Why this cannot be assessed" : `Justification for score ${score}`} <small>optional</small>
+          </span>
+          <textarea
+            id={`justification-${dimension.key}`}
+            value={justification}
+            onChange={(event) => onJustificationChange(event.target.value)}
+            placeholder={isNotApplicable ? "Optionally explain why this dimension cannot be assessed." : "Optionally explain the evidence supporting this score."}
+            rows={3}
           />
         </label>
       )}
@@ -795,6 +815,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setDraft((previous) => ({
       ...previous,
       evidenceTurns: { ...previous.evidenceTurns, [key]: value },
+    }));
+    markDraftChanged();
+  }
+
+  /** Records an optional written explanation for one dimension score. */
+  function updateJustification(key: DimensionKey, value: string) {
+    clearSubmissionFeedback();
+    setDraft((previous) => ({
+      ...previous,
+      justifications: { ...previous.justifications, [key]: value },
     }));
     markDraftChanged();
   }
@@ -2138,7 +2168,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <span>1 · Material failure</span><span>2 · Partial / minor issue</span><span>3 · Meets anchor</span>
                 </div>
                 <p className="rubric-instruction">
-                  Select one score for every dimension. Evidence turn numbers are optional. A written explanation is required only when skipping an episode or reporting a critical failure. Use N/A only when the dimension genuinely cannot be assessed.
+                  A score of 1, 2, 3, or N/A is required for every dimension. Evidence turn numbers and score justifications are optional. A written explanation is required when skipping an episode or reporting a critical failure. Use N/A only when the dimension genuinely cannot be assessed.
                 </p>
 
                 {RUBRIC_SECTIONS.map((section) => (
@@ -2157,8 +2187,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                         dimension={dimension}
                         score={draft.scores[dimension.key]}
                         evidenceTurns={draft.evidenceTurns[dimension.key]}
+                        justification={draft.justifications[dimension.key]}
                         onScoreChange={(score) => updateScore(dimension.key, score)}
                         onEvidenceChange={(value) => updateEvidenceTurns(dimension.key, value)}
+                        onJustificationChange={(value) => updateJustification(dimension.key, value)}
                       />
                     ))}
                   </section>
