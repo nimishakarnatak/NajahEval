@@ -198,7 +198,8 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(component, /Select all that apply/);
   assert.match(component, /observed === "yes"/);
   assert.match(rubric, /Other serious failure/);
-  assert.match(component, /A written justification is required for every score/);
+  assert.doesNotMatch(component, /A written justification is required for every score/);
+  assert.match(component, /A written explanation is required only when skipping an episode or reporting a critical failure/);
   assert.match(component, /Evidence turn numbers are optional/);
   assert.match(component, /Task status/);
   assert.match(component, /Why was the task not completed/);
@@ -221,7 +222,7 @@ test("separates task status from the conditional reason an incomplete task stopp
     readFile(rubricPath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(rubric, /najah-evidence-v9/);
+  assert.match(rubric, /najah-evidence-v10/);
   assert.match(rubric, /Completed and acknowledged/);
   assert.match(rubric, /Participant moved to another module/);
   assert.match(rubric, /No further Najah reply was observed/);
@@ -240,12 +241,12 @@ test("keeps submission validation visible and reveals the first incomplete field
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(component, /firstSubmissionProblem/);
-  assert.match(component, /Provide a written justification for/);
+  assert.doesNotMatch(component, /Provide a written justification for/);
   assert.match(component, /Rating not submitted/);
   assert.match(component, /role="alert"/);
   assert.match(component, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
   assert.match(component, /id=\{`evidence-\$\{dimension\.key\}`\}/);
-  assert.match(component, /id=\{`justification-\$\{dimension\.key\}`\}/);
+  assert.doesNotMatch(component, /id=\{`justification-\$\{dimension\.key\}`\}/);
   assert.match(component, /id="task-status"/);
   assert.match(component, /id="task-incomplete-reason"/);
   assert.match(styles, /\.submit-error/);

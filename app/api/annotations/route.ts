@@ -214,15 +214,14 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
 
 /**
  * Applies the submission-only requirements. Drafts may be incomplete, while a
- * completed rating must contain every judgment and its written rationale.
+ * completed rating must contain every judgment. Written explanations are
+ * required only for selected critical failures; skip reasons are validated
+ * separately when the rater uses the skip action.
  */
 function completionError(annotation: NormalizedAnnotation): string | null {
   for (const dimension of RUBRIC_DIMENSIONS) {
     const score = annotation.scores[dimension.key];
     if (score === null) return `Select a score or N/A for ${dimension.label}.`;
-    if (!annotation.justifications[dimension.key]) {
-      return `Provide a written justification for ${dimension.label}.`;
-    }
   }
 
   if (!annotation.taskStatus) {

@@ -53,11 +53,11 @@ test("uses observable, layered scope guidance without the old compound anchor", 
   assert.doesNotMatch(rubric, /presents inappropriate authority/);
 });
 
-test("requires score justifications while keeping turn evidence optional", async () => {
+test("requires explanations only for skips and selected critical failures", async () => {
   const route = await readFile(annotationRoutePath, "utf8");
   assert.doesNotMatch(route, /Add the relevant turn number\(s\)/);
-  assert.match(route, /Provide a written justification for/);
-  assert.match(route, /annotation\.justifications\[dimension\.key\]/);
+  assert.doesNotMatch(route, /Provide a written justification for/);
+  assert.doesNotMatch(route, /if \(!annotation\.justifications\[dimension\.key\]\)/);
   assert.match(route, /Select the task status/);
   assert.match(route, /Select why the task was not completed/);
   assert.match(route, /annotation\.taskStatus === "not_completed"/);
