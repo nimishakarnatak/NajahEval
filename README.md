@@ -3,7 +3,7 @@
 A full-stack human-evaluation workspace for rating the reviewed, de-identified
 Najah module episodes. The repository includes the final 300-episode annotation
 sample, independent rater accounts, drafts, completed ratings, progress views,
-CSV export, and optional Google sign-in.
+CSV export, optional Google sign-in, and secure password recovery.
 
 Administrative and rating permissions are independent. The configured owner
 can be an **Admin + Rater**, submit clearly separated demo ratings under the same account,
@@ -133,6 +133,9 @@ In **Project configuration** → **Environment variables**, add:
 - `ADMIN_EMAIL`: the email address that should receive administrator rights.
 - `GOOGLE_CLIENT_ID`: optional Google Web client ID. Password registration and
   login work without it.
+- `RESEND_API_KEY`: server-only Resend API key used to send password-reset links.
+- `PASSWORD_RESET_FROM_EMAIL`: sender name and address on a domain verified in
+  Resend, for example `Najah Review Studio <accounts@updates.example.org>`.
 
 Never use a `NEXT_PUBLIC_` prefix for `DATABASE_URL`; it must remain server-only.
 
@@ -140,6 +143,12 @@ For Google sign-in, create a **Web application** OAuth client in Google Cloud
 Console and add both the Netlify URL and any custom domain to **Authorized
 JavaScript origins**. Then set the same client ID as `GOOGLE_CLIENT_ID` and
 redeploy.
+
+For password recovery, verify a sending domain in Resend, create an API key,
+and add both password-reset variables above. The sign-in page then emails a
+single-use reset link that expires after 30 minutes. The request response never
+confirms whether an account exists. Completing a reset signs the account out on
+other devices while preserving its ratings, role, and assigned queue.
 
 ### 5. Deploy and verify before inviting raters
 

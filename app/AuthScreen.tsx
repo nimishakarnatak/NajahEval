@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-type AuthMode = "login" | "register";
+type AuthMode = "login" | "register" | "forgot";
 
 type GoogleCredentialResponse = { credential?: string };
 
@@ -53,6 +53,7 @@ export function AuthScreen({ googleClientId }: { googleClientId: string }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement>(null);
 
@@ -150,11 +151,15 @@ export function AuthScreen({ googleClientId }: { googleClientId: string }) {
   function changeMode(nextMode: AuthMode) {
     setMode(nextMode);
     setError("");
+    setSuccess("");
+    setPassword("");
+    setConfirmPassword("");
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setSuccess("");
     if (mode === "register" && password !== confirmPassword) {
       setError("The two passwords do not match.");
       return;
@@ -162,27 +167,47 @@ export function AuthScreen({ googleClientId }: { googleClientId: string }) {
 
     setSubmitting(true);
     try {
-      const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
+      const endpoint = mode === "login"
+        ? "/api/auth/login"
+        : mode === "register"
+          ? "/api/auth/register"
+          : "/api/auth/forgot-password";
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(mode === "forgot" ? { "x-najah-auth": "password-reset" } : {}),
+        },
         body: JSON.stringify(
           mode === "login"
             ? { email, password }
-            : { displayName, email, password },
+            : mode === "register"
+              ? { displayName, email, password }
+              : { email },
         ),
       });
       const responseText = await response.text();
-      let payload: { error?: string } = {};
+      let payload: { error?: string; message?: string } = {};
       if (responseText) {
         try {
-          payload = JSON.parse(responseText) as { error?: string };
+          payload = JSON.parse(responseText) as { error?: string; message?: string };
         } catch {
           // A proxy or unexpected server failure may return a non-JSON body.
           // The fallback below keeps that infrastructure detail out of the UI.
         }
       }
-      if (!response.ok) throw new Error(payload.error || "Unable to sign in.");
+      if (!response.ok) {
+        throw new Error(
+          payload.error || (mode === "forgot" ? "Unable to send the reset email." : "Unable to sign in."),
+        );
+      }
+      if (mode === "forgot") {
+        setSuccess(
+          payload.message ||
+            "If an active password account exists for that email, a reset link has been sent.",
+        );
+        return;
+      }
       window.location.assign("/");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to sign in.");
@@ -215,7 +240,7 @@ export function AuthScreen({ googleClientId }: { googleClientId: string }) {
 
       <section className="auth-form-area">
         <div className="auth-card">
-          {googleClientId && (
+          {googleClientId && mode !== "forgot" && (
             <>
               <div className="google-auth-heading">
                 <p>Rater access</p>
@@ -249,12 +274,26 @@ export function AuthScreen({ googleClientId }: { googleClientId: string }) {
           </div>
 
           <div className="auth-card-heading">
-            <p>{mode === "login" ? "Email sign in" : "New rater account"}</p>
-            <h2>{mode === "login" ? "Sign in to continue" : "Create your rater account"}</h2>
+            <p>
+              {mode === "login"
+                ? "Email sign in"
+                : mode === "register"
+                  ? "New rater account"
+                  : "Account recovery"}
+            </p>
+            <h2>
+              {mode === "login"
+                ? "Sign in to continue"
+                : mode === "register"
+                  ? "Create your rater account"
+                  : "Reset your password"}
+            </h2>
             <span>
               {mode === "login"
                 ? "Use the email and password for your Najah account."
-                : "Create an account with your email and a secure password."}
+                : mode === "register"
+                  ? "Create an account with your email and a secure password."
+                  : "Enter your account email and we will send you a secure reset link."}
             </span>
           </div>
 
@@ -284,19 +323,32 @@ export function AuthScreen({ googleClientId }: { googleClientId: string }) {
                 required
               />
             </label>
-            <label>
-              <span>Password</span>
-              <input
-                type="password"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder={mode === "register" ? "At least 6 characters" : "Your password"}
-                required
-                minLength={mode === "register" ? 6 : undefined}
-                maxLength={128}
-              />
-            </label>
+            {mode !== "forgot" && (
+              <label>
+                <span className="auth-password-label">
+                  Password
+                  {mode === "login" && (
+                    <button
+                      type="button"
+                      className="auth-inline-action"
+                      onClick={() => changeMode("forgot")}
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </span>
+                <input
+                  type="password"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder={mode === "register" ? "At least 6 characters" : "Your password"}
+                  required
+                  minLength={mode === "register" ? 6 : undefined}
+                  maxLength={128}
+                />
+              </label>
+            )}
             {mode === "register" && (
               <>
                 <label>
@@ -315,17 +367,32 @@ export function AuthScreen({ googleClientId }: { googleClientId: string }) {
               </>
             )}
             {error && <p className="auth-error" role="alert">{error}</p>}
+            {success && <p className="auth-success" role="status">{success}</p>}
             <button className="auth-submit" type="submit" disabled={submitting}>
               {submitting
-                ? mode === "login" ? "Signing in…" : "Creating account…"
-                : mode === "login" ? "Sign in" : "Create account"}
+                ? mode === "login"
+                  ? "Signing in…"
+                  : mode === "register"
+                    ? "Creating account…"
+                    : "Sending reset link…"
+                : mode === "login"
+                  ? "Sign in"
+                  : mode === "register"
+                    ? "Create account"
+                    : "Send reset link"}
             </button>
           </form>
 
           <p className="auth-help">
             {mode === "login"
               ? "Need an account? Choose Create account above."
-              : "Already registered? Return to Sign in."}
+              : mode === "register"
+                ? "Already registered? Return to Sign in."
+                : (
+                  <button type="button" className="auth-text-button" onClick={() => changeMode("login")}>
+                    Return to sign in
+                  </button>
+                )}
           </p>
         </div>
       </section>

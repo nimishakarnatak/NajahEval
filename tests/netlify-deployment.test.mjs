@@ -80,3 +80,19 @@ test("ships a versioned Postgres schema and traces the bundled dataset", async (
   assert.match(progress, /WHERE import_batch = \?/);
   assert.match(exportsRoute, /e\.import_batch = \?/);
 });
+
+test("ships a durable password-reset token migration", async () => {
+  const [migration, schema] = await Promise.all([
+    readFile(
+      projectFile("database/migrations/20260914010000_add_password_reset_tokens.sql"),
+      "utf8",
+    ),
+    readFile(projectFile("db/schema.ts"), "utf8"),
+  ]);
+
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS password_reset_tokens/);
+  assert.match(migration, /token_hash TEXT PRIMARY KEY/);
+  assert.match(migration, /WHERE used_at IS NULL/);
+  assert.match(schema, /CREATE TABLE IF NOT EXISTS password_reset_tokens/);
+  assert.match(schema, /idx_password_reset_tokens_expiry/);
+});

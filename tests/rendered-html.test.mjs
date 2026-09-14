@@ -19,6 +19,10 @@ const registerRoutePath = new URL("../app/api/auth/register/route.ts", import.me
 const googleRoutePath = new URL("../app/api/auth/google/route.ts", import.meta.url);
 const googleIdentityPath = new URL("../lib/google-identity.ts", import.meta.url);
 const ratingPolicyPath = new URL("../lib/rating-policy.ts", import.meta.url);
+const forgotPasswordRoutePath = new URL("../app/api/auth/forgot-password/route.ts", import.meta.url);
+const resetPasswordRoutePath = new URL("../app/api/auth/reset-password/route.ts", import.meta.url);
+const passwordResetPath = new URL("../lib/password-reset.ts", import.meta.url);
+const resetPasswordScreenPath = new URL("../app/reset-password/ResetPasswordScreen.tsx", import.meta.url);
 
 test("ships Najah-specific metadata without starter preview markers", async () => {
   const [page, layout] = await Promise.all([
@@ -28,6 +32,34 @@ test("ships Najah-specific metadata without starter preview markers", async () =
   assert.match(page, /Najah Review Studio/);
   assert.match(layout, /og\.png/);
   assert.doesNotMatch(`${page}\n${layout}`, /codex-preview|SkeletonPreview/);
+});
+
+test("offers secure, expiring, single-use password recovery", async () => {
+  const [authScreen, forgotRoute, resetRoute, resetHelper, resetScreen, schema] = await Promise.all([
+    readFile(authScreenPath, "utf8"),
+    readFile(forgotPasswordRoutePath, "utf8"),
+    readFile(resetPasswordRoutePath, "utf8"),
+    readFile(passwordResetPath, "utf8"),
+    readFile(resetPasswordScreenPath, "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(authScreen, /Forgot password\?/);
+  assert.match(authScreen, /Send reset link/);
+  assert.match(resetScreen, /Set your new password/);
+  assert.match(resetScreen, /Confirm new password/);
+  assert.match(forgotRoute, /PASSWORD_RESET_GENERIC_MESSAGE/);
+  assert.match(forgotRoute, /passwordHash\.startsWith\("pbkdf2-sha256\$"\)/);
+  assert.match(forgotRoute, /DELETE FROM password_reset_tokens WHERE token_hash = \?/);
+  assert.match(resetRoute, /SET used_at = \$1/);
+  assert.match(resetRoute, /used_at IS NULL/);
+  assert.match(resetRoute, /DELETE FROM auth_sessions WHERE user_id = \?/);
+  assert.match(resetRoute, /passwordValidationError/);
+  assert.match(resetHelper, /PASSWORD_RESET_EXPIRY_SECONDS = 30 \* 60/);
+  assert.match(resetHelper, /https:\/\/api\.resend\.com\/emails/);
+  assert.match(resetHelper, /RESEND_API_KEY/);
+  assert.match(schema, /token_hash TEXT PRIMARY KEY/);
+  assert.doesNotMatch(schema, /password_reset_tokens[\s\S]{0,200}token TEXT/);
 });
 
 test("classifies code-switched conversations while keeping language labels out of the review UI", async () => {

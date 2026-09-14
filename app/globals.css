@@ -785,10 +785,28 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .auth-form label { display: grid; gap: 7px; }
 .auth-form label > span { color: #465450; font-size: 10px; font-weight: 750; }
 .auth-form input { height: 43px; padding: 0 12px; }
+.auth-password-label { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.auth-inline-action, .auth-text-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--green);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+}
+.auth-inline-action:hover, .auth-text-button:hover { text-decoration-color: currentColor; }
 .auth-error { margin: 0; padding: 10px 11px; border-radius: 8px; background: #fae7e4; color: #852f25; font-size: 11px; line-height: 1.45; }
+.auth-success { margin: 0; padding: 10px 11px; border-radius: 8px; background: var(--green-soft); color: var(--green-dark); font-size: 11px; line-height: 1.5; }
 .auth-submit { min-height: 43px; margin-top: 3px; border: 1px solid var(--green); border-radius: 9px; background: var(--green); color: white; font-size: 11px; font-weight: 800; box-shadow: 0 7px 18px rgba(18,110,90,.19); }
 .auth-submit:hover { background: var(--green-dark); }
 .auth-help { margin: 18px 0 0; color: var(--muted); font-size: 10px; text-align: center; }
+.auth-help a { color: var(--green); font-weight: 800; text-decoration: none; }
+.auth-help a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.auth-complete { display: grid; gap: 15px; }
+.auth-submit-link { display: grid; place-items: center; text-decoration: none; }
 
 /* Administrator progress dashboard */
 .admin-shell { min-height: 100vh; background: var(--canvas); }
