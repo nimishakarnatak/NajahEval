@@ -23,6 +23,7 @@ const forgotPasswordRoutePath = new URL("../app/api/auth/forgot-password/route.t
 const resetPasswordRoutePath = new URL("../app/api/auth/reset-password/route.ts", import.meta.url);
 const passwordResetPath = new URL("../lib/password-reset.ts", import.meta.url);
 const resetPasswordScreenPath = new URL("../app/reset-password/ResetPasswordScreen.tsx", import.meta.url);
+const requestSecurityPath = new URL("../lib/request-security.ts", import.meta.url);
 
 test("ships Najah-specific metadata without starter preview markers", async () => {
   const [page, layout] = await Promise.all([
@@ -35,12 +36,13 @@ test("ships Najah-specific metadata without starter preview markers", async () =
 });
 
 test("offers secure, expiring, single-use password recovery", async () => {
-  const [authScreen, forgotRoute, resetRoute, resetHelper, resetScreen, schema] = await Promise.all([
+  const [authScreen, forgotRoute, resetRoute, resetHelper, resetScreen, requestSecurity, schema] = await Promise.all([
     readFile(authScreenPath, "utf8"),
     readFile(forgotPasswordRoutePath, "utf8"),
     readFile(resetPasswordRoutePath, "utf8"),
     readFile(passwordResetPath, "utf8"),
     readFile(resetPasswordScreenPath, "utf8"),
+    readFile(requestSecurityPath, "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
   ]);
 
@@ -58,6 +60,10 @@ test("offers secure, expiring, single-use password recovery", async () => {
   assert.match(resetHelper, /PASSWORD_RESET_EXPIRY_SECONDS = 30 \* 60/);
   assert.match(resetHelper, /https:\/\/api\.resend\.com\/emails/);
   assert.match(resetHelper, /RESEND_API_KEY/);
+  assert.match(forgotRoute, /acceptsSameOriginMutation\(request, "password-reset"\)/);
+  assert.match(resetRoute, /acceptsSameOriginMutation\(request, "password-reset"\)/);
+  assert.match(requestSecurity, /x-forwarded-host/);
+  assert.match(requestSecurity, /allowedHosts\.has\(origin\.host\.toLowerCase\(\)\)/);
   assert.match(schema, /token_hash TEXT PRIMARY KEY/);
   assert.doesNotMatch(schema, /password_reset_tokens[\s\S]{0,200}token TEXT/);
 });

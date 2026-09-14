@@ -8,6 +8,7 @@ import {
   passwordResetExpiryEpoch,
   sendPasswordResetEmail,
 } from "@/lib/password-reset";
+import { acceptsSameOriginMutation } from "@/lib/request-security";
 
 type ForgotPasswordPayload = { email?: string };
 
@@ -24,20 +25,13 @@ function validEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
 }
 
-function acceptedRequest(request: Request): boolean {
-  return (
-    request.headers.get("origin") === new URL(request.url).origin &&
-    request.headers.get("x-najah-auth") === "password-reset"
-  );
-}
-
 /**
  * Request a password-reset email without revealing whether an account exists.
  * Google-only and administrator-invited placeholder accounts intentionally
  * receive the same generic response but are not sent a password link.
  */
 export async function POST(request: Request) {
-  if (!acceptedRequest(request)) {
+  if (!acceptsSameOriginMutation(request, "password-reset")) {
     return Response.json({ error: "This password-reset request was not accepted." }, { status: 403 });
   }
 

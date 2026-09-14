@@ -1,22 +1,16 @@
 import { ensureNajahSchema, getDatabase } from "@/db";
 import { hashPassword, passwordValidationError } from "@/lib/password-auth";
 import { digestPasswordResetToken } from "@/lib/password-reset";
+import { acceptsSameOriginMutation } from "@/lib/request-security";
 
 type ResetPasswordPayload = {
   token?: string;
   password?: string;
 };
 
-function acceptedRequest(request: Request): boolean {
-  return (
-    request.headers.get("origin") === new URL(request.url).origin &&
-    request.headers.get("x-najah-auth") === "password-reset"
-  );
-}
-
 /** Consume a valid single-use link, replace the password, and revoke old sessions. */
 export async function POST(request: Request) {
-  if (!acceptedRequest(request)) {
+  if (!acceptsSameOriginMutation(request, "password-reset")) {
     return Response.json({ error: "This password-reset request was not accepted." }, { status: 403 });
   }
 

@@ -2,6 +2,7 @@ import { ensureNajahSchema, getDatabase } from "@/db";
 import { issueSessionCookie } from "@/lib/auth-session";
 import { verifyGoogleIdToken } from "@/lib/google-identity";
 import { isInvitedPassword } from "@/lib/participant-accounts";
+import { acceptsSameOriginMutation } from "@/lib/request-security";
 import type { UserRole } from "@/lib/user-roles";
 
 type GoogleLoginPayload = { credential?: string };
@@ -27,11 +28,7 @@ function configuredValue(name: "GOOGLE_CLIENT_ID" | "ADMIN_EMAIL"): string {
  * completed ratings are never split between two identities.
  */
 export async function POST(request: Request) {
-  const requestOrigin = new URL(request.url).origin;
-  if (
-    request.headers.get("origin") !== requestOrigin ||
-    request.headers.get("x-najah-auth") !== "google"
-  ) {
+  if (!acceptsSameOriginMutation(request, "google")) {
     return Response.json({ error: "This sign-in request was not accepted." }, { status: 403 });
   }
 
