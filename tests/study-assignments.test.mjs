@@ -63,7 +63,12 @@ test("routes serious mismatches and notifies judges without revealing primary sc
   assert.match(episodes, /primary_serious_mismatch/);
   assert.match(mismatch, /values\.has\(1\) && values\.has\(3\)/);
   assert.match(mismatch, /values\.has\("na"\)/);
-  assert.match(app, /Mismatch alerts/);
+  assert.match(app, /Mismatch reviews/);
+  assert.match(app, /Random assignments/);
+  assert.match(app, /mismatchNotStarted/);
+  assert.match(app, /mismatchCompleted/);
+  assert.match(app, /judgeRandomNotStarted/);
+  assert.match(app, /judgeRandomCompleted/);
   assert.match(app, /Serious primary-rating mismatch—judge review required/);
   assert.match(app, /individual scores remain hidden/i);
 });

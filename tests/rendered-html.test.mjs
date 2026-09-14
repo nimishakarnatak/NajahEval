@@ -261,6 +261,7 @@ test("lets raters skip an episode without marking it complete", async () => {
   assert.match(component, /Enter a reason before skipping this episode/);
   assert.match(component, /id="skip-reason"/);
   assert.match(component, /Episode skipped\. You can return to it from My queue\./);
+  assert.match(component, /Episode skipped\. You can return to it from its assigned review list\./);
   assert.match(component, /persist\("draft", true, "skip"\)/);
 });
 

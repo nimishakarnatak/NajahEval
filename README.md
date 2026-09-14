@@ -192,8 +192,10 @@ do not expose the production `DATABASE_URL` to untrusted preview deployments.
 - Every completed rating records task status. If the task was not completed, a
   second required field records the observable reason the interaction stopped.
 - Evaluators never see another evaluator's scores; they see only the completed
-  count for their own review layer. Judges receive mismatch alerts without the
-  primary raters' identities or score values.
+  count for their own review layer. The judge workspace separates fixed random
+  assignments from mismatch reviews and shows Not started, Draft, Done,
+  Remaining, and Total counts for each. Judges receive mismatch signals without
+  the primary raters' identities or score values.
 - Privacy and language-review fields are retained as metadata but currently do
   not gate import. Revisit that temporary decision before external data release.
 - The evidence rubric is stored in `rubric_annotations`, separately from the

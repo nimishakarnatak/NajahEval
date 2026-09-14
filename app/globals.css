@@ -206,6 +206,63 @@ button:focus-visible,
   font-weight: 750;
 }
 
+.judge-progress-card { display: grid; gap: 11px; }
+.judge-progress-group {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid #dce7e3;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfdfc;
+  color: inherit;
+  text-align: left;
+  transition: border-color .15s, background .15s, transform .15s;
+}
+.judge-progress-group:hover {
+  border-color: #9bc0b3;
+  background: #f2f8f5;
+  transform: translateY(-1px);
+}
+.judge-progress-group:focus-visible {
+  outline: 0;
+  border-color: #69a895;
+  box-shadow: 0 0 0 3px rgba(18, 110, 90, .12);
+}
+.judge-progress-group-heading,
+.judge-progress-remaining {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.judge-progress-group-heading strong { color: var(--ink); font-size: 10px; }
+.judge-progress-group-heading small { color: var(--muted); font-size: 8px; }
+.judge-progress-statuses {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+.judge-progress-statuses > span {
+  display: grid;
+  gap: 2px;
+  border-radius: 7px;
+  padding: 6px 4px;
+  background: #f0f4f2;
+  color: var(--muted);
+  font-size: 7px;
+  text-align: center;
+}
+.judge-progress-statuses strong { color: var(--ink); font-size: 11px; }
+.judge-progress-remaining {
+  padding-top: 6px;
+  border-top: 1px solid #e7eeeb;
+  color: var(--muted);
+  font-size: 8px;
+}
+.judge-progress-remaining strong { color: var(--green-dark); font-size: 10px; }
+.judge-progress-note { margin: 0; color: var(--muted); font-size: 8px; line-height: 1.4; }
+
 .progress-overlay {
   position: fixed;
   inset: 0;

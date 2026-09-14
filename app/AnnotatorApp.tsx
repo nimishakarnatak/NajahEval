@@ -53,6 +53,7 @@ type AnnotationDraft = {
 type Episode = AnnotationDraft & {
   episodeId: string;
   studyOrder: number;
+  judgeBaseAssignment: "" | "judge_1" | "judge_2";
   studentStatus: string;
   language: string;
   module: string;
@@ -80,7 +81,7 @@ type Rater = {
 };
 type SaveState = "saved" | "saving" | "unsaved" | "error";
 type ViewFilter = "queue" | "drafts" | "completed" | "mismatches" | "all";
-type ProgressView = "queue" | "not_started" | "draft" | "complete" | "mismatches" | "all";
+type ProgressView = "queue" | "random" | "not_started" | "draft" | "complete" | "mismatches" | "all";
 type TranslationStatus = "idle" | "preparing" | "translating" | "ready" | "error";
 type TranscriptTurn = {
   speaker: "USER" | "NAJAH";
@@ -774,13 +775,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         treatmentFilter === "all" || episode.treatment === treatmentFilter;
       const matchesView = readOnly ||
         viewFilter === "all" ||
-        (viewFilter === "queue" && episode.annotationStatus !== "complete" && episode.completedRaterCount < requiredRatingsPerEpisode) ||
+        (viewFilter === "queue" &&
+          episode.annotationStatus !== "complete" &&
+          episode.completedRaterCount < requiredRatingsPerEpisode &&
+          (reviewLayer !== "judge" || episode.judgeBaseAssignment === rater.assignmentCohort)) ||
         (viewFilter === "drafts" && episode.annotationStatus === "draft") ||
         (viewFilter === "completed" && episode.annotationStatus === "complete") ||
         (viewFilter === "mismatches" && episode.primaryMismatch);
       return matchesModule && matchesTreatment && matchesView;
     });
-  }, [episodes, moduleFilter, readOnly, requiredRatingsPerEpisode, treatmentFilter, viewFilter]);
+  }, [episodes, moduleFilter, rater.assignmentCohort, readOnly, requiredRatingsPerEpisode, reviewLayer, treatmentFilter, viewFilter]);
 
   useEffect(() => {
     if (reviewLayer !== "judge" && viewFilter === "mismatches") {
@@ -1114,7 +1118,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         ? (currentIndex + 1) % filteredEpisodes.length
         : 0;
       setSelectedId(filteredEpisodes[nextIndex].episodeId);
-      setNotice("Episode skipped. You can return to it from My queue.");
+      setNotice(
+        reviewLayer === "judge"
+          ? "Episode skipped. You can return to it from its assigned review list."
+          : "Episode skipped. You can return to it from My queue.",
+      );
     } finally {
       setSkipping(false);
     }
@@ -1134,6 +1142,12 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setViewFilter(
       progressView === "queue"
         ? "queue"
+        : progressView === "random"
+          ? episode.annotationStatus === "complete"
+            ? "completed"
+            : episode.annotationStatus === "draft"
+              ? "drafts"
+              : "queue"
         : progressView === "mismatches"
           ? "mismatches"
         : progressView === "all"
@@ -1154,7 +1168,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setViewFilter(view);
     setProgressView(
       view === "queue"
-        ? "queue"
+        ? reviewLayer === "judge" ? "random" : "queue"
         : view === "drafts"
           ? "draft"
           : view === "completed"
@@ -1513,15 +1527,40 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const completedByMe = episodes.filter((episode) => episode.annotationStatus === "complete").length;
   const draftsByMe = episodes.filter((episode) => episode.annotationStatus === "draft").length;
   const notStartedByMe = episodes.length - completedByMe - draftsByMe;
+  const judgeRandomEpisodes = reviewLayer === "judge"
+    ? episodes.filter((episode) => episode.judgeBaseAssignment === rater.assignmentCohort)
+    : [];
+  const judgeRandomNotStarted = judgeRandomEpisodes.filter(
+    (episode) => episode.annotationStatus === null,
+  ).length;
+  const judgeRandomDrafts = judgeRandomEpisodes.filter(
+    (episode) => episode.annotationStatus === "draft",
+  ).length;
+  const judgeRandomCompleted = judgeRandomEpisodes.filter(
+    (episode) => episode.annotationStatus === "complete",
+  ).length;
+  const judgeRandomRemaining = judgeRandomNotStarted + judgeRandomDrafts;
+  const mismatchEpisodes = episodes.filter((episode) => episode.primaryMismatch);
+  const mismatchNotStarted = mismatchEpisodes.filter(
+    (episode) => episode.annotationStatus === null,
+  ).length;
+  const mismatchDrafts = mismatchEpisodes.filter(
+    (episode) => episode.annotationStatus === "draft",
+  ).length;
+  const mismatchCompleted = mismatchEpisodes.filter(
+    (episode) => episode.annotationStatus === "complete",
+  ).length;
+  const mismatchRemaining = mismatchNotStarted + mismatchDrafts;
   const fullyRated = episodes.filter(
     (episode) => episode.completedRaterCount >= requiredRatingsPerEpisode,
   ).length;
   const queueCount = episodes.filter(
     (episode) =>
       episode.annotationStatus !== "complete" &&
-      episode.completedRaterCount < requiredRatingsPerEpisode,
+      episode.completedRaterCount < requiredRatingsPerEpisode &&
+      (reviewLayer !== "judge" || episode.judgeBaseAssignment === rater.assignmentCohort),
   ).length;
-  const mismatchCount = episodes.filter((episode) => episode.primaryMismatch).length;
+  const mismatchCount = mismatchEpisodes.length;
   const viewCounts: Record<ViewFilter, number> = {
     queue: queueCount,
     drafts: draftsByMe,
@@ -1530,11 +1569,14 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     all: episodes.length,
   };
   const availableViews: ViewFilter[] = reviewLayer === "judge"
-    ? ["queue", "drafts", "completed", "mismatches", "all"]
+    ? ["queue", "mismatches", "drafts", "completed", "all"]
     : ["queue", "drafts", "completed", "all"];
   const progressEpisodes = episodes.filter((episode) => {
     if (progressView === "all") return true;
     if (progressView === "mismatches") return episode.primaryMismatch;
+    if (progressView === "random") {
+      return episode.judgeBaseAssignment === rater.assignmentCohort;
+    }
     if (progressView === "queue") {
       return (
         episode.annotationStatus !== "complete" &&
@@ -1556,9 +1598,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     progressView === "all"
       ? "All episodes"
       : progressView === "queue"
-        ? "My queue"
+        ? reviewLayer === "judge" ? "Random assignments remaining" : "My queue"
+        : progressView === "random"
+          ? "Random assignments"
         : progressView === "mismatches"
-          ? "Primary-rating mismatches"
+          ? "Mismatch reviews"
         : progressView === "complete"
           ? "Completed by you"
           : progressView === "draft"
@@ -1609,36 +1653,86 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           </section>
         ) : (
           <>
-            <button
-              type="button"
-              className="progress-card progress-card-button"
-              onClick={() => {
-                setProgressView("not_started");
-                setProgressOpen(true);
-              }}
-              aria-haspopup="dialog"
-              aria-expanded={progressOpen}
-            >
-              <div className="progress-heading"><span>My progress</span><strong>{completedByMe}/{episodes.length}</strong></div>
-              <div className="progress-track"><span style={{ width: `${episodes.length ? (completedByMe / episodes.length) * 100 : 0}%` }} /></div>
-              <div className="progress-stats">
-                <span><strong>{draftsByMe}</strong> drafts</span>
-                <span>
-                  <strong>{reviewLayer === "judge" ? mismatchCount : fullyRated}</strong>{" "}
-                  {reviewLayer === "judge" ? "mismatch alerts" : "fully rated"}
-                </span>
-              </div>
-              <span className="progress-card-action">View episode list <span aria-hidden="true">→</span></span>
-            </button>
+            {reviewLayer === "judge" ? (
+              <section className="progress-card judge-progress-card" aria-label="Judge review progress">
+                <div className="progress-heading">
+                  <span>Judge review progress</span>
+                  <strong>{completedByMe}/{episodes.length}</strong>
+                </div>
+
+                <button
+                  type="button"
+                  className="judge-progress-group"
+                  onClick={() => openViewList("queue")}
+                  aria-haspopup="dialog"
+                >
+                  <span className="judge-progress-group-heading">
+                    <strong>Random assignments</strong>
+                    <small>Total {judgeRandomEpisodes.length}</small>
+                  </span>
+                  <span className="judge-progress-statuses">
+                    <span><strong>{judgeRandomNotStarted}</strong>Not started</span>
+                    <span><strong>{judgeRandomDrafts}</strong>Draft</span>
+                    <span><strong>{judgeRandomCompleted}</strong>Done</span>
+                  </span>
+                  <span className="judge-progress-remaining">
+                    <strong>{judgeRandomRemaining}</strong> remaining
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className="judge-progress-group"
+                  onClick={() => openViewList("mismatches")}
+                  aria-haspopup="dialog"
+                >
+                  <span className="judge-progress-group-heading">
+                    <strong>Mismatch reviews</strong>
+                    <small>Total {mismatchCount}</small>
+                  </span>
+                  <span className="judge-progress-statuses">
+                    <span><strong>{mismatchNotStarted}</strong>Not started</span>
+                    <span><strong>{mismatchDrafts}</strong>Draft</span>
+                    <span><strong>{mismatchCompleted}</strong>Done</span>
+                  </span>
+                  <span className="judge-progress-remaining">
+                    <strong>{mismatchRemaining}</strong> remaining
+                  </span>
+                </button>
+
+                <p className="judge-progress-note">
+                  One review can appear in both sections when a random assignment also has a mismatch.
+                </p>
+              </section>
+            ) : (
+              <button
+                type="button"
+                className="progress-card progress-card-button"
+                onClick={() => {
+                  setProgressView("not_started");
+                  setProgressOpen(true);
+                }}
+                aria-haspopup="dialog"
+                aria-expanded={progressOpen}
+              >
+                <div className="progress-heading"><span>My progress</span><strong>{completedByMe}/{episodes.length}</strong></div>
+                <div className="progress-track"><span style={{ width: `${episodes.length ? (completedByMe / episodes.length) * 100 : 0}%` }} /></div>
+                <div className="progress-stats">
+                  <span><strong>{draftsByMe}</strong> drafts</span>
+                  <span><strong>{fullyRated}</strong> fully rated</span>
+                </div>
+                <span className="progress-card-action">View episode list <span aria-hidden="true">→</span></span>
+              </button>
+            )}
 
             <nav className="view-tabs" aria-label="Annotation views">
               {availableViews.map((view) => (
                 <button key={view} className={viewFilter === view ? "active" : ""} onClick={() => openViewList(view)}>
                   <span>
                     {view === "queue"
-                      ? "My queue"
+                      ? reviewLayer === "judge" ? "Random assignments" : "My queue"
                       : view === "mismatches"
-                        ? "Mismatch alerts"
+                        ? "Mismatch reviews"
                         : view[0].toUpperCase() + view.slice(1)}
                   </span>
                   <strong>{viewCounts[view]}</strong>
@@ -1891,10 +1985,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   ? "No drafts yet"
                   : viewFilter === "completed" && !filteredEpisodes.length
                     ? "No completed episodes yet"
-                    : viewFilter === "mismatches" && !filteredEpisodes.length
-                      ? "No primary-rating mismatches"
+                : viewFilter === "mismatches" && !filteredEpisodes.length
+                      ? "No mismatch reviews"
                     : viewFilter === "queue" && !filteredEpisodes.length
-                      ? "Your queue is complete"
+                      ? reviewLayer === "judge" ? "Your random assignments are complete" : "Your queue is complete"
                       : "No episodes match these filters"}
             </h1>
             <p>
@@ -1906,10 +2000,12 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   ? "Ratings saved before submission will appear in Drafts."
                   : viewFilter === "completed" && !filteredEpisodes.length
                     ? "Ratings you submit will appear in Completed."
-                    : viewFilter === "mismatches" && !filteredEpisodes.length
-                      ? "An alert will appear here after both primary raters submit different scores, task-status judgments, or critical-failure judgments."
+                : viewFilter === "mismatches" && !filteredEpisodes.length
+                      ? "A review will appear here after both primary raters submit different scores, task-status judgments, or critical-failure judgments."
                     : viewFilter === "queue" && !filteredEpisodes.length
-                      ? "There are no episodes currently waiting for your rating."
+                      ? reviewLayer === "judge"
+                        ? "There are no random assignments currently waiting for your review."
+                        : "There are no episodes currently waiting for your rating."
                       : "Change a filter or choose another list."}
             </p>
           </section>
