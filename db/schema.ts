@@ -98,8 +98,6 @@ export const NAJAH_SCHEMA_STATEMENTS = [
   "CREATE INDEX IF NOT EXISTS idx_annotations_rater_status ON annotations(rater_id, status)",
   "CREATE INDEX IF NOT EXISTS idx_rubric_annotations_episode_status ON rubric_annotations(episode_id, status)",
   "CREATE INDEX IF NOT EXISTS idx_rubric_annotations_rater_status ON rubric_annotations(rater_id, status)",
-  "CREATE INDEX IF NOT EXISTS idx_users_assignment_cohort ON users(assignment_cohort)",
-  "CREATE INDEX IF NOT EXISTS idx_episodes_study_order ON episodes(study_order)",
   "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)",
   "CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at)",
 ] as const;
@@ -126,6 +124,10 @@ export const NAJAH_SCHEMA_MIGRATION_STATEMENTS = [
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_incomplete_reason TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS skip_reason TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS critical_failure_observed TEXT NOT NULL DEFAULT ''",
+  // These indexes must follow the ALTER statements. Existing production
+  // databases may not have the assignment columns when this transaction starts.
+  "CREATE INDEX IF NOT EXISTS idx_users_assignment_cohort ON users(assignment_cohort)",
+  "CREATE INDEX IF NOT EXISTS idx_episodes_study_order ON episodes(study_order)",
   `
     DO $$
     DECLARE

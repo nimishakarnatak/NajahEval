@@ -59,6 +59,17 @@ test("ships a versioned Postgres schema and traces the bundled dataset", async (
   assert.match(assignmentMigration, /ADD COLUMN IF NOT EXISTS review_layer/);
   assert.match(schema, /ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS skip_reason/);
   assert.match(schema, /ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS critical_failure_observed/);
+  const upgrades = schema.slice(schema.indexOf("NAJAH_SCHEMA_MIGRATION_STATEMENTS"));
+  assert.ok(
+    upgrades.indexOf("ALTER TABLE users ADD COLUMN IF NOT EXISTS assignment_cohort") <
+      upgrades.indexOf("CREATE INDEX IF NOT EXISTS idx_users_assignment_cohort"),
+    "the assignment column must exist before its index is created",
+  );
+  assert.ok(
+    upgrades.indexOf("ALTER TABLE episodes ADD COLUMN IF NOT EXISTS study_order") <
+      upgrades.indexOf("CREATE INDEX IF NOT EXISTS idx_episodes_study_order"),
+    "the study-order column must exist before its index is created",
+  );
   assert.match(nextConfig, /outputFileTracingIncludes/);
   assert.match(nextConfig, /najah_final_annotation_dataset\.csv/);
   assert.match(bundledDataset, /parameterized multi-row upsert/);
