@@ -13,6 +13,7 @@ export const NAJAH_SCHEMA_STATEMENTS = [
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('admin', 'rater', 'viewer')),
       can_rate BOOLEAN NOT NULL DEFAULT FALSE,
+      assignment_cohort TEXT NOT NULL DEFAULT 'unassigned',
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       failed_login_count INTEGER NOT NULL DEFAULT 0,
       locked_until BIGINT,
@@ -30,6 +31,8 @@ export const NAJAH_SCHEMA_STATEMENTS = [
   `
     CREATE TABLE IF NOT EXISTS episodes (
       episode_id TEXT PRIMARY KEY,
+      study_order INTEGER NOT NULL DEFAULT 0,
+      judge_base_assignment TEXT NOT NULL DEFAULT '',
       student_status TEXT NOT NULL DEFAULT 'unknown',
       language TEXT NOT NULL,
       module TEXT NOT NULL,
@@ -70,9 +73,12 @@ export const NAJAH_SCHEMA_STATEMENTS = [
       episode_id TEXT NOT NULL REFERENCES episodes(episode_id) ON DELETE CASCADE,
       rater_id TEXT NOT NULL,
       rater_email TEXT NOT NULL,
+      review_layer TEXT NOT NULL DEFAULT 'legacy',
+      assignment_cohort TEXT NOT NULL DEFAULT '',
       scores_json TEXT NOT NULL DEFAULT '{}',
       evidence_turns_json TEXT NOT NULL DEFAULT '{}',
       justifications_json TEXT NOT NULL DEFAULT '{}',
+      critical_failure_observed TEXT NOT NULL DEFAULT '',
       critical_flags_json TEXT NOT NULL DEFAULT '{}',
       critical_evidence_json TEXT NOT NULL DEFAULT '{}',
       episode_end_reason TEXT NOT NULL DEFAULT '',
@@ -92,6 +98,8 @@ export const NAJAH_SCHEMA_STATEMENTS = [
   "CREATE INDEX IF NOT EXISTS idx_annotations_rater_status ON annotations(rater_id, status)",
   "CREATE INDEX IF NOT EXISTS idx_rubric_annotations_episode_status ON rubric_annotations(episode_id, status)",
   "CREATE INDEX IF NOT EXISTS idx_rubric_annotations_rater_status ON rubric_annotations(rater_id, status)",
+  "CREATE INDEX IF NOT EXISTS idx_users_assignment_cohort ON users(assignment_cohort)",
+  "CREATE INDEX IF NOT EXISTS idx_episodes_study_order ON episodes(study_order)",
   "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)",
   "CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at)",
 ] as const;
@@ -109,9 +117,15 @@ export const NAJAH_SCHEMA_MIGRATION_STATEMENTS = [
   "UPDATE users SET can_rate = (role IN ('admin', 'rater')) WHERE can_rate IS NULL",
   "ALTER TABLE users ALTER COLUMN can_rate SET DEFAULT FALSE",
   "ALTER TABLE users ALTER COLUMN can_rate SET NOT NULL",
+  "ALTER TABLE users ADD COLUMN IF NOT EXISTS assignment_cohort TEXT NOT NULL DEFAULT 'unassigned'",
+  "ALTER TABLE episodes ADD COLUMN IF NOT EXISTS study_order INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE episodes ADD COLUMN IF NOT EXISTS judge_base_assignment TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS review_layer TEXT NOT NULL DEFAULT 'legacy'",
+  "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS assignment_cohort TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_status TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_incomplete_reason TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS skip_reason TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS critical_failure_observed TEXT NOT NULL DEFAULT ''",
   `
     DO $$
     DECLARE

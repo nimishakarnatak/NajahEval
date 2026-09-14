@@ -5,7 +5,9 @@ import {
 } from "@/lib/bundled-dataset";
 import {
   CRITICAL_FLAGS,
+  CRITICAL_FAILURE_OBSERVATIONS,
   CRITICAL_FLAG_KEYS,
+  CriticalFailureObserved,
   CriticalFlagKey,
   CriticalFlagValue,
   DIMENSION_KEYS,
@@ -19,8 +21,23 @@ import {
   TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
-import { REQUIRED_RATINGS_PER_EPISODE } from "@/lib/rating-policy";
+import {
+  REQUIRED_JUDGE_RATINGS_PER_EPISODE,
+  REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
+} from "@/lib/rating-policy";
 import { getRaterIdentity } from "@/lib/server-auth";
+import {
+  assignmentIncludesEpisode,
+  isAssignedCohort,
+  isJudgeCohort,
+  primaryCohortForOrder,
+  reviewLayerForAccount,
+  type JudgeAssignment,
+} from "@/lib/study-assignments";
+import {
+  summarizePrimaryMismatch,
+  type ComparablePrimaryRating,
+} from "@/lib/rating-mismatch";
 
 type AnnotationPayload = {
   episodeId?: string;
@@ -29,6 +46,7 @@ type AnnotationPayload = {
   justifications?: Partial<Record<DimensionKey, string>>;
   criticalFlags?: Partial<Record<CriticalFlagKey, CriticalFlagValue>>;
   criticalEvidence?: Partial<Record<CriticalFlagKey, string>>;
+  criticalFailureObserved?: CriticalFailureObserved | "";
   taskStatus?: TaskStatus | "";
   taskIncompleteReason?: TaskIncompleteReason | "";
   skipReason?: string;
@@ -43,6 +61,7 @@ type NormalizedAnnotation = {
   justifications: Record<DimensionKey, string>;
   criticalFlags: Record<CriticalFlagKey, CriticalFlagValue>;
   criticalEvidence: Record<CriticalFlagKey, string>;
+  criticalFailureObserved: CriticalFailureObserved | "";
   taskStatus: TaskStatus | "";
   taskIncompleteReason: TaskIncompleteReason | "";
   skipReason: string;
@@ -62,6 +81,16 @@ function validDimensionScore(value: unknown): value is DimensionScore {
 /** A critical flag is blank while drafting, then an explicit Yes or No. */
 function validCriticalFlag(value: unknown): value is CriticalFlagValue {
   return value === null || value === "yes" || value === "no";
+}
+
+/** Drafts may leave the screening question blank; submissions may not. */
+function validCriticalFailureObserved(
+  value: unknown,
+): value is CriticalFailureObserved | "" {
+  return (
+    value === "" ||
+    CRITICAL_FAILURE_OBSERVATIONS.some((option) => option.value === value)
+  );
 }
 
 /** Drafts may leave task status blank; completed ratings must select one. */
@@ -91,6 +120,8 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     (payload.justifications !== undefined && !isRecord(payload.justifications)) ||
     (payload.criticalFlags !== undefined && !isRecord(payload.criticalFlags)) ||
     (payload.criticalEvidence !== undefined && !isRecord(payload.criticalEvidence)) ||
+    (payload.criticalFailureObserved !== undefined &&
+      !validCriticalFailureObserved(payload.criticalFailureObserved)) ||
     (payload.taskStatus !== undefined && !validTaskStatus(payload.taskStatus)) ||
     (payload.taskIncompleteReason !== undefined &&
       !validTaskIncompleteReason(payload.taskIncompleteReason)) ||
@@ -132,12 +163,47 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     criticalEvidence[key] = evidence.trim();
   }
 
+  // Older browser clients submitted only six category-level Yes/No values.
+  // Infer their screening answer so an in-flight save remains compatible with
+  // the upgraded server, while new clients send the answer explicitly.
+  const inferredFailureObserved = CRITICAL_FLAG_KEYS.some(
+    (key) => criticalFlags[key] === "yes",
+  )
+    ? "yes"
+    : CRITICAL_FLAG_KEYS.filter((key) => key !== "otherSeriousFailure").every(
+        (key) => criticalFlags[key] === "no",
+      )
+      ? "no"
+      : "";
+  const criticalFailureObserved =
+    payload.criticalFailureObserved ?? inferredFailureObserved;
+
+  if (criticalFailureObserved === "no") {
+    for (const key of CRITICAL_FLAG_KEYS) {
+      criticalFlags[key] = "no";
+      criticalEvidence[key] = "";
+    }
+  } else if (criticalFailureObserved === "cannot_determine") {
+    for (const key of CRITICAL_FLAG_KEYS) {
+      criticalFlags[key] = null;
+      criticalEvidence[key] = "";
+    }
+  } else if (criticalFailureObserved === "yes") {
+    for (const key of CRITICAL_FLAG_KEYS) {
+      if (criticalFlags[key] !== "yes") {
+        criticalFlags[key] = "no";
+        criticalEvidence[key] = "";
+      }
+    }
+  }
+
   return {
     scores,
     evidenceTurns,
     justifications,
     criticalFlags,
     criticalEvidence,
+    criticalFailureObserved,
     taskStatus: payload.taskStatus ?? "",
     taskIncompleteReason:
       payload.taskStatus === "not_completed" ? payload.taskIncompleteReason ?? "" : "",
@@ -166,11 +232,20 @@ function completionError(annotation: NormalizedAnnotation): string | null {
     return "Select why the task was not completed.";
   }
 
-  for (const flag of CRITICAL_FLAGS) {
-    const value = annotation.criticalFlags[flag.key];
-    if (value === null) return `Select Yes or No for the ${flag.label} flag.`;
-    if (value === "yes" && !annotation.criticalEvidence[flag.key]) {
-      return `Provide turn evidence and an explanation for the ${flag.label} flag.`;
+  if (!annotation.criticalFailureObserved) {
+    return "Select whether any critical failure was observed.";
+  }
+  if (annotation.criticalFailureObserved === "yes") {
+    const selectedFlags = CRITICAL_FLAGS.filter(
+      (flag) => annotation.criticalFlags[flag.key] === "yes",
+    );
+    if (!selectedFlags.length) {
+      return "Select at least one critical-failure category.";
+    }
+    for (const flag of selectedFlags) {
+      if (!annotation.criticalEvidence[flag.key]) {
+        return `Provide a brief explanation for ${flag.label}.`;
+      }
     }
   }
   return null;
@@ -184,6 +259,12 @@ export async function POST(request: Request) {
   if (!rater.canRate) {
     return Response.json(
       { error: "Rater status is required to save or submit ratings." },
+      { status: 403 },
+    );
+  }
+  if (rater.role !== "admin" && !isAssignedCohort(rater.assignmentCohort)) {
+    return Response.json(
+      { error: "Your study assignment is pending. Ask an administrator to assign your queue." },
       { status: 403 },
     );
   }
@@ -211,24 +292,89 @@ export async function POST(request: Request) {
   await ensureNajahSchema(db);
   await ensureBundledDataset(db);
   const episode = await db
-    .prepare("SELECT episode_id FROM episodes WHERE episode_id = ? AND import_batch = ?")
+    .prepare(`
+      SELECT
+        episode_id AS "episodeId",
+        study_order AS "studyOrder",
+        judge_base_assignment AS "judgeBaseAssignment"
+      FROM episodes
+      WHERE episode_id = ? AND import_batch = ?
+    `)
     .bind(episodeId, BUNDLED_DATASET_VERSION)
-    .first();
+    .first<{
+      episodeId: string;
+      studyOrder: number;
+      judgeBaseAssignment: JudgeAssignment;
+    }>();
   if (!episode) {
     return Response.json({ error: "Episode not found." }, { status: 404 });
   }
 
-  if (status === "complete") {
+  let hasSeriousMismatch = false;
+  if (isJudgeCohort(rater.assignmentCohort)) {
+    const primaryRatings = await db
+      .prepare(`
+        SELECT
+          scores_json AS "scoresJson",
+          task_status AS "taskStatus",
+          task_incomplete_reason AS "taskIncompleteReason",
+          critical_failure_observed AS "criticalFailureObserved",
+          critical_flags_json AS "criticalFlagsJson"
+        FROM rubric_annotations
+        WHERE episode_id = ?
+          AND status = 'complete'
+          AND review_layer = 'primary'
+          AND assignment_cohort = ?
+        ORDER BY updated_at
+      `)
+      .bind(episodeId, primaryCohortForOrder(Number(episode.studyOrder)))
+      .all<ComparablePrimaryRating>();
+    hasSeriousMismatch = summarizePrimaryMismatch(
+      primaryRatings.results,
+    ).seriousMismatch;
+  }
+
+  if (
+    rater.role !== "admin" &&
+    !assignmentIncludesEpisode(
+      rater.assignmentCohort,
+      Number(episode.studyOrder),
+      episode.judgeBaseAssignment,
+      hasSeriousMismatch,
+    )
+  ) {
+    return Response.json(
+      { error: "This episode is outside your assigned review queue." },
+      { status: 403 },
+    );
+  }
+
+  const reviewLayer = reviewLayerForAccount(rater.role, rater.assignmentCohort);
+  const requiredRatings = isJudgeCohort(rater.assignmentCohort)
+    ? REQUIRED_JUDGE_RATINGS_PER_EPISODE
+    : REQUIRED_PRIMARY_RATINGS_PER_EPISODE;
+
+  // Administrative demo ratings are retained for demonstrations but never
+  // consume one of the paired-primary or judge-review study slots.
+  if (status === "complete" && reviewLayer !== "admin_demo") {
     const completed = await db
       .prepare(`
         SELECT COUNT(*) AS count FROM rubric_annotations
-        WHERE episode_id = ? AND status = 'complete' AND rater_id != ?
+        WHERE episode_id = ?
+          AND status = 'complete'
+          AND rater_id != ?
+          AND review_layer = ?
+          AND assignment_cohort = ?
       `)
-      .bind(episodeId, rater.id)
+      .bind(episodeId, rater.id, reviewLayer, rater.assignmentCohort)
       .first<{ count: number }>();
-    if ((completed?.count ?? 0) >= REQUIRED_RATINGS_PER_EPISODE) {
+    if ((completed?.count ?? 0) >= requiredRatings) {
       return Response.json(
-        { error: "This episode already has all five required independent ratings." },
+        {
+          error: reviewLayer === "judge"
+            ? "This episode already has its required judge review."
+            : "This episode already has both required independent primary ratings.",
+        },
         { status: 409 },
       );
     }
@@ -237,15 +383,19 @@ export async function POST(request: Request) {
   await db
     .prepare(`
       INSERT INTO rubric_annotations (
-        episode_id, rater_id, rater_email, scores_json, evidence_turns_json,
-        justifications_json, critical_flags_json, critical_evidence_json,
+        episode_id, rater_id, rater_email, review_layer, assignment_cohort,
+        scores_json, evidence_turns_json,
+        justifications_json, critical_failure_observed, critical_flags_json, critical_evidence_json,
         task_status, task_incomplete_reason, skip_reason, comments, rubric_version, status, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(episode_id, rater_id) DO UPDATE SET
         rater_email = excluded.rater_email,
+        review_layer = excluded.review_layer,
+        assignment_cohort = excluded.assignment_cohort,
         scores_json = excluded.scores_json,
         evidence_turns_json = excluded.evidence_turns_json,
         justifications_json = excluded.justifications_json,
+        critical_failure_observed = excluded.critical_failure_observed,
         critical_flags_json = excluded.critical_flags_json,
         critical_evidence_json = excluded.critical_evidence_json,
         task_status = excluded.task_status,
@@ -260,9 +410,12 @@ export async function POST(request: Request) {
       episodeId,
       rater.id,
       rater.email,
+      reviewLayer,
+      rater.assignmentCohort,
       JSON.stringify(annotation.scores),
       JSON.stringify(annotation.evidenceTurns),
       JSON.stringify(annotation.justifications),
+      annotation.criticalFailureObserved,
       JSON.stringify(annotation.criticalFlags),
       JSON.stringify(annotation.criticalEvidence),
       annotation.taskStatus,

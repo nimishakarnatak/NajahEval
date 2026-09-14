@@ -24,13 +24,21 @@ test("uses standard Next.js and external Neon Postgres for a durable deployment"
 });
 
 test("ships a versioned Postgres schema and traces the bundled dataset", async () => {
-  const [migration, skipReasonMigration, schema, nextConfig, bundledDataset, episodesRoute, progress, exportsRoute] = await Promise.all([
+  const [migration, skipReasonMigration, criticalFailureMigration, assignmentMigration, schema, nextConfig, bundledDataset, episodesRoute, progress, exportsRoute] = await Promise.all([
     readFile(
       projectFile("database/migrations/20260825000000_create_najah_schema.sql"),
       "utf8",
     ),
     readFile(
       projectFile("database/migrations/20260908000000_add_skip_reason.sql"),
+      "utf8",
+    ),
+    readFile(
+      projectFile("database/migrations/20260908010000_add_critical_failure_screening.sql"),
+      "utf8",
+    ),
+    readFile(
+      projectFile("database/migrations/20260914000000_add_paired_batch_assignments.sql"),
       "utf8",
     ),
     readFile(projectFile("db/schema.ts"), "utf8"),
@@ -45,12 +53,18 @@ test("ships a versioned Postgres schema and traces the bundled dataset", async (
     assert.match(migration, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   }
   assert.match(skipReasonMigration, /ADD COLUMN IF NOT EXISTS skip_reason/);
+  assert.match(criticalFailureMigration, /ADD COLUMN IF NOT EXISTS critical_failure_observed/);
+  assert.match(assignmentMigration, /ADD COLUMN IF NOT EXISTS assignment_cohort/);
+  assert.match(assignmentMigration, /ADD COLUMN IF NOT EXISTS study_order/);
+  assert.match(assignmentMigration, /ADD COLUMN IF NOT EXISTS review_layer/);
   assert.match(schema, /ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS skip_reason/);
+  assert.match(schema, /ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS critical_failure_observed/);
   assert.match(nextConfig, /outputFileTracingIncludes/);
   assert.match(nextConfig, /najah_final_annotation_dataset\.csv/);
   assert.match(bundledDataset, /parameterized multi-row upsert/);
   assert.match(bundledDataset, /ON CONFLICT\(episode_id\) DO UPDATE/);
-  assert.match(bundledDataset, /najah-activity-sample-v2/);
+  assert.match(bundledDataset, /najah-activity-sample-v4-flexible-judge-review/);
+  assert.match(bundledDataset, /judge_base_assignment/);
   assert.match(episodesRoute, /WHERE e\.import_batch = \?/);
   assert.match(progress, /WHERE import_batch = \?/);
   assert.match(exportsRoute, /e\.import_batch = \?/);

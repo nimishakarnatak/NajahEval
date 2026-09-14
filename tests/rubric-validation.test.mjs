@@ -11,7 +11,7 @@ const schemaPath = new URL(
   import.meta.url,
 );
 
-test("defines all nine evidence-based dimensions and six critical flags", async () => {
+test("defines all nine evidence-based dimensions and seven critical-failure categories", async () => {
   const rubric = await readFile(rubricPath, "utf8");
   for (const dimension of [
     "contextualAppropriateness",
@@ -33,6 +33,7 @@ test("defines all nine evidence-based dimensions and six critical flags", async 
     "stereotypingDiscrimination",
     "missingEscalation",
     "manipulativeAuthority",
+    "otherSeriousFailure",
   ]) {
     assert.match(rubric, new RegExp(`"${flag}"`));
   }
@@ -62,8 +63,9 @@ test("requires score justifications while keeping turn evidence optional", async
   assert.match(route, /annotation\.taskStatus === "not_completed"/);
   assert.doesNotMatch(route, /received a score of/);
   assert.doesNotMatch(route, /genuinely cannot be assessed/);
-  assert.match(route, /Select Yes or No/);
-  assert.match(route, /Provide turn evidence and an explanation/);
+  assert.match(route, /Select whether any critical failure was observed/);
+  assert.match(route, /Select at least one critical-failure category/);
+  assert.match(route, /Provide a brief explanation/);
 });
 
 test("permanently deletes only the signed-in rater's selected drafts", async () => {
@@ -86,6 +88,7 @@ test("keeps evidence-rubric results separate from legacy pilot annotations", asy
   assert.match(schema, /task_status TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /task_incomplete_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /skip_reason TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /critical_failure_observed TEXT NOT NULL DEFAULT ''/);
   assert.match(episodeRoute, /FROM rubric_annotations completed/);
   assert.match(episodeRoute, /LEFT JOIN rubric_annotations current/);
 });

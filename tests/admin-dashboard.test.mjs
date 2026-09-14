@@ -17,7 +17,7 @@ test("protects evaluator progress on both the admin page and API", async () => {
   assert.match(route, /status: 403/);
 });
 
-test("calculates progress for five raters including dual-role administrators", async () => {
+test("calculates paired-primary and judge progress without counting admin demos", async () => {
   const [progress, policy] = await Promise.all([
     readFile(projectFile("lib/admin-progress.ts"), "utf8"),
     readFile(projectFile("lib/rating-policy.ts"), "utf8"),
@@ -27,15 +27,20 @@ test("calculates progress for five raters including dual-role administrators", a
   assert.match(progress, /WHERE u\.can_rate = TRUE/);
   assert.match(progress, /saved\.rater_id = u\.user_id/);
   assert.match(progress, /u\.can_rate AS "canRate"/);
-  assert.match(progress, /FILTER \(WHERE ra\.status = 'complete'\)/);
-  assert.match(progress, /FILTER \(WHERE ra\.status = 'draft'\)/);
+  assert.match(progress, /ra\.review_layer = 'admin_demo'/);
+  assert.match(progress, /ra\.review_layer IN \('primary', 'judge'\)/);
   assert.match(progress, /notStartedCount/);
   assert.match(progress, /completionPercentage/);
-  assert.match(policy, /REQUIRED_RATINGS_PER_EPISODE = 5/);
-  assert.match(progress, /partiallyRatedEpisodes/);
-  assert.match(progress, /fullyRatedEpisodes/);
-  assert.match(progress, /expectedRatings: totalEpisodes \* REQUIRED_RATINGS_PER_EPISODE/);
-  assert.doesNotMatch(progress, /rating_user\.role = 'rater'/);
+  assert.match(policy, /REQUIRED_PRIMARY_RATINGS_PER_EPISODE = 2/);
+  assert.match(policy, /REQUIRED_JUDGE_RATINGS_PER_EPISODE = 1/);
+  assert.match(progress, /onePrimaryRating/);
+  assert.match(progress, /primaryComplete/);
+  assert.match(progress, /judgePending/);
+  assert.match(progress, /judgeComplete/);
+  assert.match(progress, /judgeRequiredEpisodes \* REQUIRED_JUDGE_RATINGS_PER_EPISODE/);
+  assert.match(progress, /judgeAssignmentForEpisode/);
+  assert.match(progress, /summarizePrimaryMismatch/);
+  assert.match(progress, /ASSIGNMENT_OPTIONS\.map/);
 });
 
 test("shows the dashboard link only to administrators and renders evaluator detail", async () => {
@@ -51,7 +56,11 @@ test("shows the dashboard link only to administrators and renders evaluator deta
   assert.match(page, /Draft ratings/);
   assert.match(page, /Not started/);
   assert.match(page, /Latest activity/);
-  assert.match(page, /Independent-rating coverage/);
+  assert.match(page, /Required review coverage/);
+  assert.match(page, /Progress by assigned team/);
+  assert.match(page, /expectedPrimaryRatings/);
+  assert.match(page, /expectedJudgeReviews/);
+  assert.match(page, /random sample of 50 episodes/);
 });
 
 test("lets administrators manage raters and read-only viewers without deleting ratings", async () => {
@@ -69,6 +78,10 @@ test("lets administrators manage raters and read-only viewers without deleting r
   assert.match(manager, /Add participant/);
   assert.match(manager, /Rater/);
   assert.match(manager, /Viewer/);
+  assert.match(manager, /Study assignment/);
+  assert.match(manager, /Primary rater/);
+  assert.match(manager, /Judge/);
+  assert.match(manager, /mode: "assignment"/);
   assert.match(manager, /Remove/);
   assert.match(manager, /Restore/);
   assert.match(route, /Administrator access is required/);
@@ -88,6 +101,8 @@ test("lets administrators manage raters and read-only viewers without deleting r
   assert.match(schema, /'admin', 'rater', 'viewer'/);
   assert.match(schema, /is_active BOOLEAN NOT NULL DEFAULT TRUE/);
   assert.match(schema, /can_rate BOOLEAN NOT NULL DEFAULT FALSE/);
+  assert.match(schema, /assignment_cohort TEXT NOT NULL DEFAULT 'unassigned'/);
+  assert.match(schema, /study_order INTEGER NOT NULL DEFAULT 0/);
   assert.match(annotations, /Rater status is required to save or submit ratings/);
   assert.match(annotations, /!rater\.canRate/);
   assert.match(app, /Read-only dataset/);
@@ -97,7 +112,7 @@ test("lets administrators manage raters and read-only viewers without deleting r
   assert.match(serverAuth, /role = 'admin', can_rate = TRUE/);
 });
 
-test("provides one administrator CSV per rater plus a combined analysis file", async () => {
+test("provides evaluator, primary, judge, and combined administrator exports", async () => {
   const [page, exportsPanel, exportsRoute, exporter, app] = await Promise.all([
     readFile(projectFile("app/admin/page.tsx"), "utf8"),
     readFile(projectFile("app/admin/AdminRatingExports.tsx"), "utf8"),
@@ -108,20 +123,28 @@ test("provides one administrator CSV per rater plus a combined analysis file", a
 
   assert.match(page, /AdminRatingExports/);
   assert.match(exportsPanel, /analysis files/);
-  assert.match(exportsPanel, /Rater \{index \+ 1\}/);
-  assert.match(exportsPanel, /Download combined CSV/);
+  assert.match(exportsPanel, /Download primary CSV/);
+  assert.match(exportsPanel, /Download judge CSV/);
+  assert.match(exportsPanel, /Download all-layers CSV/);
   assert.match(exportsPanel, /both drafts and completed ratings/);
   assert.match(exportsRoute, /admin\.role !== "admin"/);
-  assert.match(exportsRoute, /scope"\) === "combined"/);
+  assert.match(exportsRoute, /requestedScope === "combined"/);
+  assert.match(exportsRoute, /requestedScope === "primary"/);
+  assert.match(exportsRoute, /requestedScope === "judge"/);
   assert.doesNotMatch(exportsRoute, /annotation_user\.role <> 'admin'/);
   assert.match(exportsRoute, /can_rate = TRUE/);
   assert.match(exportsRoute, /content-disposition/);
   assert.match(exportsRoute, /private, no-store/);
   assert.match(exporter, /rater_email/);
   assert.match(exporter, /rater_status_active/);
+  assert.match(exporter, /rater_current_assignment/);
+  assert.match(exporter, /review_layer/);
+  assert.match(exporter, /rating_assignment_cohort/);
+  assert.match(exporter, /study_order/);
   assert.match(exporter, /raterCanRate/);
   assert.match(exporter, /rubric_version/);
   assert.match(exporter, /skip_reason/);
+  assert.match(exporter, /critical_failure_observed/);
   assert.match(exporter, /spreadsheet-formula prefixes/);
   assert.match(app, /Open export centre/);
 });

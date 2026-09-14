@@ -1,5 +1,6 @@
 import { studentStatusLabel, treatmentLabel } from "@/lib/episode-dimensions";
 import { CRITICAL_FLAGS, RUBRIC_DIMENSIONS } from "@/lib/rubric";
+import { primaryCohortForOrder } from "@/lib/study-assignments";
 
 export type ExportAnnotationRow = {
   raterId: string;
@@ -7,7 +8,12 @@ export type ExportAnnotationRow = {
   raterEmail: string;
   raterRole: string;
   raterCanRate: boolean;
+  raterCurrentAssignment: string;
+  reviewLayer: string;
+  assignmentCohort: string;
   episodeId: string;
+  studyOrder: number;
+  judgeBaseAssignment: string;
   studentStatus: string;
   module: string;
   treatment: string;
@@ -17,6 +23,7 @@ export type ExportAnnotationRow = {
   taskIncompleteReason: string;
   skipReason: string;
   legacyEpisodeEndReason: string;
+  criticalFailureObserved: string;
   scoresJson: string;
   evidenceTurnsJson: string;
   justificationsJson: string;
@@ -60,7 +67,13 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     "rater_email",
     "rater_role",
     "rater_status_active",
+    "rater_current_assignment",
+    "review_layer",
+    "rating_assignment_cohort",
     "episode_id",
+    "study_order",
+    "primary_group",
+    "judge_base_assignment",
     "student_status",
     "module",
     "treatment",
@@ -70,6 +83,7 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     "task_incomplete_reason",
     "skip_reason",
     "legacy_episode_end_reason",
+    "critical_failure_observed",
     ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
       `${dimension.key}_score`,
       `${dimension.key}_evidence_turns`,
@@ -97,7 +111,13 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
       row.raterEmail,
       row.raterRole,
       row.raterCanRate,
+      row.raterCurrentAssignment,
+      row.reviewLayer,
+      row.assignmentCohort,
       row.episodeId,
+      row.studyOrder,
+      primaryCohortForOrder(Number(row.studyOrder)),
+      row.judgeBaseAssignment,
       studentStatusLabel(row.studentStatus),
       row.module,
       treatmentLabel(row.treatment),
@@ -107,6 +127,7 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
       row.taskIncompleteReason,
       row.skipReason,
       row.legacyEpisodeEndReason,
+      row.criticalFailureObserved,
       ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
         scores[dimension.key],
         evidenceTurns[dimension.key],

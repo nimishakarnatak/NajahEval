@@ -9,10 +9,12 @@ const finalDatasetCsv = readFileSync(
 );
 
 /** Stable marker used to detect whether this exact bundled sample is in Postgres. */
-export const BUNDLED_DATASET_VERSION = "najah-activity-sample-v2";
+export const BUNDLED_DATASET_VERSION = "najah-activity-sample-v4-flexible-judge-review";
 
 type BundledEpisode = {
   episodeId: string;
+  studyOrder: number;
+  judgeBaseAssignment: "" | "judge_1" | "judge_2";
   studentStatus: string;
   language: string;
   module: string;
@@ -81,6 +83,7 @@ function readBundledEpisodes(csv: string): BundledEpisode[] {
     header.trim().replace(/^\ufeff/, ""),
   );
   const requiredHeaders = [
+    "rater_item_order",
     "episode_id",
     "student_status",
     "language",
@@ -105,6 +108,8 @@ function readBundledEpisodes(csv: string): BundledEpisode[] {
       );
       return {
         episodeId: record.episode_id.trim(),
+        studyOrder: Number(record.rater_item_order),
+        judgeBaseAssignment: "" as const,
         studentStatus: record.student_status.trim() || "unknown",
         language: record.language.trim() || "unknown",
         module: record.module.trim() || "unknown",
@@ -124,7 +129,66 @@ function readBundledEpisodes(csv: string): BundledEpisode[] {
   if (episodes.some((episode) => !episode.episodeId || !episode.transcript)) {
     throw new Error("Every bundled Najah episode must have an ID and transcript.");
   }
+  const studyOrders = new Set(episodes.map((episode) => episode.studyOrder));
+  if (
+    studyOrders.size !== 300 ||
+    episodes.some((episode) => !Number.isInteger(episode.studyOrder)) ||
+    Math.min(...studyOrders) !== 1 ||
+    Math.max(...studyOrders) !== 300
+  ) {
+    throw new Error("The bundled Najah dataset must have unique study orders from 1 to 300.");
+  }
+
+  assignJudgeBaseSamples(episodes);
   return episodes;
+}
+
+/** Stable non-cryptographic rank used only for reproducible random sampling. */
+function seededJudgeRank(episodeId: string): number {
+  const value = `najah-judge-base-v1:${episodeId}`;
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Select two non-overlapping, reproducible 50-episode judge samples.
+ *
+ * The quotas balance the 100 sampled episodes across the three primary groups:
+ * Judge 1 receives 17/17/16 and Judge 2 receives 16/17/17 from Groups A/B/C.
+ * Within each group, episode IDs are ordered by a fixed seeded hash rather than
+ * by study order, preventing the sample from changing between deployments.
+ */
+function assignJudgeBaseSamples(episodes: BundledEpisode[]): void {
+  const quotas = [
+    { start: 1, end: 100, judge1: 17, judge2: 16 },
+    { start: 101, end: 200, judge1: 17, judge2: 17 },
+    { start: 201, end: 300, judge1: 16, judge2: 17 },
+  ];
+
+  for (const quota of quotas) {
+    const ranked = episodes
+      .filter((episode) => episode.studyOrder >= quota.start && episode.studyOrder <= quota.end)
+      .sort((left, right) =>
+        seededJudgeRank(left.episodeId) - seededJudgeRank(right.episodeId) ||
+        left.episodeId.localeCompare(right.episodeId),
+      );
+    for (const episode of ranked.slice(0, quota.judge1)) {
+      episode.judgeBaseAssignment = "judge_1";
+    }
+    for (const episode of ranked.slice(quota.judge1, quota.judge1 + quota.judge2)) {
+      episode.judgeBaseAssignment = "judge_2";
+    }
+  }
+
+  const judge1Count = episodes.filter((episode) => episode.judgeBaseAssignment === "judge_1").length;
+  const judge2Count = episodes.filter((episode) => episode.judgeBaseAssignment === "judge_2").length;
+  if (judge1Count !== 50 || judge2Count !== 50) {
+    throw new Error("Each judge base sample must contain exactly 50 episodes.");
+  }
 }
 
 const BUNDLED_EPISODES = readBundledEpisodes(finalDatasetCsv);
@@ -158,6 +222,8 @@ export async function ensureBundledDataset(db: AppDatabase): Promise<void> {
   const rows = BUNDLED_EPISODES.map((episode) => {
     const rowValues = [
       episode.episodeId,
+      episode.studyOrder,
+      episode.judgeBaseAssignment,
       episode.studentStatus,
       episode.language,
       episode.module,
@@ -178,12 +244,14 @@ export async function ensureBundledDataset(db: AppDatabase): Promise<void> {
   await db.execute(
     `
       INSERT INTO episodes (
-        episode_id, student_status, language, module, treatment,
+        episode_id, study_order, judge_base_assignment, student_status, language, module, treatment,
         module_objective, prior_context, transcript,
         privacy_review_status, language_review_status,
         import_batch, imported_by
       ) VALUES ${rows.join(",\n")}
       ON CONFLICT(episode_id) DO UPDATE SET
+        study_order = excluded.study_order,
+        judge_base_assignment = excluded.judge_base_assignment,
         student_status = excluded.student_status,
         language = excluded.language,
         module = excluded.module,
