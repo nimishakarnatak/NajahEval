@@ -9,7 +9,9 @@ import {
 } from "@/lib/episode-dimensions";
 import {
   CRITICAL_FLAGS,
+  CRITICAL_FAILURE_OBSERVATIONS,
   CRITICAL_FLAG_KEYS,
+  CriticalFailureObserved,
   CriticalFlagKey,
   CriticalFlagValue,
   DIMENSION_KEYS,
@@ -24,7 +26,15 @@ import {
   TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
-import { REQUIRED_RATINGS_PER_EPISODE } from "@/lib/rating-policy";
+import {
+  REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
+} from "@/lib/rating-policy";
+import {
+  assignmentCohortLabel,
+  isAssignedCohort,
+  type AssignmentCohort,
+  type ReviewLayer,
+} from "@/lib/study-assignments";
 import { type UserRole, userAccessLabel } from "@/lib/user-roles";
 
 type AnnotationDraft = {
@@ -33,6 +43,7 @@ type AnnotationDraft = {
   justifications: Record<DimensionKey, string>;
   criticalFlags: Record<CriticalFlagKey, CriticalFlagValue>;
   criticalEvidence: Record<CriticalFlagKey, string>;
+  criticalFailureObserved: CriticalFailureObserved | "";
   taskStatus: TaskStatus | "";
   taskIncompleteReason: TaskIncompleteReason | "";
   skipReason: string;
@@ -41,6 +52,7 @@ type AnnotationDraft = {
 
 type Episode = AnnotationDraft & {
   episodeId: string;
+  studyOrder: number;
   studentStatus: string;
   language: string;
   module: string;
@@ -50,16 +62,25 @@ type Episode = AnnotationDraft & {
   transcript: string;
   privacyReviewStatus: string;
   languageReviewStatus: string;
+  primaryRatingCount: number;
+  primaryMismatch: boolean;
+  primarySeriousMismatch: boolean;
   completedRaterCount: number;
   annotationStatus: "draft" | "complete" | null;
   annotationUpdatedAt: string | null;
   legacyEpisodeEndReason: string;
 };
 
-type Rater = { displayName: string; email: string; role: UserRole; canRate: boolean };
+type Rater = {
+  displayName: string;
+  email: string;
+  role: UserRole;
+  canRate: boolean;
+  assignmentCohort: AssignmentCohort;
+};
 type SaveState = "saved" | "saving" | "unsaved" | "error";
-type ViewFilter = "queue" | "drafts" | "completed" | "all";
-type ProgressView = "queue" | "not_started" | "draft" | "complete" | "all";
+type ViewFilter = "queue" | "drafts" | "completed" | "mismatches" | "all";
+type ProgressView = "queue" | "not_started" | "draft" | "complete" | "mismatches" | "all";
 type TranslationStatus = "idle" | "preparing" | "translating" | "ready" | "error";
 type TranscriptTurn = {
   speaker: "USER" | "NAJAH";
@@ -123,6 +144,7 @@ function emptyDraft(): AnnotationDraft {
     justifications: keyedRecord(DIMENSION_KEYS, () => ""),
     criticalFlags: keyedRecord(CRITICAL_FLAG_KEYS, () => null),
     criticalEvidence: keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
+    criticalFailureObserved: "",
     taskStatus: "",
     taskIncompleteReason: "",
     skipReason: "",
@@ -168,19 +190,30 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
     };
   }
 
-  for (const flag of CRITICAL_FLAGS) {
-    const value = draft.criticalFlags[flag.key];
-    if (value === null) {
+  if (!draft.criticalFailureObserved) {
+    return {
+      message: "Select whether any critical failure was observed.",
+      targetId: "critical-failure-observed",
+    };
+  }
+
+  if (draft.criticalFailureObserved === "yes") {
+    const selectedFlags = CRITICAL_FLAGS.filter(
+      (flag) => draft.criticalFlags[flag.key] === "yes",
+    );
+    if (!selectedFlags.length) {
       return {
-        message: `Select Yes or No for the ${flag.label} flag.`,
-        targetId: `critical-${flag.key}`,
+        message: "Select at least one critical-failure category.",
+        targetId: "critical-failure-categories",
       };
     }
-    if (value === "yes" && !draft.criticalEvidence[flag.key].trim()) {
-      return {
-        message: `Provide turn evidence and an explanation for the ${flag.label} flag.`,
-        targetId: `critical-evidence-${flag.key}`,
-      };
+    for (const flag of selectedFlags) {
+      if (!draft.criticalEvidence[flag.key].trim()) {
+        return {
+          message: `Provide a brief explanation for ${flag.label}.`,
+          targetId: `critical-evidence-${flag.key}`,
+        };
+      }
     }
   }
 
@@ -196,6 +229,7 @@ function draftFromEpisode(episode: Episode | undefined): AnnotationDraft {
     justifications: { ...emptyDraft().justifications, ...episode.justifications },
     criticalFlags: { ...emptyDraft().criticalFlags, ...episode.criticalFlags },
     criticalEvidence: { ...emptyDraft().criticalEvidence, ...episode.criticalEvidence },
+    criticalFailureObserved: episode.criticalFailureObserved ?? "",
     taskStatus: episode.taskStatus ?? "",
     taskIncompleteReason: episode.taskIncompleteReason ?? "",
     skipReason: episode.skipReason ?? "",
@@ -499,56 +533,128 @@ function TaskStatusCard({
   );
 }
 
-/** Renders one critical-failure decision and conditional evidence requirement. */
+/** Renders one selectable failure category and its required explanation. */
 function CriticalFlagCard({
   flag,
-  value,
+  selected,
   evidence,
-  onValueChange,
+  onSelectedChange,
   onEvidenceChange,
 }: {
   flag: (typeof CRITICAL_FLAGS)[number];
-  value: CriticalFlagValue;
+  selected: boolean;
   evidence: string;
-  onValueChange: (value: CriticalFlagValue) => void;
+  onSelectedChange: (selected: boolean) => void;
   onEvidenceChange: (value: string) => void;
 }) {
   return (
-    <fieldset className="critical-flag-card" id={`critical-${flag.key}`}>
-      <legend>{flag.label}</legend>
-      <p>{flag.trigger}</p>
-      <div className="binary-options" aria-label={`${flag.label}, yes or no`}>
-        {(["no", "yes"] as const).map((option) => (
-          <label key={option} className={value === option ? "selected" : ""}>
-            <input
-              type="radio"
-              name={`critical-${flag.key}`}
-              checked={value === option}
-              onChange={() => onValueChange(option)}
-            />
-            {option === "yes" ? "Yes" : "No"}
-          </label>
-        ))}
-      </div>
-      {value === "yes" && (
+    <article className={`critical-flag-card${selected ? " selected" : ""}`} id={`critical-${flag.key}`}>
+      <label className="critical-checkbox-row">
+        <input
+          type="checkbox"
+          aria-label={flag.label}
+          checked={selected}
+          onChange={(event) => onSelectedChange(event.target.checked)}
+        />
+        <span className="episode-option-copy">
+          <strong>{flag.label}</strong>
+          <small>{flag.trigger}</small>
+        </span>
+      </label>
+      {selected && (
         <label className="evidence-field critical-evidence-field">
-          <span>Evidence turn(s) and explanation <strong>required</strong></span>
+          <span>
+            {flag.key === "otherSeriousFailure"
+              ? "Describe the other serious failure"
+              : "Brief explanation"}{" "}
+            <strong>required</strong>
+          </span>
           <textarea
             id={`critical-evidence-${flag.key}`}
             value={evidence}
             onChange={(event) => onEvidenceChange(event.target.value)}
-            placeholder="e.g. Turn 004 — identify the exact statement and explain why it triggers this flag."
+            placeholder="Explain what happened. Include relevant turn numbers when available."
             rows={3}
           />
         </label>
       )}
-    </fieldset>
+    </article>
+  );
+}
+
+/**
+ * Uses a two-stage design: screen once for any critical failure, then reveal
+ * multi-select categories only when the answer is Yes.
+ */
+function CriticalFailureCard({
+  observed,
+  flags,
+  evidence,
+  onObservedChange,
+  onFlagChange,
+  onEvidenceChange,
+}: {
+  observed: CriticalFailureObserved | "";
+  flags: Record<CriticalFlagKey, CriticalFlagValue>;
+  evidence: Record<CriticalFlagKey, string>;
+  onObservedChange: (value: CriticalFailureObserved) => void;
+  onFlagChange: (key: CriticalFlagKey, selected: boolean) => void;
+  onEvidenceChange: (key: CriticalFlagKey, value: string) => void;
+}) {
+  return (
+    <div className="critical-failure-stack">
+      <fieldset className="episode-end-card critical-screen-card" id="critical-failure-observed">
+        <legend>Was any critical failure observed in this module episode?</legend>
+        <p>Select Cannot determine only when the available record is insufficient.</p>
+        <div className="episode-end-options">
+          {CRITICAL_FAILURE_OBSERVATIONS.map((option) => (
+            <label key={option.value} className={observed === option.value ? "selected" : ""}>
+              <input
+                type="radio"
+                aria-label={option.label}
+                name="critical-failure-observed"
+                value={option.value}
+                checked={observed === option.value}
+                onChange={() => onObservedChange(option.value)}
+              />
+              <span className="episode-option-copy">
+                <strong>{option.label}</strong>
+                <small>{option.description}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      {observed === "yes" && (
+        <fieldset className="critical-category-card conditional-card" id="critical-failure-categories">
+          <legend>Which critical failure or failures occurred?</legend>
+          <p>Select all that apply. A brief explanation is required for every selected failure.</p>
+          <div className="critical-flag-list">
+            {CRITICAL_FLAGS.map((flag) => (
+              <CriticalFlagCard
+                key={flag.key}
+                flag={flag}
+                selected={flags[flag.key] === "yes"}
+                evidence={evidence[flag.key]}
+                onSelectedChange={(selected) => onFlagChange(flag.key, selected)}
+                onEvidenceChange={(value) => onEvidenceChange(flag.key, value)}
+              />
+            ))}
+          </div>
+        </fieldset>
+      )}
+    </div>
   );
 }
 
 export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [rater, setRater] = useState(initialRater);
+  const [reviewLayer, setReviewLayer] = useState<ReviewLayer>("legacy");
+  const [requiredRatingsPerEpisode, setRequiredRatingsPerEpisode] = useState(
+    REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
+  );
   const readOnly = !rater.canRate;
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<AnnotationDraft>(emptyDraft);
@@ -599,8 +705,17 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       setEpisodes(loaded);
       const loadedRater = (payload.rater ?? initialRater) as Rater;
       setRater(loadedRater);
+      setReviewLayer((payload.reviewLayer ?? "legacy") as ReviewLayer);
+      setRequiredRatingsPerEpisode(
+        Number(payload.requiredRatingsPerEpisode) || REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
+      );
       if (!loadedRater.canRate) setViewFilter("all");
-      setSelectedId((current) => preferredId || current || loaded[0]?.episodeId || "");
+      setSelectedId((current) => {
+        const candidate = preferredId || current;
+        return loaded.some((episode) => episode.episodeId === candidate)
+          ? candidate
+          : loaded[0]?.episodeId || "";
+      });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to load episodes.");
     } finally {
@@ -659,12 +774,21 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         treatmentFilter === "all" || episode.treatment === treatmentFilter;
       const matchesView = readOnly ||
         viewFilter === "all" ||
-        (viewFilter === "queue" && episode.annotationStatus !== "complete" && episode.completedRaterCount < REQUIRED_RATINGS_PER_EPISODE) ||
+        (viewFilter === "queue" && episode.annotationStatus !== "complete" && episode.completedRaterCount < requiredRatingsPerEpisode) ||
         (viewFilter === "drafts" && episode.annotationStatus === "draft") ||
-        (viewFilter === "completed" && episode.annotationStatus === "complete");
+        (viewFilter === "completed" && episode.annotationStatus === "complete") ||
+        (viewFilter === "mismatches" && episode.primaryMismatch);
       return matchesModule && matchesTreatment && matchesView;
     });
-  }, [episodes, moduleFilter, readOnly, treatmentFilter, viewFilter]);
+  }, [episodes, moduleFilter, readOnly, requiredRatingsPerEpisode, treatmentFilter, viewFilter]);
+
+  useEffect(() => {
+    if (reviewLayer !== "judge" && viewFilter === "mismatches") {
+      // Assignment changes may turn a judge account back into a primary rater.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setViewFilter("queue");
+    }
+  }, [reviewLayer, viewFilter]);
 
   useEffect(() => {
     if (filteredEpisodes.length && !filteredEpisodes.some((episode) => episode.episodeId === selectedId)) {
@@ -733,7 +857,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     markDraftChanged();
   }
 
-  /** Updates one Yes/No flag or its associated evidence text. */
+  /** Updates the explanation attached to one selected failure category. */
   function updateCriticalEvidence(key: CriticalFlagKey, value: string) {
     clearSubmissionFeedback();
     setDraft((previous) => ({
@@ -743,15 +867,39 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     markDraftChanged();
   }
 
-  /** Selecting No clears any evidence that was entered for an earlier Yes. */
-  function updateCriticalFlag(key: CriticalFlagKey, value: CriticalFlagValue) {
+  /** Selects or clears one category in the conditional multi-select list. */
+  function updateCriticalFlag(key: CriticalFlagKey, selected: boolean) {
     clearSubmissionFeedback();
     setDraft((previous) => ({
       ...previous,
-      criticalFlags: { ...previous.criticalFlags, [key]: value },
-      criticalEvidence: value === "no"
+      criticalFlags: { ...previous.criticalFlags, [key]: selected ? "yes" : "no" },
+      criticalEvidence: !selected
         ? { ...previous.criticalEvidence, [key]: "" }
         : previous.criticalEvidence,
+    }));
+    markDraftChanged();
+  }
+
+  /**
+   * Records the screening answer and clears category data that no longer
+   * applies. Choosing Yes initializes every category as unselected (No).
+   */
+  function updateCriticalFailureObserved(value: CriticalFailureObserved) {
+    clearSubmissionFeedback();
+    setDraft((previous) => ({
+      ...previous,
+      criticalFailureObserved: value,
+      criticalFlags: value === "yes"
+        ? Object.fromEntries(CRITICAL_FLAG_KEYS.map((key) => [
+          key,
+          previous.criticalFailureObserved === "yes" && previous.criticalFlags[key] === "yes"
+            ? "yes"
+            : "no",
+        ])) as Record<CriticalFlagKey, CriticalFlagValue>
+        : keyedRecord(CRITICAL_FLAG_KEYS, () => value === "no" ? "no" : null),
+      criticalEvidence: value === "yes" && previous.criticalFailureObserved === "yes"
+        ? previous.criticalEvidence
+        : keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
     }));
     markDraftChanged();
   }
@@ -986,6 +1134,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setViewFilter(
       progressView === "queue"
         ? "queue"
+        : progressView === "mismatches"
+          ? "mismatches"
         : progressView === "all"
           ? "all"
           : episode.annotationStatus === "complete"
@@ -1009,6 +1159,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           ? "draft"
           : view === "completed"
             ? "complete"
+            : view === "mismatches"
+              ? "mismatches"
             : "all",
     );
     setProgressOpen(true);
@@ -1294,7 +1446,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     const columns = [
       "rater_email",
       "rater_access",
+      "review_layer",
+      "assignment_cohort",
       "episode_id",
+      "study_order",
       "student_status",
       "module",
       "treatment",
@@ -1304,6 +1459,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       "task_incomplete_reason",
       "skip_reason",
       "legacy_episode_end_reason",
+      "critical_failure_observed",
       ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
         `${dimension.key}_score`,
         `${dimension.key}_evidence_turns`,
@@ -1320,7 +1476,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       .map((episode) => [
         rater.email,
         userAccessLabel(rater.role, rater.canRate),
+        reviewLayer,
+        rater.assignmentCohort,
         episode.episodeId,
+        episode.studyOrder,
         studentStatusLabel(episode.studentStatus),
         episode.module,
         treatmentLabel(episode.treatment),
@@ -1330,6 +1489,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         episode.taskIncompleteReason,
         episode.skipReason,
         episode.legacyEpisodeEndReason,
+        episode.criticalFailureObserved,
         ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
           episode.scores[dimension.key],
           episode.evidenceTurns[dimension.key],
@@ -1354,25 +1514,31 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const draftsByMe = episodes.filter((episode) => episode.annotationStatus === "draft").length;
   const notStartedByMe = episodes.length - completedByMe - draftsByMe;
   const fullyRated = episodes.filter(
-    (episode) => episode.completedRaterCount >= REQUIRED_RATINGS_PER_EPISODE,
+    (episode) => episode.completedRaterCount >= requiredRatingsPerEpisode,
   ).length;
   const queueCount = episodes.filter(
     (episode) =>
       episode.annotationStatus !== "complete" &&
-      episode.completedRaterCount < REQUIRED_RATINGS_PER_EPISODE,
+      episode.completedRaterCount < requiredRatingsPerEpisode,
   ).length;
+  const mismatchCount = episodes.filter((episode) => episode.primaryMismatch).length;
   const viewCounts: Record<ViewFilter, number> = {
     queue: queueCount,
     drafts: draftsByMe,
     completed: completedByMe,
+    mismatches: mismatchCount,
     all: episodes.length,
   };
+  const availableViews: ViewFilter[] = reviewLayer === "judge"
+    ? ["queue", "drafts", "completed", "mismatches", "all"]
+    : ["queue", "drafts", "completed", "all"];
   const progressEpisodes = episodes.filter((episode) => {
     if (progressView === "all") return true;
+    if (progressView === "mismatches") return episode.primaryMismatch;
     if (progressView === "queue") {
       return (
         episode.annotationStatus !== "complete" &&
-        episode.completedRaterCount < REQUIRED_RATINGS_PER_EPISODE
+        episode.completedRaterCount < requiredRatingsPerEpisode
       );
     }
     if (progressView === "complete") return episode.annotationStatus === "complete";
@@ -1391,6 +1557,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       ? "All episodes"
       : progressView === "queue"
         ? "My queue"
+        : progressView === "mismatches"
+          ? "Primary-rating mismatches"
         : progressView === "complete"
           ? "Completed by you"
           : progressView === "draft"
@@ -1414,7 +1582,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
             <span className="avatar">{rater.displayName.slice(0, 1).toUpperCase()}</span>
             <span>
               <strong>{rater.displayName}</strong>
-              <small>{rater.email} · {userAccessLabel(rater.role, rater.canRate)}</small>
+              <small>
+                {rater.email} · {userAccessLabel(rater.role, rater.canRate)}
+                {rater.role === "rater" ? ` · ${assignmentCohortLabel(rater.assignmentCohort)}` : ""}
+              </small>
             </span>
           </div>
           {rater.role === "admin" && (
@@ -1452,15 +1623,24 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
               <div className="progress-track"><span style={{ width: `${episodes.length ? (completedByMe / episodes.length) * 100 : 0}%` }} /></div>
               <div className="progress-stats">
                 <span><strong>{draftsByMe}</strong> drafts</span>
-                <span><strong>{fullyRated}</strong> fully rated</span>
+                <span>
+                  <strong>{reviewLayer === "judge" ? mismatchCount : fullyRated}</strong>{" "}
+                  {reviewLayer === "judge" ? "mismatch alerts" : "fully rated"}
+                </span>
               </div>
               <span className="progress-card-action">View episode list <span aria-hidden="true">→</span></span>
             </button>
 
             <nav className="view-tabs" aria-label="Annotation views">
-              {(["queue", "drafts", "completed", "all"] as ViewFilter[]).map((view) => (
+              {availableViews.map((view) => (
                 <button key={view} className={viewFilter === view ? "active" : ""} onClick={() => openViewList(view)}>
-                  <span>{view === "queue" ? "My queue" : view[0].toUpperCase() + view.slice(1)}</span>
+                  <span>
+                    {view === "queue"
+                      ? "My queue"
+                      : view === "mismatches"
+                        ? "Mismatch alerts"
+                        : view[0].toUpperCase() + view.slice(1)}
+                  </span>
                   <strong>{viewCounts[view]}</strong>
                 </button>
               ))}
@@ -1490,7 +1670,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
         <section className="data-tools">
           <h2>Dataset</h2>
-          <p><strong>{episodes.length}</strong> reviewed episodes are built in and shared with every rater or viewer.</p>
+          <p>
+            <strong>{episodes.length}</strong> episode{episodes.length === 1 ? "" : "s"} in this account&apos;s
+            {rater.role === "rater" ? " assigned review queue" : " dataset view"}.
+          </p>
           {rater.role === "admin" && (
             <Link className="text-button" href="/admin#rating-exports">Open export centre</Link>
           )}
@@ -1618,6 +1801,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                         <strong>{episode.episodeId}</strong>
                         <small>
                           {MODULE_LABELS[episode.module] || episode.module} · {treatmentLabel(episode.treatment)}
+                          {reviewLayer === "judge" && episode.primarySeriousMismatch
+                            ? " · Serious mismatch"
+                            : reviewLayer === "judge" && episode.primaryMismatch
+                              ? " · Primary-rating mismatch"
+                            : ""}
                         </small>
                       </span>
                       <span className={`progress-row-status status-${episode.annotationStatus ?? "not_started"}`}>
@@ -1696,22 +1884,30 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
             <div className="empty-icon">✓</div>
             <h1>
               {!episodes.length
-                ? "Your review workspace is ready"
+                ? rater.role === "rater" && !isAssignedCohort(rater.assignmentCohort)
+                  ? "Your study assignment is pending"
+                  : "Your review workspace is ready"
                 : viewFilter === "drafts" && !filteredEpisodes.length
                   ? "No drafts yet"
                   : viewFilter === "completed" && !filteredEpisodes.length
                     ? "No completed episodes yet"
+                    : viewFilter === "mismatches" && !filteredEpisodes.length
+                      ? "No primary-rating mismatches"
                     : viewFilter === "queue" && !filteredEpisodes.length
                       ? "Your queue is complete"
                       : "No episodes match these filters"}
             </h1>
             <p>
               {!episodes.length
-                ? "The built-in dataset could not be loaded. Refresh the page to try again."
+                ? rater.role === "rater" && !isAssignedCohort(rater.assignmentCohort)
+                  ? "An administrator must assign you to Group A, Group B, Group C, Judge 1, or Judge 2 before episodes appear."
+                  : "The built-in dataset could not be loaded. Refresh the page to try again."
                 : viewFilter === "drafts" && !filteredEpisodes.length
                   ? "Ratings saved before submission will appear in Drafts."
                   : viewFilter === "completed" && !filteredEpisodes.length
                     ? "Ratings you submit will appear in Completed."
+                    : viewFilter === "mismatches" && !filteredEpisodes.length
+                      ? "An alert will appear here after both primary raters submit different scores, task-status judgments, or critical-failure judgments."
                     : viewFilter === "queue" && !filteredEpisodes.length
                       ? "There are no episodes currently waiting for your rating."
                       : "Change a filter or choose another list."}
@@ -1723,6 +1919,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
               <div>
                 <span className="module-badge">{MODULE_LABELS[current.module] || current.module}</span>
                 <span className={`treatment-badge treatment-${current.treatment}`}>{treatmentLabel(current.treatment)}</span>
+                {reviewLayer === "judge" && current.primaryMismatch && (
+                  <span className="mismatch-badge">
+                    {current.primarySeriousMismatch
+                      ? "Serious mismatch · review required"
+                      : "Primary-rating mismatch"}
+                  </span>
+                )}
                 <span className="episode-id">{current.episodeId}</span>
               </div>
               <div className="episode-nav">
@@ -1752,8 +1955,31 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <p className="eyebrow">Module objective</p>
                   <h1>{current.moduleObjective || `Evaluate the ${MODULE_LABELS[current.module] || current.module} guidance.`}</h1>
                   <div className="independence-note">
-                    <span>◎</span> {current.completedRaterCount}/{REQUIRED_RATINGS_PER_EPISODE} independent ratings complete
+                    <span>◎</span> {current.completedRaterCount}/{requiredRatingsPerEpisode}{" "}
+                    {reviewLayer === "judge" ? "judge review complete" : "independent primary ratings complete"}
                   </div>
+                  {reviewLayer === "judge" && current.primaryMismatch && (
+                    <div className="judge-mismatch-alert" role="status">
+                      <strong>
+                        {current.primarySeriousMismatch
+                          ? "Serious primary-rating mismatch—judge review required"
+                          : "Primary-rating mismatch in the random review sample"}
+                      </strong>
+                      {current.primarySeriousMismatch ? (
+                        <span>
+                          The primary ratings differ on a major score contrast, task-status
+                          judgment, or critical-failure judgment. Their individual scores
+                          remain hidden so you can make an independent assessment.
+                        </span>
+                      ) : (
+                        <span>
+                          Both primary ratings are complete and differ on at least one
+                          judgment. Their individual scores remain hidden so you can make
+                          an independent assessment.
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </header>
 
                 <section className="translation-toolbar" aria-label="Conversation language view">
@@ -1890,19 +2116,17 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
                 <section className="rubric-section critical-section">
                   <div className="rubric-section-heading">
-                    <p className="eyebrow">Critical-failure flags</p>
-                    <span>Select Yes or No for every flag. A Yes requires exact turn evidence and an explanation.</span>
+                    <p className="eyebrow">5. Critical-failure screening</p>
+                    <span>Screen once, then identify every applicable failure only when the answer is Yes.</span>
                   </div>
-                  {CRITICAL_FLAGS.map((flag) => (
-                    <CriticalFlagCard
-                      key={flag.key}
-                      flag={flag}
-                      value={draft.criticalFlags[flag.key]}
-                      evidence={draft.criticalEvidence[flag.key]}
-                      onValueChange={(value) => updateCriticalFlag(flag.key, value)}
-                      onEvidenceChange={(value) => updateCriticalEvidence(flag.key, value)}
-                    />
-                  ))}
+                  <CriticalFailureCard
+                    observed={draft.criticalFailureObserved}
+                    flags={draft.criticalFlags}
+                    evidence={draft.criticalEvidence}
+                    onObservedChange={updateCriticalFailureObserved}
+                    onFlagChange={updateCriticalFlag}
+                    onEvidenceChange={updateCriticalEvidence}
+                  />
                 </section>
 
                 <label className="form-field comments-field">

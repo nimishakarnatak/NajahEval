@@ -27,9 +27,12 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const combined = url.searchParams.get("scope") === "combined";
+  const requestedScope = url.searchParams.get("scope");
+  const aggregateScope = requestedScope === "combined" || requestedScope === "primary" || requestedScope === "judge"
+    ? requestedScope
+    : null;
   const raterId = url.searchParams.get("raterId")?.trim() ?? "";
-  if (!combined && !raterId) {
+  if (!aggregateScope && !raterId) {
     return Response.json({ error: "Choose a rater or the combined export." }, { status: 400 });
   }
 
@@ -38,7 +41,7 @@ export async function GET(request: Request) {
   await ensureBundledDataset(db);
 
   let selectedRater: ExportRater | null = null;
-  if (!combined) {
+  if (!aggregateScope) {
     selectedRater = await db
       .prepare(`
         SELECT
@@ -62,9 +65,13 @@ export async function GET(request: Request) {
     }
   }
 
-  const whereClause = combined
-    ? "WHERE e.import_batch = ?"
-    : "WHERE e.import_batch = ? AND ra.rater_id = ?";
+  const whereClause = aggregateScope === "primary"
+    ? "WHERE e.import_batch = ? AND ra.review_layer = 'primary'"
+    : aggregateScope === "judge"
+      ? "WHERE e.import_batch = ? AND ra.review_layer = 'judge'"
+      : aggregateScope === "combined"
+        ? "WHERE e.import_batch = ?"
+        : "WHERE e.import_batch = ? AND ra.rater_id = ?";
   const query = db.prepare(`
     SELECT
       ra.rater_id AS "raterId",
@@ -72,7 +79,12 @@ export async function GET(request: Request) {
       ra.rater_email AS "raterEmail",
       annotation_user.role AS "raterRole",
       annotation_user.can_rate AS "raterCanRate",
+      annotation_user.assignment_cohort AS "raterCurrentAssignment",
+      ra.review_layer AS "reviewLayer",
+      ra.assignment_cohort AS "assignmentCohort",
       ra.episode_id AS "episodeId",
+      e.study_order AS "studyOrder",
+      e.judge_base_assignment AS "judgeBaseAssignment",
       e.student_status AS "studentStatus",
       e.module,
       e.treatment,
@@ -82,6 +94,7 @@ export async function GET(request: Request) {
       ra.task_incomplete_reason AS "taskIncompleteReason",
       ra.skip_reason AS "skipReason",
       ra.episode_end_reason AS "legacyEpisodeEndReason",
+      ra.critical_failure_observed AS "criticalFailureObserved",
       ra.scores_json AS "scoresJson",
       ra.evidence_turns_json AS "evidenceTurnsJson",
       ra.justifications_json AS "justificationsJson",
@@ -96,14 +109,18 @@ export async function GET(request: Request) {
     ${whereClause}
     ORDER BY LOWER(annotation_user.display_name), ra.episode_id
   `);
-  const result = combined
+  const result = aggregateScope
     ? await query.bind(BUNDLED_DATASET_VERSION).all<ExportAnnotationRow>()
     : await query.bind(BUNDLED_DATASET_VERSION, raterId).all<ExportAnnotationRow>();
 
   const date = new Date().toISOString().slice(0, 10);
-  const filename = combined
-    ? `najah-all-raters-combined-${date}.csv`
-    : `najah-${exportFilenamePart(selectedRater!.displayName)}-${date}.csv`;
+  const filename = aggregateScope === "primary"
+    ? `najah-primary-ratings-${date}.csv`
+    : aggregateScope === "judge"
+      ? `najah-judge-reviews-${date}.csv`
+      : aggregateScope === "combined"
+        ? `najah-all-evaluation-layers-${date}.csv`
+        : `najah-${exportFilenamePart(selectedRater!.displayName)}-${date}.csv`;
 
   // The UTF-8 byte-order mark keeps Arabic and French text legible when a CSV
   // is opened directly in desktop Excel.

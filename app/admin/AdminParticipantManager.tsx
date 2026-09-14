@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  ASSIGNMENT_OPTIONS,
+  assignmentCohortLabel,
+  type AssignmentCohort,
+} from "@/lib/study-assignments";
+import {
   PARTICIPANT_ROLES,
   type ParticipantRole,
   type UserRole,
@@ -16,6 +21,7 @@ type ManagedUser = {
   displayName: string;
   role: UserRole;
   canRate: boolean;
+  assignmentCohort: AssignmentCohort;
   isActive: boolean;
   invited: boolean;
   createdAt: string;
@@ -37,6 +43,7 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<ParticipantRole>("rater");
+  const [assignmentCohort, setAssignmentCohort] = useState<AssignmentCohort>("group_a");
   const [loading, setLoading] = useState(true);
   const [busyUserId, setBusyUserId] = useState("");
   const [message, setMessage] = useState("");
@@ -81,14 +88,40 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
     setError("");
     setMessage("");
     try {
-      await mutate("POST", { displayName, email, role });
+      await mutate("POST", {
+        displayName,
+        email,
+        role,
+        assignmentCohort: role === "rater" ? assignmentCohort : "unassigned",
+      });
       setDisplayName("");
       setEmail("");
       setRole("rater");
+      setAssignmentCohort("group_a");
       setMessage("Participant access added. They can now register or use Google sign-in.");
       await loadUsers();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to add this participant.");
+    } finally {
+      setBusyUserId("");
+    }
+  }
+
+  /** Move an active rater between the paired primary and judge queues. */
+  async function changeAssignment(user: ManagedUser, assignment: AssignmentCohort) {
+    setBusyUserId(user.userId);
+    setError("");
+    setMessage("");
+    try {
+      await mutate("PATCH", {
+        userId: user.userId,
+        mode: "assignment",
+        assignmentCohort: assignment,
+      });
+      setMessage(`${user.displayName} is assigned to ${assignmentCohortLabel(assignment)}.`);
+      await loadUsers();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to change this assignment.");
     } finally {
       setBusyUserId("");
     }
@@ -158,6 +191,7 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
         displayName: user.displayName,
         email: user.email,
         role: user.role === "viewer" ? "viewer" : "rater",
+        assignmentCohort: user.role === "viewer" ? "unassigned" : user.assignmentCohort,
       });
       setMessage(`${user.displayName}'s access was restored.`);
       await loadUsers();
@@ -193,16 +227,20 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
       <div className="admin-section-heading access-heading">
         <div>
           <p className="admin-eyebrow">Participant access</p>
-          <h2 id="participant-access-title">Raters and viewers</h2>
-          <p>Add people, change their access level, or remove access without deleting saved work.</p>
+          <h2 id="participant-access-title">Raters, judges and viewers</h2>
+          <p>
+            Assign two raters to each 100-episode group and one judge to each
+            random-sample plus serious-mismatch queue.
+          </p>
         </div>
         <span>{users.filter((user) => user.isActive).length} active</span>
       </div>
 
       <div className="admin-role-guide">
-        <div><strong>Rater</strong><span>Can read conversations and submit evaluations.</span></div>
+        <div><strong>Primary rater</strong><span>Rates one paired 100-episode Group A, B, or C queue.</span></div>
+        <div><strong>Judge</strong><span>Independently reviews 50 random episodes plus assigned serious-mismatch cases.</span></div>
         <div><strong>Viewer</strong><span>Can read conversations but cannot save or submit ratings.</span></div>
-        <div><strong>Admin + Rater</strong><span>Manages the study and can also submit ratings under the same account. Assigned to {adminEmail}.</span></div>
+        <div><strong>Admin + Demo rater</strong><span>Manages the study and may demonstrate rating without affecting study coverage. Assigned to {adminEmail}.</span></div>
       </div>
 
       <form className="admin-add-participant" onSubmit={addParticipant}>
@@ -229,9 +267,32 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
         </label>
         <label>
           <span>Access level</span>
-          <select value={role} onChange={(event) => setRole(event.target.value as ParticipantRole)}>
+          <select
+            value={role}
+            onChange={(event) => {
+              const nextRole = event.target.value as ParticipantRole;
+              setRole(nextRole);
+              if (nextRole === "viewer") setAssignmentCohort("unassigned");
+              if (nextRole === "rater" && assignmentCohort === "unassigned") {
+                setAssignmentCohort("group_a");
+              }
+            }}
+          >
             {PARTICIPANT_ROLES.map((participantRole) => (
               <option key={participantRole} value={participantRole}>{userRoleLabel(participantRole)}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Study assignment</span>
+          <select
+            value={assignmentCohort}
+            disabled={role === "viewer"}
+            onChange={(event) => setAssignmentCohort(event.target.value as AssignmentCohort)}
+          >
+            {role === "viewer" && <option value="unassigned">No rating assignment</option>}
+            {ASSIGNMENT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
         </label>
@@ -252,7 +313,7 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
         <div className="admin-table-scroll">
           <table className="admin-access-table">
             <thead>
-              <tr><th>Participant</th><th>Role</th><th>Account</th><th>Access</th></tr>
+              <tr><th>Participant</th><th>Assignment</th><th>Role</th><th>Account</th><th>Access</th></tr>
             </thead>
             <tbody>
               {users.map((user) => {
@@ -265,6 +326,29 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
                         <span className="avatar">{user.displayName.slice(0, 1).toUpperCase()}</span>
                         <span><strong>{user.displayName}</strong><small>{user.email}</small></span>
                       </span>
+                    </td>
+                    <td>
+                      {isAdmin ? (
+                        <span className="admin-fixed-role">Administrative oversight</span>
+                      ) : user.role === "rater" ? (
+                        <select
+                          className="admin-assignment-select"
+                          value={user.assignmentCohort}
+                          disabled={!user.isActive || busy}
+                          aria-label={`Study assignment for ${user.displayName}`}
+                          onChange={(event) => void changeAssignment(
+                            user,
+                            event.target.value as AssignmentCohort,
+                          )}
+                        >
+                          <option value="unassigned">Pending assignment</option>
+                          {ASSIGNMENT_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="admin-fixed-role">No rating assignment</span>
+                      )}
                     </td>
                     <td>
                       {isAdmin ? (

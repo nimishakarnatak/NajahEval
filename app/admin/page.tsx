@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getAdminProgress } from "@/lib/admin-progress";
-import { REQUIRED_RATINGS_PER_EPISODE } from "@/lib/rating-policy";
+import { assignmentCohortLabel } from "@/lib/study-assignments";
 import { getRaterIdentity } from "@/lib/server-auth";
 import { userAccessLabel } from "@/lib/user-roles";
 import { AdminParticipantManager } from "./AdminParticipantManager";
@@ -32,6 +32,8 @@ export default async function AdminDashboardPage() {
   if (!admin || admin.role !== "admin") redirect("/");
 
   const progress = await getAdminProgress();
+  const expectedPrimaryRatings = progress.totalEpisodes * 2;
+  const expectedJudgeReviews = progress.expectedRatings - expectedPrimaryRatings;
   const overallPercentage = progress.expectedRatings
     ? Math.min(
         Math.round((progress.completedRatings / progress.expectedRatings) * 100),
@@ -83,7 +85,10 @@ export default async function AdminDashboardPage() {
             >
               <span style={{ width: `${overallPercentage}%` }} />
             </div>
-            <small>{progress.completedRatings} of {progress.expectedRatings} required independent ratings</small>
+            <small>
+              {progress.completedRatings} of {progress.expectedRatings} required study reviews
+              ({expectedPrimaryRatings} primary ratings + {expectedJudgeReviews} judge reviews)
+            </small>
           </div>
         </section>
 
@@ -109,25 +114,65 @@ export default async function AdminDashboardPage() {
           <article>
             <span>Episodes in dataset</span>
             <strong>{progress.totalEpisodes}</strong>
-            <small>Available to each evaluator</small>
+            <small>Allocated across paired primary and judge queues</small>
           </article>
+        </section>
+
+        <section className="admin-assignment-card" aria-labelledby="assignment-progress-title">
+          <div className="admin-section-heading">
+            <div>
+              <p className="admin-eyebrow">Study allocation</p>
+              <h2 id="assignment-progress-title">Progress by assigned team</h2>
+              <p>
+                Groups A–C each contain two primary raters sharing 100 episodes.
+                Each judge receives a separate reproducible random sample of 50 episodes.
+                Serious primary-rating mismatches outside those samples are added to one
+                judge&apos;s queue.
+              </p>
+            </div>
+            <span>8 evaluator places</span>
+          </div>
+          <div className="admin-assignment-grid">
+            {progress.assignments.map((assignment) => (
+              <article key={assignment.assignmentCohort}>
+                <span>{assignment.label}</span>
+                <strong>{assignment.completedCount}/{assignment.expectedCount}</strong>
+                <div className="admin-progress-track" aria-hidden="true">
+                  <span style={{ width: `${assignment.completionPercentage}%` }} />
+                </div>
+                <small>
+                  {assignment.activeMembers}/{assignment.capacity} evaluator places filled ·{" "}
+                  {assignment.assignedEpisodes} episodes
+                </small>
+              </article>
+            ))}
+          </div>
         </section>
 
         <section className="admin-coverage-card">
           <div>
-            <p className="admin-eyebrow">Independent-rating coverage</p>
+            <p className="admin-eyebrow">Required review coverage</p>
             <h2>Coverage across the dataset</h2>
-            <p>Completed ratings only; drafts are excluded from these coverage counts.</p>
+            <p>
+              Completed ratings only. Primary-pair coverage and the separate judge
+              sample plus serious-mismatch reviews are reported independently; drafts
+              and admin demos are excluded.
+            </p>
           </div>
           <div className="admin-coverage-stats">
-            <div><strong>{progress.coverage.noCompletedRating}</strong><span>No completed rating</span></div>
+            <div><strong>{progress.coverage.noPrimaryRating}</strong><span>No primary rating</span></div>
             <div>
-              <strong>{progress.coverage.partiallyRatedEpisodes}</strong>
-              <span>1–{REQUIRED_RATINGS_PER_EPISODE - 1} completed ratings</span>
+              <strong>{progress.coverage.onePrimaryRating}</strong>
+              <span>One of two primary ratings</span>
             </div>
             <div className="coverage-complete">
-              <strong>{progress.coverage.fullyRatedEpisodes}</strong>
-              <span>All {REQUIRED_RATINGS_PER_EPISODE} ratings</span>
+              <strong>{progress.coverage.primaryComplete}</strong>
+              <span>Both primary ratings</span>
+            </div>
+            <div><strong>{progress.coverage.judgePending}</strong><span>Judge review pending</span></div>
+            <div className="coverage-complete">
+              <strong>{progress.coverage.judgeComplete}</strong>
+              <span>Judge review complete</span>
             </div>
           </div>
         </section>
@@ -147,6 +192,7 @@ export default async function AdminDashboardPage() {
                 <thead>
                   <tr>
                     <th>Evaluator</th>
+                    <th>Assignment</th>
                     <th>Completion</th>
                     <th>Completed</th>
                     <th>Drafts</th>
@@ -165,6 +211,12 @@ export default async function AdminDashboardPage() {
                             <small>{evaluator.email}</small>
                           </span>
                         </span>
+                      </td>
+                      <td>
+                        <strong>{assignmentCohortLabel(evaluator.assignmentCohort)}</strong>
+                        <small className="admin-assignment-detail">
+                          {evaluator.assignedEpisodeCount} assigned episodes
+                        </small>
                       </td>
                       <td>
                         <span className="admin-person-progress">
@@ -193,8 +245,10 @@ export default async function AdminDashboardPage() {
         </section>
 
         <p className="admin-data-note">
-          “Not started” means the evaluator has no saved draft or completed rating for
-          that episode. Times are shown in UTC.
+          “Not started” is calculated against each evaluator’s assigned queue. Legacy
+          ratings and administrator demo ratings remain exportable but are excluded from
+          the {progress.expectedRatings} currently required study reviews. This total can
+          increase when serious mismatch cases are added. Times are shown in UTC.
         </p>
       </main>
     </div>

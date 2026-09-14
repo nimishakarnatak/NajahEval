@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'rater', 'viewer')),
   can_rate BOOLEAN NOT NULL DEFAULT FALSE,
+  assignment_cohort TEXT NOT NULL DEFAULT 'unassigned',
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   failed_login_count INTEGER NOT NULL DEFAULT 0,
   locked_until BIGINT,
@@ -58,6 +59,8 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 
 CREATE TABLE IF NOT EXISTS episodes (
   episode_id TEXT PRIMARY KEY,
+  study_order INTEGER NOT NULL DEFAULT 0,
+  judge_base_assignment TEXT NOT NULL DEFAULT '',
   student_status TEXT NOT NULL DEFAULT 'unknown',
   language TEXT NOT NULL,
   module TEXT NOT NULL,
@@ -96,9 +99,12 @@ CREATE TABLE IF NOT EXISTS rubric_annotations (
   episode_id TEXT NOT NULL REFERENCES episodes(episode_id) ON DELETE CASCADE,
   rater_id TEXT NOT NULL,
   rater_email TEXT NOT NULL,
+  review_layer TEXT NOT NULL DEFAULT 'legacy',
+  assignment_cohort TEXT NOT NULL DEFAULT '',
   scores_json TEXT NOT NULL DEFAULT '{}',
   evidence_turns_json TEXT NOT NULL DEFAULT '{}',
   justifications_json TEXT NOT NULL DEFAULT '{}',
+  critical_failure_observed TEXT NOT NULL DEFAULT '',
   critical_flags_json TEXT NOT NULL DEFAULT '{}',
   critical_evidence_json TEXT NOT NULL DEFAULT '{}',
   episode_end_reason TEXT NOT NULL DEFAULT '',
@@ -124,6 +130,10 @@ CREATE INDEX IF NOT EXISTS idx_rubric_annotations_episode_status
   ON rubric_annotations(episode_id, status);
 CREATE INDEX IF NOT EXISTS idx_rubric_annotations_rater_status
   ON rubric_annotations(rater_id, status);
+CREATE INDEX IF NOT EXISTS idx_users_assignment_cohort
+  ON users(assignment_cohort);
+CREATE INDEX IF NOT EXISTS idx_episodes_study_order
+  ON episodes(study_order);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
   ON auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry

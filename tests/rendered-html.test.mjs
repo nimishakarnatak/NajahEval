@@ -78,7 +78,7 @@ test("bundles and automatically seeds the 300-episode final dataset", async () =
   assert.match(bundledDataset, /BUNDLED_EPISODE_COUNT/);
   assert.match(bundledDataset, /ON CONFLICT\(episode_id\) DO UPDATE/);
   assert.match(episodesRoute, /ensureBundledDataset\(db\)/);
-  assert.match(component, /reviewed episodes are built in and shared with every rater/);
+  assert.match(component, /assigned review queue/);
   assert.doesNotMatch(component, /Import CSV/);
 });
 
@@ -99,18 +99,22 @@ test("opens a personal progress list with direct episode navigation", async () =
   assert.match(component, /Select any episode to open it in the evaluation workspace/);
 });
 
-test("keeps every episode available until five independent ratings are complete", async () => {
+test("uses two primary ratings and one judge review for each assigned judge episode", async () => {
   const [component, policy, annotationRoute] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(ratingPolicyPath, "utf8"),
     readFile(new URL("../app/api/annotations/route.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(policy, /REQUIRED_RATINGS_PER_EPISODE = 5/);
-  assert.match(component, /completedRaterCount < REQUIRED_RATINGS_PER_EPISODE/);
-  assert.match(component, /completedRaterCount\}\/\{REQUIRED_RATINGS_PER_EPISODE\}/);
+  assert.match(policy, /REQUIRED_PRIMARY_RATINGS_PER_EPISODE = 2/);
+  assert.match(policy, /REQUIRED_JUDGE_RATINGS_PER_EPISODE = 1/);
+  assert.match(component, /completedRaterCount < requiredRatingsPerEpisode/);
+  assert.match(component, /current\.completedRaterCount\}\/\{requiredRatingsPerEpisode\}/);
   assert.match(component, /fully rated/);
-  assert.match(annotationRoute, /completed\?\.count \?\? 0\) >= REQUIRED_RATINGS_PER_EPISODE/);
-  assert.match(annotationRoute, /all five required independent ratings/);
+  assert.match(annotationRoute, /reviewLayer !== "admin_demo"/);
+  assert.match(annotationRoute, /review_layer = \?/);
+  assert.match(annotationRoute, /assignment_cohort = \?/);
+  assert.match(annotationRoute, /both required independent primary ratings/);
+  assert.match(annotationRoute, /required judge review/);
 });
 
 test("uses queue and progress lists instead of a conflicting episode search", async () => {
@@ -188,7 +192,12 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(rubric, /Contextual appropriateness/);
   assert.match(rubric, /Task effectiveness/);
   assert.match(component, /Evidence turn number\(s\)/);
-  assert.match(component, /Critical-failure flags/);
+  assert.match(component, /Critical-failure screening/);
+  assert.match(component, /Was any critical failure observed in this module episode/);
+  assert.match(component, /Which critical failure or failures occurred/);
+  assert.match(component, /Select all that apply/);
+  assert.match(component, /observed === "yes"/);
+  assert.match(rubric, /Other serious failure/);
   assert.match(component, /A written justification is required for every score/);
   assert.match(component, /Evidence turn numbers are optional/);
   assert.match(component, /Task status/);
@@ -198,7 +207,7 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(rubric, /The available conversation does not provide enough evidence/);
   assert.match(rubric, /Cannot determine/);
   assert.match(component, /Submit (?:&|&amp;) next/);
-  assert.match(component, /reviewed episodes are built in/);
+  assert.match(component, /assigned review queue/);
   assert.doesNotMatch(`${component}\n${importRoute}`, /do_not_release|doNotRelease/);
   assert.doesNotMatch(
     importRoute,
@@ -212,7 +221,7 @@ test("separates task status from the conditional reason an incomplete task stopp
     readFile(rubricPath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(rubric, /najah-evidence-v8/);
+  assert.match(rubric, /najah-evidence-v9/);
   assert.match(rubric, /Completed and acknowledged/);
   assert.match(rubric, /Participant moved to another module/);
   assert.match(rubric, /No further Najah reply was observed/);

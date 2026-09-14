@@ -1,9 +1,9 @@
 /**
- * Number of independent completed evaluations required for every episode.
+ * Number of independent completed primary evaluations required per episode.
  *
- * The study currently has five raters and requires all five to evaluate every
- * episode. Keeping this value in one shared module ensures that the rater
- * queue, server-side submission limit, and administrator dashboard all apply
- * the same study design.
+ * Each of the three 100-episode batches is assigned to a pair of raters.
  */
-export const REQUIRED_RATINGS_PER_EPISODE = 5;
+export const REQUIRED_PRIMARY_RATINGS_PER_EPISODE = 2;
+
+/** Every episode receives one separate quality-assurance judge review. */
+export const REQUIRED_JUDGE_RATINGS_PER_EPISODE = 1;

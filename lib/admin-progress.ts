@@ -3,19 +3,54 @@ import {
   BUNDLED_DATASET_VERSION,
   ensureBundledDataset,
 } from "@/lib/bundled-dataset";
-import { REQUIRED_RATINGS_PER_EPISODE } from "@/lib/rating-policy";
+import {
+  REQUIRED_JUDGE_RATINGS_PER_EPISODE,
+  REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
+} from "@/lib/rating-policy";
+import {
+  ASSIGNMENT_OPTIONS,
+  assignmentCohortLabel,
+  assignmentEpisodeCount,
+  isAssignmentCohort,
+  isJudgeCohort,
+  judgeAssignmentForEpisode,
+  primaryCohortForOrder,
+  type AssignedCohort,
+  type AssignmentCohort,
+  type JudgeAssignment,
+} from "@/lib/study-assignments";
+import {
+  summarizePrimaryMismatch,
+  type ComparablePrimaryRating,
+} from "@/lib/rating-mismatch";
+import type { UserRole } from "@/lib/user-roles";
 
 export type EvaluatorProgress = {
   raterId: string;
   displayName: string;
   email: string;
+  role: UserRole;
   canRate: boolean;
+  isActive: boolean;
+  assignmentCohort: AssignmentCohort;
+  assignedEpisodeCount: number;
   joinedAt: string | null;
   completedCount: number;
   draftCount: number;
   notStartedCount: number;
   completionPercentage: number;
   lastActivity: string | null;
+};
+
+export type AssignmentProgress = {
+  assignmentCohort: AssignedCohort;
+  label: string;
+  assignedEpisodes: number;
+  activeMembers: number;
+  capacity: number;
+  completedCount: number;
+  expectedCount: number;
+  completionPercentage: number;
 };
 
 export type AdminProgress = {
@@ -26,37 +61,45 @@ export type AdminProgress = {
   draftRatings: number;
   expectedRatings: number;
   coverage: {
-    noCompletedRating: number;
-    partiallyRatedEpisodes: number;
-    fullyRatedEpisodes: number;
+    noPrimaryRating: number;
+    onePrimaryRating: number;
+    primaryComplete: number;
+    judgePending: number;
+    judgeComplete: number;
   };
+  assignments: AssignmentProgress[];
   evaluators: EvaluatorProgress[];
 };
-
-type CountRow = { count: number | string };
 
 type RawEvaluatorProgress = {
   raterId: string;
   displayName: string;
   email: string;
+  role: UserRole;
   canRate: boolean;
+  isActive: boolean;
+  assignmentCohort: string;
   joinedAt: string | Date | null;
   completedCount: number | string;
   draftCount: number | string;
   lastActivity: string | Date | null;
 };
 
-type RawCoverage = {
-  noCompletedRating: number | string;
-  partiallyRatedEpisodes: number | string;
-  fullyRatedEpisodes: number | string;
+type RawEpisodeAssignment = {
+  episodeId: string;
+  studyOrder: number | string;
+  judgeBaseAssignment: JudgeAssignment;
 };
 
-/**
- * Converts a Postgres timestamp into a stable JSON-safe value. Neon normally
- * returns timestamp strings, while test or alternative drivers may return a
- * Date object. Invalid legacy values are treated as unavailable.
- */
+type RawStudyRating = ComparablePrimaryRating & {
+  episodeId: string;
+  raterId: string;
+  reviewLayer: "primary" | "judge";
+  assignmentCohort: string;
+  status: "draft" | "complete";
+};
+
+/** Convert a database timestamp into a stable JSON-safe value. */
 function timestampToIso(value: string | Date | null): string | null {
   if (value === null) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -64,38 +107,80 @@ function timestampToIso(value: string | Date | null): string | null {
 }
 
 /**
- * Builds the administrator's evaluator-progress view from saved annotations.
- *
- * Each account with rater status is included even when it has not opened an
- * episode. Accounts with saved ratings remain visible after rater status is
- * removed, so historical work never disappears from progress or CSV exports.
- * A completed annotation counts as completed, a saved incomplete annotation
- * counts as a draft, and every remaining episode is "not started" for that
- * evaluator. Administrative and rating permissions are independent, allowing
- * the configured owner to participate in a demo as an Admin + Rater.
- *
- * The bundled dataset is seeded first so a newly deployed site reports the
- * correct denominator before any evaluator has visited the review workspace.
+ * Build progress for the paired primary-rater design and the separate judge
+ * layer. A rating is counted for a current assignment only when the immutable
+ * assignment snapshot on the rating matches the evaluator's account. Legacy
+ * and administrator-demo ratings remain exportable but do not affect study
+ * completion.
  */
 export async function getAdminProgress(): Promise<AdminProgress> {
   const db = getDatabase();
   await ensureNajahSchema(db);
   await ensureBundledDataset(db);
 
-  const [episodeCountRow, evaluatorResult, coverageRow] = await Promise.all([
+  const [episodeResult, evaluatorResult, studyRatingResult] = await Promise.all([
     db
-      .prepare("SELECT COUNT(*) AS count FROM episodes WHERE import_batch = ?")
+      .prepare(`
+        SELECT
+          episode_id AS "episodeId",
+          study_order AS "studyOrder",
+          judge_base_assignment AS "judgeBaseAssignment"
+        FROM episodes
+        WHERE import_batch = ?
+        ORDER BY study_order
+      `)
       .bind(BUNDLED_DATASET_VERSION)
-      .first<CountRow>(),
+      .all<RawEpisodeAssignment>(),
     db.prepare(`
       SELECT
         u.user_id AS "raterId",
         u.display_name AS "displayName",
         u.email,
+        u.role,
         u.can_rate AS "canRate",
+        u.is_active AS "isActive",
+        u.assignment_cohort AS "assignmentCohort",
         u.created_at AS "joinedAt",
-        COUNT(active_episode.episode_id) FILTER (WHERE ra.status = 'complete') AS "completedCount",
-        COUNT(active_episode.episode_id) FILTER (WHERE ra.status = 'draft') AS "draftCount",
+        COUNT(active_episode.episode_id) FILTER (
+          WHERE ra.status = 'complete'
+            AND (
+              (u.role = 'admin' AND ra.review_layer = 'admin_demo')
+              OR (
+                u.role != 'admin'
+                AND u.assignment_cohort != 'unassigned'
+                AND ra.assignment_cohort = u.assignment_cohort
+                AND ra.review_layer = CASE
+                  WHEN u.assignment_cohort IN ('judge_1', 'judge_2') THEN 'judge'
+                  ELSE 'primary'
+                END
+              )
+              OR (
+                u.role != 'admin'
+                AND u.assignment_cohort = 'unassigned'
+                AND ra.review_layer IN ('primary', 'judge')
+              )
+            )
+        ) AS "completedCount",
+        COUNT(active_episode.episode_id) FILTER (
+          WHERE ra.status = 'draft'
+            AND (
+              (u.role = 'admin' AND ra.review_layer = 'admin_demo')
+              OR (
+                u.role != 'admin'
+                AND u.assignment_cohort != 'unassigned'
+                AND ra.assignment_cohort = u.assignment_cohort
+                AND ra.review_layer = CASE
+                  WHEN u.assignment_cohort IN ('judge_1', 'judge_2') THEN 'judge'
+                  ELSE 'primary'
+                END
+              )
+              OR (
+                u.role != 'admin'
+                AND u.assignment_cohort = 'unassigned'
+                AND ra.review_layer IN ('primary', 'judge')
+              )
+            )
+        ) AS "draftCount",
         MAX(ra.updated_at) FILTER (WHERE active_episode.episode_id IS NOT NULL) AS "lastActivity"
       FROM users u
       LEFT JOIN rubric_annotations ra ON ra.rater_id = u.user_id
@@ -107,51 +192,110 @@ export async function getAdminProgress(): Promise<AdminProgress> {
            SELECT 1 FROM rubric_annotations saved
            WHERE saved.rater_id = u.user_id
          )
-      GROUP BY u.user_id, u.display_name, u.email, u.can_rate, u.created_at
-      ORDER BY
-        COUNT(active_episode.episode_id) FILTER (WHERE ra.status = 'complete') DESC,
-        LOWER(u.display_name),
-        LOWER(u.email)
+      GROUP BY
+        u.user_id, u.display_name, u.email, u.role, u.can_rate, u.is_active,
+        u.assignment_cohort, u.created_at
+      ORDER BY LOWER(u.display_name), LOWER(u.email)
     `).bind(BUNDLED_DATASET_VERSION).all<RawEvaluatorProgress>(),
     db.prepare(`
       SELECT
-        COUNT(*) FILTER (WHERE completed_count = 0) AS "noCompletedRating",
-        COUNT(*) FILTER (
-          WHERE completed_count > 0 AND completed_count < ?
-        ) AS "partiallyRatedEpisodes",
-        COUNT(*) FILTER (WHERE completed_count >= ?) AS "fullyRatedEpisodes"
-      FROM (
-        SELECT
-          e.episode_id,
-          COUNT(rating_user.user_id) FILTER (WHERE ra.status = 'complete') AS completed_count
-        FROM episodes e
-        LEFT JOIN rubric_annotations ra ON ra.episode_id = e.episode_id
-        LEFT JOIN users rating_user
-          ON rating_user.user_id = ra.rater_id
-        WHERE e.import_batch = ?
-        GROUP BY e.episode_id
-      ) episode_coverage
-    `).bind(
-      REQUIRED_RATINGS_PER_EPISODE,
-      REQUIRED_RATINGS_PER_EPISODE,
-      BUNDLED_DATASET_VERSION,
-    ).first<RawCoverage>(),
+        ra.episode_id AS "episodeId",
+        ra.rater_id AS "raterId",
+        ra.review_layer AS "reviewLayer",
+        ra.assignment_cohort AS "assignmentCohort",
+        ra.status,
+        ra.scores_json AS "scoresJson",
+        ra.task_status AS "taskStatus",
+        ra.task_incomplete_reason AS "taskIncompleteReason",
+        ra.critical_failure_observed AS "criticalFailureObserved",
+        ra.critical_flags_json AS "criticalFlagsJson"
+      FROM rubric_annotations ra
+      INNER JOIN episodes e ON e.episode_id = ra.episode_id
+      WHERE e.import_batch = ?
+        AND ra.review_layer IN ('primary', 'judge')
+    `).bind(BUNDLED_DATASET_VERSION).all<RawStudyRating>(),
   ]);
 
-  const totalEpisodes = Number(episodeCountRow?.count ?? 0);
-  const evaluators = evaluatorResult.results.map((row) => {
-    const completedCount = Number(row.completedCount ?? 0);
-    const draftCount = Number(row.draftCount ?? 0);
-    const notStartedCount = Math.max(totalEpisodes - completedCount - draftCount, 0);
-    const completionPercentage = totalEpisodes
-      ? Math.round((completedCount / totalEpisodes) * 100)
+  const episodes = episodeResult.results;
+  const totalEpisodes = episodes.length;
+  const episodeById = new Map(episodes.map((episode) => [episode.episodeId, episode]));
+  const primaryRatingsByEpisode = new Map<string, ComparablePrimaryRating[]>();
+
+  for (const rating of studyRatingResult.results) {
+    const episode = episodeById.get(rating.episodeId);
+    if (
+      !episode ||
+      rating.status !== "complete" ||
+      rating.reviewLayer !== "primary" ||
+      rating.assignmentCohort !== primaryCohortForOrder(Number(episode.studyOrder))
+    ) continue;
+    const ratings = primaryRatingsByEpisode.get(rating.episodeId) ?? [];
+    ratings.push(rating);
+    primaryRatingsByEpisode.set(rating.episodeId, ratings);
+  }
+
+  const mismatchByEpisode = new Map(
+    episodes.map((episode) => [
+      episode.episodeId,
+      summarizePrimaryMismatch(primaryRatingsByEpisode.get(episode.episodeId) ?? []),
+    ]),
+  );
+  const requiredJudgeByEpisode = new Map<string, JudgeAssignment>();
+  for (const episode of episodes) {
+    const requiredJudge = judgeAssignmentForEpisode(
+      episode.judgeBaseAssignment,
+      Number(episode.studyOrder),
+      mismatchByEpisode.get(episode.episodeId)?.seriousMismatch ?? false,
+    );
+    if (requiredJudge) requiredJudgeByEpisode.set(episode.episodeId, requiredJudge);
+  }
+  const assignedEpisodeCountByJudge = {
+    judge_1: Array.from(requiredJudgeByEpisode.values()).filter((value) => value === "judge_1").length,
+    judge_2: Array.from(requiredJudgeByEpisode.values()).filter((value) => value === "judge_2").length,
+  };
+
+  /** Keep only ratings that belong to the currently defined study assignment. */
+  const currentStudyRatings = studyRatingResult.results.filter((rating) => {
+    const episode = episodeById.get(rating.episodeId);
+    if (!episode) return false;
+    if (rating.reviewLayer === "primary") {
+      return rating.assignmentCohort === primaryCohortForOrder(Number(episode.studyOrder));
+    }
+    return rating.assignmentCohort === requiredJudgeByEpisode.get(rating.episodeId);
+  });
+
+  const evaluators = evaluatorResult.results.map((row): EvaluatorProgress => {
+    const assignmentCohort: AssignmentCohort = isAssignmentCohort(row.assignmentCohort)
+      ? row.assignmentCohort
+      : "unassigned";
+    const assignedStudyRows = currentStudyRatings.filter(
+      (rating) => rating.raterId === row.raterId,
+    );
+    const completedCount = row.role === "admin"
+      ? Number(row.completedCount ?? 0)
+      : assignedStudyRows.filter((rating) => rating.status === "complete").length;
+    const draftCount = row.role === "admin"
+      ? Number(row.draftCount ?? 0)
+      : assignedStudyRows.filter((rating) => rating.status === "draft").length;
+    const historicalWork = completedCount + draftCount > 0;
+    const assignedEpisodeCount = isJudgeCohort(assignmentCohort)
+      ? assignedEpisodeCountByJudge[assignmentCohort]
+      : assignmentEpisodeCount(assignmentCohort) ||
+      (row.role === "admin" && row.canRate ? totalEpisodes : historicalWork ? totalEpisodes : 0);
+    const notStartedCount = Math.max(assignedEpisodeCount - completedCount - draftCount, 0);
+    const completionPercentage = assignedEpisodeCount
+      ? Math.min(Math.round((completedCount / assignedEpisodeCount) * 100), 100)
       : 0;
 
     return {
       raterId: row.raterId,
       displayName: row.displayName,
       email: row.email,
+      role: row.role,
       canRate: row.canRate,
+      isActive: row.isActive,
+      assignmentCohort,
+      assignedEpisodeCount,
       joinedAt: timestampToIso(row.joinedAt),
       completedCount,
       draftCount,
@@ -161,14 +305,52 @@ export async function getAdminProgress(): Promise<AdminProgress> {
     };
   });
 
-  const completedRatings = evaluators.reduce(
-    (total, evaluator) => total + evaluator.completedCount,
-    0,
-  );
-  const draftRatings = evaluators.reduce(
-    (total, evaluator) => total + evaluator.draftCount,
-    0,
-  );
+  const assignments = ASSIGNMENT_OPTIONS.map((option): AssignmentProgress => {
+    const members = evaluators.filter(
+      (evaluator) => evaluator.assignmentCohort === option.value,
+    );
+    const completedCount = members.reduce(
+      (total, evaluator) => total + evaluator.completedCount,
+      0,
+    );
+    const assignedEpisodes = isJudgeCohort(option.value)
+      ? assignedEpisodeCountByJudge[option.value]
+      : option.episodeCount;
+    const expectedCount = assignedEpisodes * option.capacity;
+    return {
+      assignmentCohort: option.value,
+      label: assignmentCohortLabel(option.value),
+      assignedEpisodes,
+      activeMembers: members.filter(
+        (evaluator) => evaluator.isActive && evaluator.canRate,
+      ).length,
+      capacity: option.capacity,
+      completedCount,
+      expectedCount,
+      completionPercentage: expectedCount
+        ? Math.min(Math.round((completedCount / expectedCount) * 100), 100)
+        : 0,
+    };
+  });
+
+  const completedRatings = currentStudyRatings.filter(
+    (rating) => rating.status === "complete",
+  ).length;
+  const draftRatings = currentStudyRatings.filter(
+    (rating) => rating.status === "draft",
+  ).length;
+  const judgeRequiredEpisodes = requiredJudgeByEpisode.size;
+  const judgeCompletedEpisodes = episodes.filter((episode) => {
+    const requiredJudge = requiredJudgeByEpisode.get(episode.episodeId);
+    if (!requiredJudge) return false;
+    return currentStudyRatings.some(
+      (rating) =>
+        rating.episodeId === episode.episodeId &&
+        rating.reviewLayer === "judge" &&
+        rating.assignmentCohort === requiredJudge &&
+        rating.status === "complete",
+    );
+  }).length;
 
   return {
     totalEpisodes,
@@ -178,13 +360,25 @@ export async function getAdminProgress(): Promise<AdminProgress> {
     ).length,
     completedRatings,
     draftRatings,
-    // Every episode is evaluated independently by all five study raters.
-    expectedRatings: totalEpisodes * REQUIRED_RATINGS_PER_EPISODE,
+    expectedRatings:
+      totalEpisodes * REQUIRED_PRIMARY_RATINGS_PER_EPISODE +
+      judgeRequiredEpisodes * REQUIRED_JUDGE_RATINGS_PER_EPISODE,
     coverage: {
-      noCompletedRating: Number(coverageRow?.noCompletedRating ?? 0),
-      partiallyRatedEpisodes: Number(coverageRow?.partiallyRatedEpisodes ?? 0),
-      fullyRatedEpisodes: Number(coverageRow?.fullyRatedEpisodes ?? 0),
+      noPrimaryRating: episodes.filter(
+        (episode) => (mismatchByEpisode.get(episode.episodeId)?.ratingCount ?? 0) === 0,
+      ).length,
+      onePrimaryRating: episodes.filter(
+        (episode) => (mismatchByEpisode.get(episode.episodeId)?.ratingCount ?? 0) === 1,
+      ).length,
+      primaryComplete: episodes.filter(
+        (episode) =>
+          (mismatchByEpisode.get(episode.episodeId)?.ratingCount ?? 0) >=
+          REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
+      ).length,
+      judgePending: judgeRequiredEpisodes - judgeCompletedEpisodes,
+      judgeComplete: judgeCompletedEpisodes,
     },
+    assignments,
     evaluators,
   };
 }

@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 
 import { ensureNajahSchema, getDatabase } from "@/db";
 import { digestSessionToken, readSessionToken } from "@/lib/password-auth";
+import type { AssignmentCohort } from "@/lib/study-assignments";
 import type { UserRole } from "@/lib/user-roles";
 
 export type RaterIdentity = {
@@ -10,6 +11,7 @@ export type RaterIdentity = {
   displayName: string;
   role: UserRole;
   canRate: boolean;
+  assignmentCohort: AssignmentCohort;
 };
 
 function hostnameFromHeaders(requestHeaders: Headers): string {
@@ -35,6 +37,7 @@ export async function getRaterIdentity(request?: Request): Promise<RaterIdentity
       displayName: "Local preview",
       role: "admin",
       canRate: true,
+      assignmentCohort: "unassigned",
     };
   }
 
@@ -52,7 +55,8 @@ export async function getRaterIdentity(request?: Request): Promise<RaterIdentity
         users.email,
         users.display_name AS "displayName",
         users.role,
-        users.can_rate AS "canRate"
+        users.can_rate AS "canRate",
+        users.assignment_cohort AS "assignmentCohort"
       FROM auth_sessions
       INNER JOIN users ON users.user_id = auth_sessions.user_id
       WHERE auth_sessions.session_hash = ?

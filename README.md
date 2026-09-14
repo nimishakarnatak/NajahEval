@@ -1,12 +1,12 @@
 # Najah Review Studio
 
 A full-stack human-evaluation workspace for rating the reviewed, de-identified
-Najah module episodes. The repository includes the final 300-participant annotation
+Najah module episodes. The repository includes the final 300-episode annotation
 sample, independent rater accounts, drafts, completed ratings, progress views,
 CSV export, and optional Google sign-in.
 
 Administrative and rating permissions are independent. The configured owner
-can be an **Admin + Rater**, submit demo or study ratings under the same account,
+can be an **Admin + Rater**, submit clearly separated demo ratings under the same account,
 and enable or remove only their rater status from the dashboard. Removing rater
 status never removes administrator access or historical CSV rows.
 
@@ -15,9 +15,10 @@ status never removes administrator access or historical CSV rows.
 The repository contains `data/najah_final_annotation_dataset.csv`. Keep the
 GitHub repository private unless the dataset has been formally approved for
 public release. The application currently allows open account registration, so
-anyone who finds a public deployment URL can create an account and read every
-episode. Reintroduce an allowlist or invitation gate before publishing if access
-must be limited to the three authorized raters.
+anyone who finds a public deployment URL can create an account. New accounts
+receive no episode queue until an administrator makes a study assignment.
+Reintroduce an allowlist or invitation gate if account creation itself must be
+limited to the eight authorized evaluators.
 
 ## Deployment architecture
 
@@ -52,6 +53,37 @@ Activity is descriptive, not a proxy for positive engagement. High activity can
 reflect productive work, persistence, confusion, retries, or technical issues.
 The activity measure and group are deliberately omitted from the rater-facing
 CSV so they cannot influence human judgments.
+
+## Evaluator assignment design
+
+The 300 episodes are fielded through two distinct review layers:
+
+- **Group A:** two blinded primary raters independently rate study orders 1–100.
+- **Group B:** two blinded primary raters independently rate study orders 101–200.
+- **Group C:** two blinded primary raters independently rate study orders 201–300.
+- **Judge 1:** one judge reviews a fixed random sample of 50 episodes plus assigned serious mismatches.
+- **Judge 2:** one judge reviews a separate fixed random sample of 50 episodes plus assigned serious mismatches.
+
+The 100 base judge episodes are selected reproducibly from episode IDs and do
+not overlap. They are balanced across Groups A-C: Judge 1 receives 17/17/16 and
+Judge 2 receives 16/17/17 episodes from those groups. Once both primary ratings
+have been submitted, a serious mismatch outside the base sample is added to one
+judge's queue using a deterministic, non-overlapping allocation rule. A serious
+mismatch is a 1-versus-3 score, N/A-versus-substantive score, different task
+status or incomplete-task reason, or different critical-failure judgment.
+
+The design therefore requires 600 primary ratings and 100 base judge reviews,
+plus one judge review for each serious mismatch outside the base samples.
+Ordinary primary-rating differences are shown as alerts only when the episode
+is already in the judge's base sample. Judges never see either primary rater's
+identity or actual answers.
+Administrator demo ratings and pre-assignment legacy ratings are stored and
+exportable, but do not count toward required study coverage.
+
+The administrator assigns accounts to groups from the dashboard. A Group A, B,
+or C assignment has capacity for two active raters; a judge assignment has
+capacity for one active judge. An unassigned rater sees no study episodes until
+the administrator selects a queue.
 
 ## Publish from GitHub to Netlify
 
@@ -114,10 +146,13 @@ redeploy.
 1. Select **Retry deploy** in Netlify after saving the environment variables.
 2. Create the administrator account using `ADMIN_EMAIL`. It initially receives
    both Admin and Rater access.
-3. Confirm the queue shows 300 episodes.
-4. Save one draft, sign out and back in, and confirm it is still present.
-5. Submit one rating and export **My work**.
-6. Create a separate test-rater account and confirm it cannot see the first
+3. Assign the six primary raters and two judges in the administration dashboard.
+4. Confirm Group A, B, and C accounts each show 100 episodes, and Judge 1 and
+   Judge 2 accounts each show their 50-episode random base sample. Their totals
+   can increase when serious mismatch cases are detected.
+5. Save one draft, sign out and back in, and confirm it is still present.
+6. Submit one rating and export **My work**.
+7. Create a separate test-rater account and confirm it cannot see the first
    rater's scores.
 
 ## Local development
@@ -146,17 +181,19 @@ do not expose the production `DATABASE_URL` to untrusted preview deployments.
 
 ## Annotation and import behavior
 
-- Raters filter by student status, module, treatment, and personal work state.
-- Admin + Rater annotations appear in the administrator's individual rater CSV
-  and in the combined CSV. Historical ratings remain exportable if that account's
-  rater status is later removed; export columns identify the account role and
-  whether its rater status is currently active.
-- Score justifications and routine evidence turn numbers are optional. Evidence
-  remains required for critical-failure flags set to **Yes**.
+- Raters filter by module, treatment, and personal work state.
+- Administrator demo annotations appear in the administrator's individual CSV
+  and in the all-layers export, but are excluded from primary and judge progress.
+  Historical ratings remain exportable if an account's rater status is later
+  removed. Export columns identify the account role, current assignment, saved
+  review layer, and assignment at the time of rating.
+- Written score justifications are required; routine evidence turn numbers are
+  optional. An explanation remains required for each selected critical failure.
 - Every completed rating records task status. If the task was not completed, a
   second required field records the observable reason the interaction stopped.
-- Annotators never see another rater's scores; they see only the count of
-  independent completed ratings.
+- Evaluators never see another evaluator's scores; they see only the completed
+  count for their own review layer. Judges receive mismatch alerts without the
+  primary raters' identities or score values.
 - Privacy and language-review fields are retained as metadata but currently do
   not gate import. Revisit that temporary decision before external data release.
 - The evidence rubric is stored in `rubric_annotations`, separately from the
