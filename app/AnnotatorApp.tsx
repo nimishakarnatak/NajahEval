@@ -578,8 +578,7 @@ function TaskStatusCard({
   return (
     <div className="task-status-stack">
       <fieldset className="episode-end-card" id="task-status">
-        <legend>Task status</legend>
-        <p>What was the status of the module task at the end of the observed episode?</p>
+        <legend>How far did the participant get with the module task?</legend>
         <div className="episode-end-options">
           {TASK_STATUSES.map((option) => (
             <label key={option.value} className={status === option.value ? "selected" : ""}>
@@ -2807,7 +2806,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <section className="rubric-section episode-ending-section">
                     <div className="rubric-section-heading">
                       <p className="eyebrow">C.1 Task outcome</p>
-                      <span><strong>How far did the participant get with the module task?</strong></span>
                     </div>
                     <TaskStatusCard
                       status={draft.taskStatus}
@@ -2818,7 +2816,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <section className="rubric-section episode-ending-section">
                     <div className="rubric-section-heading">
                       <p className="eyebrow">C.2 Episode ending</p>
-                      <span><strong>What observable event caused the available module episode to stop?</strong></span>
                     </div>
                     <EpisodeEndingCard value={draft.episodeEnding} onChange={updateEpisodeEnding} />
                     {stoppingFactorsApply(draft) && (

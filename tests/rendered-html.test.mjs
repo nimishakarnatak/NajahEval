@@ -253,7 +253,7 @@ test("includes the core annotation workflow without temporary release or review 
   assert.doesNotMatch(component, /A written justification is required for every score/);
   assert.match(component, /A score of 1, 2, 3, or N\/A is required for every dimension/);
   assert.match(component, /Routine evidence turn numbers and score justifications are optional/);
-  assert.match(component, /Task status/);
+  assert.match(component, /How far did the participant get with the module task\?/);
   assert.match(component, /How did the participant respond to Najah during this module episode/);
   assert.match(component, /What reactions did the participant explicitly express during this module episode/);
   assert.match(component, /How did the available module episode end/);
