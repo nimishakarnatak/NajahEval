@@ -102,8 +102,8 @@ test("keeps evidence-rubric results separate from legacy pilot annotations", asy
     readFile(schemaPath, "utf8"),
   ]);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS rubric_annotations/);
-  assert.match(schema, /task_status TEXT NOT NULL DEFAULT ''/);
-  assert.match(schema, /task_incomplete_reason TEXT NOT NULL DEFAULT ''/);
+  assert.doesNotMatch(schema, /task_status TEXT NOT NULL DEFAULT ''/);
+  assert.doesNotMatch(schema, /task_incomplete_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /most_useful_reflection TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /improvement_reflection TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /skip_reason TEXT NOT NULL DEFAULT ''/);

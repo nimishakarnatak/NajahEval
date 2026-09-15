@@ -108,8 +108,6 @@ CREATE TABLE IF NOT EXISTS rubric_annotations (
   critical_flags_json TEXT NOT NULL DEFAULT '{}',
   critical_evidence_json TEXT NOT NULL DEFAULT '{}',
   episode_end_reason TEXT NOT NULL DEFAULT '',
-  task_status TEXT NOT NULL DEFAULT '',
-  task_incomplete_reason TEXT NOT NULL DEFAULT '',
   most_useful_reflection TEXT NOT NULL DEFAULT '',
   improvement_reflection TEXT NOT NULL DEFAULT '',
   skip_reason TEXT NOT NULL DEFAULT '',
