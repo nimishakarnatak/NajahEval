@@ -582,6 +582,43 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   font-size: 9px;
   line-height: 1.55;
 }
+.evaluation-partition {
+  margin-top: 22px;
+  padding: 14px;
+  border: 1px solid #d8e4e0;
+  border-radius: 14px;
+  background: #f9fbfa;
+}
+.evaluation-partition-header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 11px;
+  align-items: start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #dce6e2;
+}
+.evaluation-partition-letter {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--green);
+  color: white;
+  font: 700 17px/1 Georgia, serif;
+  box-shadow: 0 4px 12px rgba(18, 110, 90, .16);
+}
+.evaluation-partition-header .eyebrow { margin: 0 0 3px; }
+.evaluation-partition-header h3 { margin: 0; font: 600 17px/1.25 Georgia, serif; color: var(--ink); }
+.evaluation-partition-header p:last-child { margin: 5px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.evaluation-partition > .rubric-section:first-of-type { margin-top: 14px; }
+.evaluation-partition .rubric-section { margin-top: 20px; }
+.participant-partition { border-color: #dfd6e8; background: #fcfafd; }
+.participant-partition .evaluation-partition-header { border-bottom-color: #e8e0ef; }
+.participant-partition .evaluation-partition-letter { background: #72558e; box-shadow: 0 4px 12px rgba(114, 85, 142, .16); }
+.outcome-partition { border-color: #eadbb9; background: #fffdf8; }
+.outcome-partition .evaluation-partition-header { border-bottom-color: #eee1c5; }
+.outcome-partition .evaluation-partition-letter { background: #a9741c; box-shadow: 0 4px 12px rgba(169, 116, 28, .16); }
 .rubric-section { margin-top: 22px; }
 .rubric-section-heading { margin-bottom: 9px; }
 .rubric-section-heading .eyebrow { margin-bottom: 3px; }

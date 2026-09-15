@@ -2468,114 +2468,147 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   A score of 1, 2, 3, or N/A is required for every dimension. Routine evidence turn numbers and score justifications are optional. Evidence and a short explanation are required for selected stopping factors and critical failures; a reason is required when skipping. Use N/A only when the dimension genuinely cannot be assessed.
                 </p>
 
-                {RUBRIC_SECTIONS.map((section) => (
-                  <section className="rubric-section" key={section}>
-                    <div className="rubric-section-heading">
-                      <p className="eyebrow">{section}</p>
-                      <span>
-                        {section === "Najah response-quality"
-                          ? "Assess the quality of Najah’s responses in this episode."
-                          : "Give one score per dimension for the complete module episode."}
-                      </span>
+                <section className="evaluation-partition najah-performance-partition" aria-labelledby="najah-performance-heading">
+                  <header className="evaluation-partition-header">
+                    <span className="evaluation-partition-letter" aria-hidden="true">A</span>
+                    <div>
+                      <p className="eyebrow">Rate Najah</p>
+                      <h3 id="najah-performance-heading">Najah’s performance</h3>
+                      <p>Assess what Najah said and did during the module episode.</p>
                     </div>
-                    {RUBRIC_DIMENSIONS.filter((dimension) => dimension.section === section).map((dimension) => (
-                      <ScoreCard
-                        key={dimension.key}
-                        dimension={dimension}
-                        score={draft.scores[dimension.key]}
-                        evidenceTurns={draft.evidenceTurns[dimension.key]}
-                        justification={draft.justifications[dimension.key]}
-                        onScoreChange={(score) => updateScore(dimension.key, score)}
-                        onEvidenceChange={(value) => updateEvidenceTurns(dimension.key, value)}
-                        onJustificationChange={(value) => updateJustification(dimension.key, value)}
-                      />
-                    ))}
-                  </section>
-                ))}
+                  </header>
 
-                <section className="rubric-section episode-ending-section">
-                  <div className="rubric-section-heading">
-                    <p className="eyebrow">2. Task outcome</p>
-                    <span>Record the completion outcome separately from the task-effectiveness quality score.</span>
-                  </div>
-                  <TaskStatusCard
-                    status={draft.taskStatus}
-                    onStatusChange={updateTaskStatus}
-                  />
-                </section>
+                  {RUBRIC_SECTIONS.map((section, sectionIndex) => (
+                    <section className="rubric-section" key={section}>
+                      <div className="rubric-section-heading">
+                        <p className="eyebrow">A.{sectionIndex + 1} {section}</p>
+                        <span>
+                          {section === "Najah response-quality"
+                            ? "Assess the quality of Najah’s responses in this episode."
+                            : "Give one score per dimension for the complete module episode."}
+                        </span>
+                      </div>
+                      {RUBRIC_DIMENSIONS.filter((dimension) => dimension.section === section).map((dimension) => (
+                        <ScoreCard
+                          key={dimension.key}
+                          dimension={dimension}
+                          score={draft.scores[dimension.key]}
+                          evidenceTurns={draft.evidenceTurns[dimension.key]}
+                          justification={draft.justifications[dimension.key]}
+                          onScoreChange={(score) => updateScore(dimension.key, score)}
+                          onEvidenceChange={(value) => updateEvidenceTurns(dimension.key, value)}
+                          onJustificationChange={(value) => updateJustification(dimension.key, value)}
+                        />
+                      ))}
+                    </section>
+                  ))}
 
-                <section className="rubric-section participant-response-section">
-                  <div className="rubric-section-heading">
-                    <p className="eyebrow">3. Participant response</p>
-                    <span>A participant may display several different or apparently contradictory responses.</span>
-                  </div>
-                  <ParticipantResponseCard
-                    responses={draft.participantResponses}
-                    other={draft.participantResponseOther}
-                    onChange={updateParticipantResponse}
-                    onOtherChange={(value) => updateDraftField("participantResponseOther", value)}
-                  />
-                </section>
-
-                <section className="rubric-section episode-ending-section">
-                  <div className="rubric-section-heading">
-                    <p className="eyebrow">4. Episode ending</p>
-                    <span>Judge only how the bounded module episode shown here ended.</span>
-                  </div>
-                  <EpisodeEndingCard value={draft.episodeEnding} onChange={updateEpisodeEnding} />
-                  {stoppingFactorsApply(draft) && (
-                    <StoppingFactorsCard
-                      factors={draft.stoppingFactors}
-                      evidenceTurns={draft.stoppingFactorsEvidenceTurns}
-                      explanation={draft.stoppingFactorsExplanation}
-                      onFactorChange={updateStoppingFactor}
-                      onEvidenceTurnsChange={(value) => updateDraftField("stoppingFactorsEvidenceTurns", value)}
-                      onExplanationChange={(value) => updateDraftField("stoppingFactorsExplanation", value)}
+                  <section className="rubric-section critical-section">
+                    <div className="rubric-section-heading">
+                      <p className="eyebrow">A.3 Critical-failure screening</p>
+                      <span>Screen once, then identify every applicable failure only when the answer is Yes.</span>
+                    </div>
+                    <CriticalFailureCard
+                      observed={draft.criticalFailureObserved}
+                      flags={draft.criticalFlags}
+                      evidence={draft.criticalEvidence}
+                      evidenceTurns={draft.criticalEvidenceTurns}
+                      onObservedChange={updateCriticalFailureObserved}
+                      onFlagChange={updateCriticalFlag}
+                      onEvidenceChange={updateCriticalEvidence}
+                      onEvidenceTurnsChange={updateCriticalEvidenceTurns}
                     />
-                  )}
+                  </section>
+
+                  <section className="rubric-section gender-context-section">
+                    <div className="rubric-section-heading">
+                      <p className="eyebrow">A.4 Gender-related context</p>
+                      <span>Record whether gender context arose and how Najah handled it.</span>
+                    </div>
+                    <GenderContextCard
+                      value={draft.genderContextHandling}
+                      onChange={(value) => updateDraftField("genderContextHandling", value)}
+                    />
+                  </section>
+
+                  <section className="rubric-section qualitative-section">
+                    <div className="rubric-section-heading">
+                      <p className="eyebrow">A.5 Optional qualitative reflections</p>
+                      <span>These responses support process evaluation and are not included in the numerical quality score.</span>
+                    </div>
+                    <label className="form-field comments-field">
+                      <span>What, if anything, was the most useful thing Najah did in this episode? <small>optional</small></span>
+                      <textarea value={draft.mostUsefulThing} onChange={(event) => updateDraftField("mostUsefulThing", event.target.value)} rows={3} />
+                    </label>
+                    <label className="form-field comments-field">
+                      <span>What is one thing Najah could have done or said differently to improve this episode? <small>optional</small></span>
+                      <textarea value={draft.suggestedImprovement} onChange={(event) => updateDraftField("suggestedImprovement", event.target.value)} rows={3} />
+                    </label>
+                  </section>
                 </section>
 
-                <section className="rubric-section critical-section">
-                  <div className="rubric-section-heading">
-                    <p className="eyebrow">5. Critical-failure screening</p>
-                    <span>Screen once, then identify every applicable failure only when the answer is Yes.</span>
-                  </div>
-                  <CriticalFailureCard
-                    observed={draft.criticalFailureObserved}
-                    flags={draft.criticalFlags}
-                    evidence={draft.criticalEvidence}
-                    evidenceTurns={draft.criticalEvidenceTurns}
-                    onObservedChange={updateCriticalFailureObserved}
-                    onFlagChange={updateCriticalFlag}
-                    onEvidenceChange={updateCriticalEvidence}
-                    onEvidenceTurnsChange={updateCriticalEvidenceTurns}
-                  />
+                <section className="evaluation-partition participant-partition" aria-labelledby="participant-response-heading">
+                  <header className="evaluation-partition-header">
+                    <span className="evaluation-partition-letter" aria-hidden="true">B</span>
+                    <div>
+                      <p className="eyebrow">Observe the participant</p>
+                      <h3 id="participant-response-heading">Participant response</h3>
+                      <p>Record the participant’s observable responses during the module episode.</p>
+                    </div>
+                  </header>
+
+                  <section className="rubric-section participant-response-section">
+                    <div className="rubric-section-heading">
+                      <p className="eyebrow">B.1 Participant response</p>
+                      <span>A participant may display several different or apparently contradictory responses.</span>
+                    </div>
+                    <ParticipantResponseCard
+                      responses={draft.participantResponses}
+                      other={draft.participantResponseOther}
+                      onChange={updateParticipantResponse}
+                      onOtherChange={(value) => updateDraftField("participantResponseOther", value)}
+                    />
+                  </section>
                 </section>
 
-                <section className="rubric-section gender-context-section">
-                  <div className="rubric-section-heading">
-                    <p className="eyebrow">6. Gender-related context</p>
-                    <span>Record whether gender context arose and how Najah handled it.</span>
-                  </div>
-                  <GenderContextCard
-                    value={draft.genderContextHandling}
-                    onChange={(value) => updateDraftField("genderContextHandling", value)}
-                  />
-                </section>
+                <section className="evaluation-partition outcome-partition" aria-labelledby="module-outcome-heading">
+                  <header className="evaluation-partition-header">
+                    <span className="evaluation-partition-letter" aria-hidden="true">C</span>
+                    <div>
+                      <p className="eyebrow">Record the outcome</p>
+                      <h3 id="module-outcome-heading">Module-episode outcome</h3>
+                      <p>Describe what happened to the module task and how the available episode ended.</p>
+                    </div>
+                  </header>
 
-                <section className="rubric-section qualitative-section">
-                  <div className="rubric-section-heading">
-                    <p className="eyebrow">7. Optional qualitative reflections</p>
-                    <span>These responses support process evaluation and are not included in the numerical quality score.</span>
-                  </div>
-                  <label className="form-field comments-field">
-                    <span>What, if anything, was the most useful thing Najah did in this episode? <small>optional</small></span>
-                    <textarea value={draft.mostUsefulThing} onChange={(event) => updateDraftField("mostUsefulThing", event.target.value)} rows={3} />
-                  </label>
-                  <label className="form-field comments-field">
-                    <span>What is one thing Najah could have done or said differently to improve this episode? <small>optional</small></span>
-                    <textarea value={draft.suggestedImprovement} onChange={(event) => updateDraftField("suggestedImprovement", event.target.value)} rows={3} />
-                  </label>
+                  <section className="rubric-section episode-ending-section">
+                    <div className="rubric-section-heading">
+                      <p className="eyebrow">C.1 Task outcome</p>
+                      <span>Record the completion outcome separately from the task-effectiveness quality score.</span>
+                    </div>
+                    <TaskStatusCard
+                      status={draft.taskStatus}
+                      onStatusChange={updateTaskStatus}
+                    />
+                  </section>
+
+                  <section className="rubric-section episode-ending-section">
+                    <div className="rubric-section-heading">
+                      <p className="eyebrow">C.2 Episode ending</p>
+                      <span>Judge only how the bounded module episode shown here ended.</span>
+                    </div>
+                    <EpisodeEndingCard value={draft.episodeEnding} onChange={updateEpisodeEnding} />
+                    {stoppingFactorsApply(draft) && (
+                      <StoppingFactorsCard
+                        factors={draft.stoppingFactors}
+                        evidenceTurns={draft.stoppingFactorsEvidenceTurns}
+                        explanation={draft.stoppingFactorsExplanation}
+                        onFactorChange={updateStoppingFactor}
+                        onEvidenceTurnsChange={(value) => updateDraftField("stoppingFactorsEvidenceTurns", value)}
+                        onExplanationChange={(value) => updateDraftField("stoppingFactorsExplanation", value)}
+                      />
+                    )}
+                  </section>
                 </section>
 
                 <label className="form-field comments-field">
