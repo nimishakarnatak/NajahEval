@@ -2807,7 +2807,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <section className="rubric-section episode-ending-section">
                     <div className="rubric-section-heading">
                       <p className="eyebrow">C.1 Task outcome</p>
-                      <span>Record the completion outcome separately from the task-effectiveness quality score.</span>
+                      <span><strong>How far did the participant get with the module task?</strong></span>
                     </div>
                     <TaskStatusCard
                       status={draft.taskStatus}
@@ -2818,7 +2818,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <section className="rubric-section episode-ending-section">
                     <div className="rubric-section-heading">
                       <p className="eyebrow">C.2 Episode ending</p>
-                      <span>Judge only how the bounded module episode shown here ended.</span>
+                      <span><strong>What observable event caused the available module episode to stop?</strong></span>
                     </div>
                     <EpisodeEndingCard value={draft.episodeEnding} onChange={updateEpisodeEnding} />
                     {stoppingFactorsApply(draft) && (
