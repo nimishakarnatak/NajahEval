@@ -211,7 +211,6 @@ export async function getAdminProgress(): Promise<AdminProgress> {
         ra.participant_behaviours_json AS "participantBehavioursJson",
         ra.participant_reactions_json AS "participantReactionsJson",
         ra.module_episode_ending AS "episodeEnding",
-        ra.stopping_factors_json AS "stoppingFactorsJson",
         ra.gender_context_handling AS "genderContextHandling",
         ra.critical_failure_observed AS "criticalFailureObserved",
         ra.critical_flags_json AS "criticalFlagsJson"

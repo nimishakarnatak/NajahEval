@@ -149,14 +149,6 @@ function validGenderContext(value: unknown): value is GenderContextHandling | ""
   return value === "" || GENDER_CONTEXT_OPTIONS.some((option) => option.value === value);
 }
 
-/** Whether conditional pre-stopping factors apply to this record. */
-function stoppingFactorsApply(taskStatus: TaskStatus | "", episodeEnding: EpisodeEnding | ""): boolean {
-  return taskStatus === "not_meaningfully_started" ||
-    taskStatus === "in_progress_no_output" ||
-    taskStatus === "output_delivered_confirmation_not_observed" ||
-    episodeEnding === "no_further_participant_reply";
-}
-
 /**
  * Normalizes a browser payload into complete keyed objects before validation or
  * storage. Trimming here keeps the database and CSV exports analysis-ready.
@@ -375,15 +367,9 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
         )
       : "",
     episodeEnding: payload.episodeEnding ?? "",
-    stoppingFactors: stoppingFactorsApply(payload.taskStatus ?? "", payload.episodeEnding ?? "")
-      ? stoppingFactors
-      : keyedRecord(STOPPING_FACTOR_KEYS, () => false),
-    stoppingFactorsEvidenceTurns: stoppingFactorsApply(payload.taskStatus ?? "", payload.episodeEnding ?? "")
-      ? payload.stoppingFactorsEvidenceTurns?.trim() ?? ""
-      : "",
-    stoppingFactorsExplanation: stoppingFactorsApply(payload.taskStatus ?? "", payload.episodeEnding ?? "")
-      ? payload.stoppingFactorsExplanation?.trim() ?? ""
-      : "",
+    stoppingFactors,
+    stoppingFactorsEvidenceTurns: payload.stoppingFactorsEvidenceTurns?.trim() ?? "",
+    stoppingFactorsExplanation: payload.stoppingFactorsExplanation?.trim() ?? "",
     genderContextHandling: payload.genderContextHandling ?? "",
     mostUsefulThing: payload.mostUsefulThing?.trim() ?? "",
     suggestedImprovement: payload.suggestedImprovement?.trim() ?? "",
@@ -421,17 +407,6 @@ function completionError(annotation: NormalizedAnnotation): string | null {
   }
   if (!annotation.episodeEnding) {
     return "Select how the available module episode ended.";
-  }
-  if (stoppingFactorsApply(annotation.taskStatus, annotation.episodeEnding)) {
-    if (!STOPPING_FACTOR_KEYS.some((key) => annotation.stoppingFactors[key])) {
-      return "Select at least one factor visible immediately before the episode stopped.";
-    }
-    if (!annotation.stoppingFactorsEvidenceTurns) {
-      return "Provide the evidence turn number(s) for the stopping factor(s).";
-    }
-    if (!annotation.stoppingFactorsExplanation) {
-      return "Briefly explain the stopping factor(s).";
-    }
   }
   if (!annotation.criticalFailureObserved) {
     return "Select whether any critical failure was observed.";

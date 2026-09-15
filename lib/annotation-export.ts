@@ -4,7 +4,6 @@ import {
   PARTICIPANT_BEHAVIOURS,
   PARTICIPANT_REACTIONS,
   RUBRIC_DIMENSIONS,
-  STOPPING_FACTORS,
 } from "@/lib/rubric";
 import { primaryCohortForOrder } from "@/lib/study-assignments";
 
@@ -27,8 +26,6 @@ export type ExportAnnotationRow = {
   participantSamplingProbability: number | string | null;
   focalEpisodeSelectionProbability: number | string | null;
   combinedEpisodeInclusionProbability: number | string | null;
-  activityGroupValidationStatus: string;
-  privacyReviewStatus: string;
   module: string;
   treatment: string;
   language: string;
@@ -44,9 +41,6 @@ export type ExportAnnotationRow = {
   participantReactionEvidenceTurnsJson: string;
   participantReactionOther: string;
   episodeEnding: string;
-  stoppingFactorsJson: string;
-  stoppingFactorsEvidenceTurns: string;
-  stoppingFactorsExplanation: string;
   genderContextHandling: string;
   mostUsefulThing: string;
   suggestedImprovement: string;
@@ -74,6 +68,49 @@ function keyedValues(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/**
+ * Keep earlier task-outcome answers usable without exposing an ambiguous
+ * `legacy_episode_end_reason` column in analysis exports.
+ */
+function exportedTaskOutcome(row: ExportAnnotationRow): string {
+  if (row.taskStatus) return row.taskStatus;
+
+  if (row.legacyEpisodeEndReason === "output_delivered_unconfirmed") {
+    return "output_delivered_confirmation_not_observed";
+  }
+  if (row.legacyEpisodeEndReason === "task_completed") {
+    return "task_completed_under_previous_rubric";
+  }
+  if (row.legacyEpisodeEndReason === "cannot_determine") {
+    return "cannot_determine";
+  }
+  return "";
+}
+
+/**
+ * Return the current episode-ending answer, with a conservative fallback for
+ * earlier fields that described an observable ending rather than task status.
+ */
+function exportedEpisodeEnding(row: ExportAnnotationRow): string {
+  if (row.episodeEnding) return row.episodeEnding;
+
+  const previousAnswer = row.taskIncompleteReason || row.legacyEpisodeEndReason;
+  const endingMap: Record<string, string> = {
+    no_further_participant_reply_observed: "no_further_participant_reply",
+    no_further_najah_reply_observed: "no_further_najah_reply",
+    participant_moved_module: "participant_moved_module",
+    technical_failure: "technical_failure",
+    other_or_unclear: "no_clear_boundary",
+    no_further_participant_reply: "no_further_participant_reply",
+    no_further_najah_reply: "no_further_najah_reply",
+    system_or_technical_failure: "technical_failure",
+    output_delivered_unconfirmed: "intended_output_delivered",
+    task_completed: "intended_output_delivered",
+    cannot_determine: "cannot_determine",
+  };
+  return endingMap[previousAnswer] ?? "";
 }
 
 /**
@@ -111,38 +148,25 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     "participant_sampling_probability",
     "focal_episode_selection_probability",
     "combined_episode_inclusion_probability",
-    "activity_group_validation_status",
-    "privacy_review_status",
     "module",
     "treatment",
     "language",
     "annotation_status",
-    "task_status",
-    "legacy_task_incomplete_reason",
-    ...PARTICIPANT_BEHAVIOURS.flatMap((behaviour) => [
-      `participant_behaviour_${behaviour.key}`,
-      `participant_behaviour_${behaviour.key}_message_turns`,
-    ]),
+    "task_outcome",
+    ...PARTICIPANT_BEHAVIOURS.map((behaviour) => `participant_behaviour_${behaviour.key}`),
     "participant_behaviour_other",
-    ...PARTICIPANT_REACTIONS.flatMap((reaction) => [
-      `participant_reaction_${reaction.key}`,
-      `participant_reaction_${reaction.key}_message_turns`,
-    ]),
+    ...PARTICIPANT_REACTIONS.map((reaction) => `participant_reaction_${reaction.key}`),
     "participant_reaction_other",
-    "module_episode_ending",
-    ...STOPPING_FACTORS.map((factor) => `stopping_factor_${factor.key}`),
-    "stopping_factors_evidence_turns",
-    "stopping_factors_explanation",
+    "episode_ending",
     "gender_context_handling",
     "most_useful_thing",
     "suggested_improvement",
     "skip_reason",
-    "legacy_episode_end_reason",
     "critical_failure_observed",
     ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
       `${dimension.key}_score`,
       `${dimension.key}_evidence_turns`,
-      `${dimension.key}_justification`,
+      ...(dimension.key === "routing" ? ["routing_na_reason"] : []),
     ]),
     ...CRITICAL_FLAGS.flatMap((flag) => [
       `${flag.key}_flag`,
@@ -162,9 +186,7 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     const criticalEvidence = keyedValues(row.criticalEvidenceJson);
     const criticalEvidenceTurns = keyedValues(row.criticalEvidenceTurnsJson);
     const participantBehaviours = keyedValues(row.participantBehavioursJson);
-    const participantBehaviourEvidenceTurns = keyedValues(row.participantBehaviourEvidenceTurnsJson);
     const participantReactions = keyedValues(row.participantReactionsJson);
-    const participantReactionEvidenceTurns = keyedValues(row.participantReactionEvidenceTurnsJson);
     const legacyParticipantResponses = keyedValues(row.participantResponsesJson);
     let participantBehaviourOther = row.participantBehaviourOther;
     let participantReactionOther = row.participantReactionOther;
@@ -198,8 +220,6 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
         participantReactions.noExplicitReaction = true;
       }
     }
-    const stoppingFactors = keyedValues(row.stoppingFactorsJson);
-
     return [
       row.raterId,
       row.raterName,
@@ -220,38 +240,25 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
       row.participantSamplingProbability,
       row.focalEpisodeSelectionProbability,
       row.combinedEpisodeInclusionProbability,
-      row.activityGroupValidationStatus,
-      row.privacyReviewStatus,
       row.module,
       treatmentLabel(row.treatment),
       row.language,
       row.status,
-      row.taskStatus,
-      row.taskIncompleteReason,
-      ...PARTICIPANT_BEHAVIOURS.flatMap((behaviour) => [
-        participantBehaviours[behaviour.key],
-        participantBehaviourEvidenceTurns[behaviour.key],
-      ]),
+      exportedTaskOutcome(row),
+      ...PARTICIPANT_BEHAVIOURS.map((behaviour) => participantBehaviours[behaviour.key]),
       participantBehaviourOther,
-      ...PARTICIPANT_REACTIONS.flatMap((reaction) => [
-        participantReactions[reaction.key],
-        participantReactionEvidenceTurns[reaction.key],
-      ]),
+      ...PARTICIPANT_REACTIONS.map((reaction) => participantReactions[reaction.key]),
       participantReactionOther,
-      row.episodeEnding,
-      ...STOPPING_FACTORS.map((factor) => stoppingFactors[factor.key]),
-      row.stoppingFactorsEvidenceTurns,
-      row.stoppingFactorsExplanation,
+      exportedEpisodeEnding(row),
       row.genderContextHandling,
       row.mostUsefulThing,
       row.suggestedImprovement,
       row.skipReason,
-      row.legacyEpisodeEndReason,
       row.criticalFailureObserved,
       ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
         scores[dimension.key],
         evidenceTurns[dimension.key],
-        justifications[dimension.key],
+        ...(dimension.key === "routing" ? [justifications.routing] : []),
       ]),
       ...CRITICAL_FLAGS.flatMap((flag) => [
         criticalFlags[flag.key],

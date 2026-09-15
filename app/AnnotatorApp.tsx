@@ -31,7 +31,6 @@ import {
   RUBRIC_DIMENSIONS,
   RubricDimension,
   RubricSection,
-  STOPPING_FACTORS,
   STOPPING_FACTOR_KEYS,
   StoppingFactorKey,
   TASK_STATUSES,
@@ -190,16 +189,6 @@ function emptyDraft(): AnnotationDraft {
   };
 }
 
-/** Whether the revised instrument asks about visible factors before stopping. */
-function stoppingFactorsApply(draft: AnnotationDraft): boolean {
-  return (
-    draft.taskStatus === "not_meaningfully_started" ||
-    draft.taskStatus === "in_progress_no_output" ||
-    draft.taskStatus === "output_delivered_confirmation_not_observed" ||
-    draft.episodeEnding === "no_further_participant_reply"
-  );
-}
-
 /**
  * Finds the first requirement that prevents a draft from being submitted.
  *
@@ -251,21 +240,6 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
   }
   if (!draft.episodeEnding) {
     return { message: "Select how the available module episode ended.", targetId: "episode-ending" };
-  }
-  if (stoppingFactorsApply(draft) && !STOPPING_FACTOR_KEYS.some((key) => draft.stoppingFactors[key])) {
-    return {
-      message: "Select at least one factor visible immediately before the episode stopped.",
-      targetId: "stopping-factors",
-    };
-  }
-  const selectedStoppingFactor = STOPPING_FACTOR_KEYS.some((key) => draft.stoppingFactors[key]);
-  if (stoppingFactorsApply(draft) && selectedStoppingFactor) {
-    if (!draft.stoppingFactorsEvidenceTurns.trim()) {
-      return { message: "Provide the evidence turn number(s) for the stopping factor(s).", targetId: "stopping-evidence-turns" };
-    }
-    if (!draft.stoppingFactorsExplanation.trim()) {
-      return { message: "Briefly explain the stopping factor(s).", targetId: "stopping-explanation" };
-    }
   }
   if (!draft.criticalFailureObserved) {
     return {
@@ -457,8 +431,9 @@ function translationChunks(text: string, maximumLength = 3200): string[] {
 
 /**
  * Renders one anchored dimension and its optional evidence-turn reference.
- * Routine score justifications are intentionally omitted to keep rating fast;
- * written explanations are reserved for skips and selected critical failures.
+ * Routine score justifications are intentionally omitted to keep rating fast.
+ * The only optional score note is a routing-specific explanation when N/A is
+ * selected, matching the locked fielding instrument.
  */
 function ScoreCard({
   dimension,
@@ -545,16 +520,14 @@ function ScoreCard({
         </label>
       )}
 
-      {hasSelectedScore && (
+      {dimension.key === "routing" && isNotApplicable && hasSelectedScore && (
         <label className="evidence-field">
-          <span>
-            {isNotApplicable ? "Why this cannot be assessed" : `Justification for score ${score}`} <small>optional</small>
-          </span>
+          <span>Why this cannot be assessed <small>optional</small></span>
           <textarea
             id={`justification-${dimension.key}`}
             value={justification}
             onChange={(event) => onJustificationChange(event.target.value)}
-            placeholder={isNotApplicable ? "Optionally explain why this dimension cannot be assessed." : "Optionally explain the evidence supporting this score."}
+            placeholder="Optionally explain why routing cannot be assessed."
             rows={3}
           />
         </label>
@@ -612,17 +585,13 @@ const PARTICIPANT_BEHAVIOUR_GROUPS: readonly ParticipantBehaviourGroup[] = [
 /** Multi-select coding of what the participant observably did in the episode. */
 function ParticipantBehaviourCard({
   behaviours,
-  evidenceTurns,
   other,
   onChange,
-  onEvidenceTurnsChange,
   onOtherChange,
 }: {
   behaviours: Record<ParticipantBehaviourKey, boolean>;
-  evidenceTurns: Record<ParticipantBehaviourKey, string>;
   other: string;
   onChange: (key: ParticipantBehaviourKey, selected: boolean) => void;
-  onEvidenceTurnsChange: (key: ParticipantBehaviourKey, value: string) => void;
   onOtherChange: (value: string) => void;
 }) {
   return (
@@ -650,16 +619,6 @@ function ParticipantBehaviourCard({
                     <p>{option.definition}</p>
                     {option.example && <p><strong>Illustrative example:</strong> “{option.example}”</p>}
                   </details>
-                  {selected && option.key !== "noClearBehaviouralResponse" && option.key !== "cannotDetermine" && (
-                    <label className="participant-turn-field">
-                      <span>Participant message turn number(s) <small>optional</small></span>
-                      <input
-                        value={evidenceTurns[option.key]}
-                        onChange={(event) => onEvidenceTurnsChange(option.key, event.target.value)}
-                        placeholder="e.g. 004, 008–010"
-                      />
-                    </label>
-                  )}
                 </div>
               );
             })}
@@ -684,17 +643,13 @@ function ParticipantBehaviourCard({
 /** Multi-select coding of reactions explicitly expressed by the participant. */
 function ParticipantReactionCard({
   reactions,
-  evidenceTurns,
   other,
   onChange,
-  onEvidenceTurnsChange,
   onOtherChange,
 }: {
   reactions: Record<ParticipantReactionKey, boolean>;
-  evidenceTurns: Record<ParticipantReactionKey, string>;
   other: string;
   onChange: (key: ParticipantReactionKey, selected: boolean) => void;
-  onEvidenceTurnsChange: (key: ParticipantReactionKey, value: string) => void;
   onOtherChange: (value: string) => void;
 }) {
   return (
@@ -719,16 +674,6 @@ function ParticipantReactionCard({
                 <p>{option.definition}</p>
                 {option.example && <p><strong>Illustrative example:</strong> “{option.example}”</p>}
               </details>
-              {selected && option.key !== "noExplicitReaction" && option.key !== "cannotDetermine" && (
-                <label className="participant-turn-field">
-                  <span>Participant message turn number(s) <small>optional</small></span>
-                  <input
-                    value={evidenceTurns[option.key]}
-                    onChange={(event) => onEvidenceTurnsChange(option.key, event.target.value)}
-                    placeholder="e.g. 004, 008–010"
-                  />
-                </label>
-              )}
             </div>
           );
         })}
@@ -777,55 +722,6 @@ function EpisodeEndingCard({
           </label>
         ))}
       </div>
-    </fieldset>
-  );
-}
-
-/** Conditional multi-select of factors visible immediately before stopping. */
-function StoppingFactorsCard({
-  factors,
-  evidenceTurns,
-  explanation,
-  onFactorChange,
-  onEvidenceTurnsChange,
-  onExplanationChange,
-}: {
-  factors: Record<StoppingFactorKey, boolean>;
-  evidenceTurns: string;
-  explanation: string;
-  onFactorChange: (key: StoppingFactorKey, selected: boolean) => void;
-  onEvidenceTurnsChange: (value: string) => void;
-  onExplanationChange: (value: string) => void;
-}) {
-  const anySelected = STOPPING_FACTOR_KEYS.some((key) => factors[key]);
-  return (
-    <fieldset className="critical-category-card conditional-card" id="stopping-factors">
-      <legend>Which factors were visible immediately before the episode stopped?</legend>
-      <p>Select all that apply. These are associated factors, not proof of the participant’s reason for stopping.</p>
-      <div className="critical-flag-list compact-check-list">
-        {STOPPING_FACTORS.map((option) => (
-          <label key={option.key} className={`critical-checkbox-row${factors[option.key] ? " selected" : ""}`}>
-            <input
-              type="checkbox"
-              checked={factors[option.key]}
-              onChange={(event) => onFactorChange(option.key, event.target.checked)}
-            />
-            <span className="episode-option-copy"><strong>{option.label}</strong></span>
-          </label>
-        ))}
-      </div>
-      {anySelected && (
-        <div className="conditional-evidence-grid">
-          <label className="evidence-field">
-            <span>Evidence turn number(s) <strong>required</strong></span>
-            <input id="stopping-evidence-turns" value={evidenceTurns} onChange={(event) => onEvidenceTurnsChange(event.target.value)} placeholder="e.g. 018–021" />
-          </label>
-          <label className="evidence-field">
-            <span>Short explanation <strong>required</strong></span>
-            <textarea id="stopping-explanation" value={explanation} onChange={(event) => onExplanationChange(event.target.value)} rows={3} />
-          </label>
-        </div>
-      )}
     </fieldset>
   );
 }
@@ -1225,19 +1121,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     markDraftChanged();
   }
 
-  /** Records an optional participant-message turn reference for one behaviour. */
-  function updateParticipantBehaviourEvidenceTurns(key: ParticipantBehaviourKey, value: string) {
-    clearSubmissionFeedback();
-    setDraft((previous) => ({
-      ...previous,
-      participantBehaviourEvidenceTurns: {
-        ...previous.participantBehaviourEvidenceTurns,
-        [key]: value,
-      },
-    }));
-    markDraftChanged();
-  }
-
   /** Records explicit participant reactions, with mutually exclusive neutral options. */
   function updateParticipantReaction(key: ParticipantReactionKey, selected: boolean) {
     clearSubmissionFeedback();
@@ -1267,41 +1150,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     markDraftChanged();
   }
 
-  /** Records an optional participant-message turn reference for one reaction. */
-  function updateParticipantReactionEvidenceTurns(key: ParticipantReactionKey, value: string) {
-    clearSubmissionFeedback();
-    setDraft((previous) => ({
-      ...previous,
-      participantReactionEvidenceTurns: {
-        ...previous.participantReactionEvidenceTurns,
-        [key]: value,
-      },
-    }));
-    markDraftChanged();
-  }
-
   /** Records the primary observable boundary of the module episode. */
   function updateEpisodeEnding(value: EpisodeEnding) {
     clearSubmissionFeedback();
     setDraft((previous) => ({ ...previous, episodeEnding: value }));
-    markDraftChanged();
-  }
-
-  /** Records visible pre-stopping factors without inferring participant motivation. */
-  function updateStoppingFactor(key: StoppingFactorKey, selected: boolean) {
-    clearSubmissionFeedback();
-    setDraft((previous) => {
-      const exclusive = key === "noObservableProblem" || key === "cannotDetermine";
-      const factors = exclusive && selected
-        ? keyedRecord(STOPPING_FACTOR_KEYS, () => false)
-        : { ...previous.stoppingFactors };
-      if (!exclusive && selected) {
-        factors.noObservableProblem = false;
-        factors.cannotDetermine = false;
-      }
-      factors[key] = selected;
-      return { ...previous, stoppingFactors: factors };
-    });
     markDraftChanged();
   }
 
@@ -1936,31 +1788,21 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       "treatment",
       "language",
       "annotation_status",
-      "task_status",
-      ...PARTICIPANT_BEHAVIOURS.flatMap((behaviour) => [
-        `participant_behaviour_${behaviour.key}`,
-        `participant_behaviour_${behaviour.key}_message_turns`,
-      ]),
+      "task_outcome",
+      ...PARTICIPANT_BEHAVIOURS.map((behaviour) => `participant_behaviour_${behaviour.key}`),
       "participant_behaviour_other",
-      ...PARTICIPANT_REACTIONS.flatMap((reaction) => [
-        `participant_reaction_${reaction.key}`,
-        `participant_reaction_${reaction.key}_message_turns`,
-      ]),
+      ...PARTICIPANT_REACTIONS.map((reaction) => `participant_reaction_${reaction.key}`),
       "participant_reaction_other",
-      "module_episode_ending",
-      ...STOPPING_FACTORS.map((factor) => `stopping_factor_${factor.key}`),
-      "stopping_factors_evidence_turns",
-      "stopping_factors_explanation",
+      "episode_ending",
       "gender_context_handling",
       "most_useful_thing",
       "suggested_improvement",
       "skip_reason",
-      "legacy_episode_end_reason",
       "critical_failure_observed",
       ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
         `${dimension.key}_score`,
         `${dimension.key}_evidence_turns`,
-        `${dimension.key}_justification`,
+        ...(dimension.key === "routing" ? ["routing_na_reason"] : []),
       ]),
       ...CRITICAL_FLAGS.flatMap((flag) => [
         `${flag.key}_flag`,
@@ -1983,31 +1825,42 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         treatmentLabel(episode.treatment),
         episode.language,
         episode.annotationStatus,
-        episode.taskStatus,
-        ...PARTICIPANT_BEHAVIOURS.flatMap((behaviour) => [
-          episode.participantBehaviours[behaviour.key],
-          episode.participantBehaviourEvidenceTurns[behaviour.key],
-        ]),
+        episode.taskStatus ||
+          (episode.legacyEpisodeEndReason === "output_delivered_unconfirmed"
+            ? "output_delivered_confirmation_not_observed"
+            : episode.legacyEpisodeEndReason === "task_completed"
+              ? "task_completed_under_previous_rubric"
+              : episode.legacyEpisodeEndReason === "cannot_determine"
+                ? "cannot_determine"
+                : ""),
+        ...PARTICIPANT_BEHAVIOURS.map((behaviour) => episode.participantBehaviours[behaviour.key]),
         episode.participantBehaviourOther,
-        ...PARTICIPANT_REACTIONS.flatMap((reaction) => [
-          episode.participantReactions[reaction.key],
-          episode.participantReactionEvidenceTurns[reaction.key],
-        ]),
+        ...PARTICIPANT_REACTIONS.map((reaction) => episode.participantReactions[reaction.key]),
         episode.participantReactionOther,
-        episode.episodeEnding,
-        ...STOPPING_FACTORS.map((factor) => episode.stoppingFactors[factor.key]),
-        episode.stoppingFactorsEvidenceTurns,
-        episode.stoppingFactorsExplanation,
+        episode.episodeEnding ||
+          (episode.legacyEpisodeEndReason === "output_delivered_unconfirmed" ||
+          episode.legacyEpisodeEndReason === "task_completed"
+            ? "intended_output_delivered"
+            : episode.legacyEpisodeEndReason === "participant_moved_module"
+              ? "participant_moved_module"
+              : episode.legacyEpisodeEndReason === "no_further_participant_reply"
+                ? "no_further_participant_reply"
+                : episode.legacyEpisodeEndReason === "no_further_najah_reply"
+                  ? "no_further_najah_reply"
+                  : episode.legacyEpisodeEndReason === "system_or_technical_failure"
+                    ? "technical_failure"
+                    : episode.legacyEpisodeEndReason === "cannot_determine"
+                      ? "cannot_determine"
+                      : ""),
         episode.genderContextHandling,
         episode.mostUsefulThing,
         episode.suggestedImprovement,
         episode.skipReason,
-        episode.legacyEpisodeEndReason,
         episode.criticalFailureObserved,
         ...RUBRIC_DIMENSIONS.flatMap((dimension) => [
           episode.scores[dimension.key],
           episode.evidenceTurns[dimension.key],
-          episode.justifications[dimension.key],
+          ...(dimension.key === "routing" ? [episode.justifications.routing] : []),
         ]),
         ...CRITICAL_FLAGS.flatMap((flag) => [
           episode.criticalFlags[flag.key],
@@ -2670,7 +2523,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <span>1 · Material failure</span><span>2 · Partial / minor issue</span><span>3 · Meets anchor</span>
                 </div>
                 <p className="rubric-instruction">
-                  A score of 1, 2, 3, or N/A is required for every dimension. Routine evidence turn numbers and score justifications are optional. Evidence and a short explanation are required for selected stopping factors and critical failures; a reason is required when skipping. Use N/A only when the dimension genuinely cannot be assessed.
+                  A score of 1, 2, 3, or N/A is required for every dimension. Evidence turn numbers are optional for routine scores. Evidence and a short explanation are required for selected critical failures; a reason is required when skipping. Use N/A only when the dimension genuinely cannot be assessed.
                 </p>
 
                 <section className="evaluation-partition najah-performance-partition" aria-labelledby="najah-performance-heading">
@@ -2769,10 +2622,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     </div>
                     <ParticipantBehaviourCard
                       behaviours={draft.participantBehaviours}
-                      evidenceTurns={draft.participantBehaviourEvidenceTurns}
                       other={draft.participantBehaviourOther}
                       onChange={updateParticipantBehaviour}
-                      onEvidenceTurnsChange={updateParticipantBehaviourEvidenceTurns}
                       onOtherChange={(value) => updateDraftField("participantBehaviourOther", value)}
                     />
                   </section>
@@ -2784,10 +2635,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     </div>
                     <ParticipantReactionCard
                       reactions={draft.participantReactions}
-                      evidenceTurns={draft.participantReactionEvidenceTurns}
                       other={draft.participantReactionOther}
                       onChange={updateParticipantReaction}
-                      onEvidenceTurnsChange={updateParticipantReactionEvidenceTurns}
                       onOtherChange={(value) => updateDraftField("participantReactionOther", value)}
                     />
                   </section>
@@ -2818,16 +2667,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                       <p className="eyebrow">C.2 Episode ending</p>
                     </div>
                     <EpisodeEndingCard value={draft.episodeEnding} onChange={updateEpisodeEnding} />
-                    {stoppingFactorsApply(draft) && (
-                      <StoppingFactorsCard
-                        factors={draft.stoppingFactors}
-                        evidenceTurns={draft.stoppingFactorsEvidenceTurns}
-                        explanation={draft.stoppingFactorsExplanation}
-                        onFactorChange={updateStoppingFactor}
-                        onEvidenceTurnsChange={(value) => updateDraftField("stoppingFactorsEvidenceTurns", value)}
-                        onExplanationChange={(value) => updateDraftField("stoppingFactorsExplanation", value)}
-                      />
-                    )}
                   </section>
                 </section>
 

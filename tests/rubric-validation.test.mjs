@@ -119,7 +119,8 @@ test("keeps routine score notes optional and validates the revised categorical q
   assert.match(route, /Select at least one explicitly expressed participant reaction/);
   assert.match(route, /Select how the available module episode ended/);
   assert.match(route, /Select how gender-related context was handled/);
-  assert.match(route, /Provide the evidence turn number\(s\) for the stopping factor/);
+  assert.doesNotMatch(route, /Provide the evidence turn number\(s\) for the stopping factor/);
+  assert.doesNotMatch(route, /Select at least one factor visible immediately before/);
   assert.doesNotMatch(route, /received a score of/);
   assert.doesNotMatch(route, /genuinely cannot be assessed/);
   assert.match(route, /Select whether any critical failure was observed/);

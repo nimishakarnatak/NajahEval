@@ -96,7 +96,8 @@ test("ships a versioned Postgres schema and traces the bundled dataset", async (
   assert.match(exportsRoute, /e\.import_batch = \?/);
   assert.match(exportsRoute, /e\.participant_gender/);
   assert.match(exportsRoute, /e\.activity_group/);
-  assert.match(exportsRoute, /e\.privacy_review_status/);
+  assert.doesNotMatch(exportsRoute, /activity_group_validation_status|activityGroupValidationStatus/);
+  assert.doesNotMatch(exportsRoute, /privacy_review_status|privacyReviewStatus/);
 });
 
 test("ships a durable password-reset token migration", async () => {

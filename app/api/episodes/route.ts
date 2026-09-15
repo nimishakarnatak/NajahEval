@@ -176,7 +176,6 @@ export async function GET(request: Request) {
               OR COUNT(DISTINCT primary_rating.participant_behaviours_json) > 1
               OR COUNT(DISTINCT primary_rating.participant_reactions_json) > 1
               OR COUNT(DISTINCT primary_rating.module_episode_ending) > 1
-              OR COUNT(DISTINCT primary_rating.stopping_factors_json) > 1
               OR COUNT(DISTINCT primary_rating.gender_context_handling) > 1
               OR COUNT(DISTINCT primary_rating.critical_failure_observed) > 1
               OR COUNT(DISTINCT primary_rating.critical_flags_json) > 1

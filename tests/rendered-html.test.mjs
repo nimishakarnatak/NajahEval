@@ -252,12 +252,12 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(rubric, /Other serious failure/);
   assert.doesNotMatch(component, /A written justification is required for every score/);
   assert.match(component, /A score of 1, 2, 3, or N\/A is required for every dimension/);
-  assert.match(component, /Routine evidence turn numbers and score justifications are optional/);
+  assert.match(component, /Evidence turn numbers are optional for routine scores/);
   assert.match(component, /How far did the participant get with the module task\?/);
   assert.match(component, /How did the participant respond to Najah during this module episode/);
   assert.match(component, /What reactions did the participant explicitly express during this module episode/);
   assert.match(component, /How did the available module episode end/);
-  assert.match(component, /Which factors were visible immediately before the episode stopped/);
+  assert.doesNotMatch(component, /Which factors were visible immediately before the episode stopped/);
   assert.match(component, /How was gender-related context handled/);
   assert.match(component, /most useful thing Najah did/);
   assert.match(component, /done or said differently/);
@@ -280,7 +280,7 @@ test("separates task outcome, participant response, and episode ending", async (
     readFile(rubricPath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(rubric, /najah-evidence-v12/);
+  assert.match(rubric, /najah-evidence-v13/);
   assert.match(rubric, /Outcome delivered; participant confirmation observed/);
   assert.match(rubric, /Participant moved to another module/);
   assert.match(rubric, /No subsequent Najah response was observed/);
@@ -288,9 +288,12 @@ test("separates task outcome, participant response, and episode ending", async (
   assert.match(rubric, /Whole module-episode/);
   assert.match(component, /Assess the quality of Najah’s responses in this episode/);
   assert.match(component, /Give one score per dimension for the complete module episode/);
-  assert.match(component, /stoppingFactorsApply/);
+  assert.doesNotMatch(component, /stoppingFactorsApply/);
+  assert.doesNotMatch(component, /<StoppingFactorsCard/);
   assert.match(component, /Select options supported by the participant/);
-  assert.match(component, /Participant message turn number\(s\)/);
+  assert.doesNotMatch(component, /Participant message turn number\(s\)/);
+  assert.doesNotMatch(component, /Justification for score/);
+  assert.match(component, /Why this cannot be assessed/);
   assert.match(styles, /\.episode-end-options label \{[^}]*grid-template-columns: 16px minmax\(0, 1fr\)/);
   assert.match(styles, /\.episode-end-options input \{[^}]*width: 16px; height: 16px/);
 });
@@ -307,7 +310,7 @@ test("keeps submission validation visible and reveals the first incomplete field
   assert.match(component, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
   assert.match(component, /id=\{`evidence-\$\{dimension\.key\}`\}/);
   assert.match(component, /id=\{`justification-\$\{dimension\.key\}`\}/);
-  assert.match(component, /Optionally explain the evidence supporting this score/);
+  assert.match(component, /Optionally explain why routing cannot be assessed/);
   assert.match(component, /id="task-status"/);
   assert.match(component, /id="participant-behaviour"/);
   assert.match(component, /id="participant-reaction"/);

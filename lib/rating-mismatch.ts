@@ -14,7 +14,6 @@ export type ComparablePrimaryRating = {
   participantBehavioursJson: string;
   participantReactionsJson: string;
   episodeEnding: string;
-  stoppingFactorsJson: string;
   genderContextHandling: string;
   criticalFailureObserved: string;
   criticalFlagsJson: string;
@@ -78,7 +77,6 @@ export function summarizePrimaryMismatch(
       participantBehaviours = { legacy: parseObject(rating.participantResponsesJson) };
       participantReactions = {};
     }
-    const stoppingFactors = parseObject(rating.stoppingFactorsJson);
     return {
       scores: Object.fromEntries(
         DIMENSION_KEYS.map((key) => [key, scoreValue(scores[key])]),
@@ -91,7 +89,6 @@ export function summarizePrimaryMismatch(
       participantBehaviours,
       participantReactions,
       episodeEnding: rating.episodeEnding || "",
-      stoppingFactors,
       genderContextHandling: rating.genderContextHandling || "",
       criticalFailureObserved:
         rating.criticalFailureObserved as CriticalFailureObserved | "",
@@ -107,8 +104,6 @@ export function summarizePrimaryMismatch(
   const participantResponseMismatch =
     JSON.stringify(left.participantBehaviours) !== JSON.stringify(right.participantBehaviours) ||
     JSON.stringify(left.participantReactions) !== JSON.stringify(right.participantReactions);
-  const stoppingFactorMismatch =
-    JSON.stringify(left.stoppingFactors) !== JSON.stringify(right.stoppingFactors);
   const criticalMismatch =
     left.criticalFailureObserved !== right.criticalFailureObserved ||
     CRITICAL_FLAG_KEYS.some((key) => left.flags[key] !== right.flags[key]);
@@ -125,7 +120,7 @@ export function summarizePrimaryMismatch(
 
   return {
     ratingCount: ratings.length,
-    mismatch: scoreMismatch || taskMismatch || participantResponseMismatch || stoppingFactorMismatch || criticalMismatch,
+    mismatch: scoreMismatch || taskMismatch || participantResponseMismatch || criticalMismatch,
     seriousMismatch: seriousScoreMismatch || taskMismatch || criticalMismatch,
   };
 }
