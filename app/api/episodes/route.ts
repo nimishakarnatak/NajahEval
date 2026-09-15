@@ -6,10 +6,6 @@ import {
 import { normalizeStudentStatus, normalizeTreatment } from "@/lib/episode-dimensions";
 import { resolveEpisodeLanguage } from "@/lib/language";
 import {
-  REQUIRED_JUDGE_RATINGS_PER_EPISODE,
-  REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
-} from "@/lib/rating-policy";
-import {
   CRITICAL_FLAG_KEYS,
   DIMENSION_KEYS,
   CriticalFailureObserved,
@@ -18,6 +14,7 @@ import {
   keyedRecord,
 } from "@/lib/rubric";
 import { getRaterIdentity } from "@/lib/server-auth";
+import { requiredRatingsForAssignment } from "@/lib/server-assignment-requirements";
 import {
   isJudgeCohort,
   isPrimaryCohort,
@@ -104,9 +101,7 @@ export async function GET(request: Request) {
   await ensureBundledDataset(db);
   const assignment = rater.assignmentCohort;
   const reviewLayer = reviewLayerForAccount(rater.role, assignment);
-  const requiredRatingsPerEpisode = isJudgeCohort(assignment)
-    ? REQUIRED_JUDGE_RATINGS_PER_EPISODE
-    : REQUIRED_PRIMARY_RATINGS_PER_EPISODE;
+  const requiredRatingsPerEpisode = await requiredRatingsForAssignment(db, assignment);
 
   const result = await db
     .prepare(`

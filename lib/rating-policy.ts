@@ -1,7 +1,8 @@
 /**
  * Number of independent completed primary evaluations required per episode.
  *
- * Each of the three 100-episode batches is assigned to a pair of raters.
+ * This is the minimum reliability threshold. When a primary group contains
+ * more than two active raters, every assigned rater is expected to complete it.
  */
 export const REQUIRED_PRIMARY_RATINGS_PER_EPISODE = 2;
 

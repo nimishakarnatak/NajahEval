@@ -70,13 +70,15 @@ function assignmentEpisodePredicate(assignment: AssignmentCohort): string {
   return "FALSE";
 }
 
-/** Prevent accidental over-allocation beyond two primary raters or one judge. */
+/** Retain one active account per judge assignment; primary groups are unlimited. */
 async function assignmentAvailabilityError(
   db: ReturnType<typeof getDatabase>,
   assignment: AssignmentCohort,
   excludedUserId = "",
 ): Promise<string | null> {
   if (!isAssignedCohort(assignment)) return null;
+  const capacity = assignmentCapacity(assignment);
+  if (capacity === null) return null;
   const row = await db
     .prepare(`
       SELECT COUNT(*) AS count
@@ -88,11 +90,8 @@ async function assignmentAvailabilityError(
     `)
     .bind(assignment, excludedUserId)
     .first<{ count: number | string }>();
-  const capacity = assignmentCapacity(assignment);
   if (Number(row?.count ?? 0) < capacity) return null;
-  return isJudgeCohort(assignment)
-    ? "This judge assignment already has its one active judge."
-    : "This primary group already has its two active raters.";
+  return "This judge assignment already has its one active judge.";
 }
 
 /**

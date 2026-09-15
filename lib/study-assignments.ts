@@ -20,28 +20,28 @@ export const ASSIGNMENT_OPTIONS: readonly {
   label: string;
   description: string;
   episodeCount: number;
-  capacity: number;
+  capacity: number | null;
 }[] = [
   {
     value: "group_a",
     label: "Group A · Primary rater",
-    description: "The same 100 episodes assigned to both Group A raters.",
+    description: "The same 100 episodes assigned to every Group A rater.",
     episodeCount: 100,
-    capacity: 2,
+    capacity: null,
   },
   {
     value: "group_b",
     label: "Group B · Primary rater",
-    description: "The same 100 episodes assigned to both Group B raters.",
+    description: "The same 100 episodes assigned to every Group B rater.",
     episodeCount: 100,
-    capacity: 2,
+    capacity: null,
   },
   {
     value: "group_c",
     label: "Group C · Primary rater",
-    description: "The same 100 episodes assigned to both Group C raters.",
+    description: "The same 100 episodes assigned to every Group C rater.",
     episodeCount: 100,
-    capacity: 2,
+    capacity: null,
   },
   {
     value: "judge_1",
@@ -91,9 +91,9 @@ export function assignmentEpisodeCount(value: AssignmentCohort): number {
   return ASSIGNMENT_OPTIONS.find((option) => option.value === value)?.episodeCount ?? 0;
 }
 
-/** Maximum number of active accounts permitted in one assignment. */
-export function assignmentCapacity(value: AssignmentCohort): number {
-  return ASSIGNMENT_OPTIONS.find((option) => option.value === value)?.capacity ?? 0;
+/** Maximum active accounts permitted, or null when the group has no fixed limit. */
+export function assignmentCapacity(value: AssignmentCohort): number | null {
+  return ASSIGNMENT_OPTIONS.find((option) => option.value === value)?.capacity ?? null;
 }
 
 /**

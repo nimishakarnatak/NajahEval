@@ -137,7 +137,7 @@ test("opens a personal progress list with direct episode navigation", async () =
   assert.match(component, /Select any episode to open it in the evaluation workspace/);
 });
 
-test("uses two primary ratings and one judge review for each assigned judge episode", async () => {
+test("uses a two-rating minimum plus all assigned primary raters and one judge review", async () => {
   const [component, policy, annotationRoute] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(ratingPolicyPath, "utf8"),
@@ -151,7 +151,7 @@ test("uses two primary ratings and one judge review for each assigned judge epis
   assert.match(annotationRoute, /reviewLayer !== "admin_demo"/);
   assert.match(annotationRoute, /review_layer = \?/);
   assert.match(annotationRoute, /assignment_cohort = \?/);
-  assert.match(annotationRoute, /both required independent primary ratings/);
+  assert.match(annotationRoute, /Every active rater in this primary group/);
   assert.match(annotationRoute, /required judge review/);
 });
 

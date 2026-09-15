@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getAdminProgress } from "@/lib/admin-progress";
-import { assignmentCohortLabel } from "@/lib/study-assignments";
+import { assignmentCohortLabel, isJudgeCohort } from "@/lib/study-assignments";
 import { getRaterIdentity } from "@/lib/server-auth";
 import { userAccessLabel } from "@/lib/user-roles";
 import { AdminParticipantManager } from "./AdminParticipantManager";
@@ -32,8 +32,12 @@ export default async function AdminDashboardPage() {
   if (!admin || admin.role !== "admin") redirect("/");
 
   const progress = await getAdminProgress();
-  const expectedPrimaryRatings = progress.totalEpisodes * 2;
-  const expectedJudgeReviews = progress.expectedRatings - expectedPrimaryRatings;
+  const expectedPrimaryRatings = progress.assignments
+    .filter((assignment) => !isJudgeCohort(assignment.assignmentCohort))
+    .reduce((total, assignment) => total + assignment.expectedCount, 0);
+  const expectedJudgeReviews = progress.assignments
+    .filter((assignment) => isJudgeCohort(assignment.assignmentCohort))
+    .reduce((total, assignment) => total + assignment.expectedCount, 0);
   const overallPercentage = progress.expectedRatings
     ? Math.min(
         Math.round((progress.completedRatings / progress.expectedRatings) * 100),
@@ -114,7 +118,7 @@ export default async function AdminDashboardPage() {
           <article>
             <span>Episodes in dataset</span>
             <strong>{progress.totalEpisodes}</strong>
-            <small>Allocated across paired primary and judge queues</small>
+            <small>Allocated across shared primary and judge queues</small>
           </article>
         </section>
 
@@ -124,13 +128,13 @@ export default async function AdminDashboardPage() {
               <p className="admin-eyebrow">Study allocation</p>
               <h2 id="assignment-progress-title">Progress by assigned team</h2>
               <p>
-                Groups A–C each contain two primary raters sharing 100 episodes.
+                Groups A–C can contain any number of primary raters sharing the same 100 episodes.
                 Each judge receives a separate reproducible random sample of 50 episodes.
                 Serious primary-rating mismatches outside those samples are added to one
                 judge&apos;s queue.
               </p>
             </div>
-            <span>8 evaluator places</span>
+            <span>{progress.assignments.reduce((total, assignment) => total + assignment.activeMembers, 0)} active evaluators</span>
           </div>
           <div className="admin-assignment-grid">
             {progress.assignments.map((assignment) => (
@@ -141,8 +145,10 @@ export default async function AdminDashboardPage() {
                   <span style={{ width: `${assignment.completionPercentage}%` }} />
                 </div>
                 <small>
-                  {assignment.activeMembers}/{assignment.capacity} evaluator places filled ·{" "}
-                  {assignment.assignedEpisodes} episodes
+                  {assignment.capacity === null
+                    ? `${assignment.activeMembers} active evaluators · no fixed group limit`
+                    : `${assignment.activeMembers}/${assignment.capacity} evaluator places filled`} ·{" "}
+                  {assignment.assignedEpisodes} episodes each
                 </small>
               </article>
             ))}
@@ -154,7 +160,7 @@ export default async function AdminDashboardPage() {
             <p className="admin-eyebrow">Required review coverage</p>
             <h2>Coverage across the dataset</h2>
             <p>
-              Completed ratings only. Primary-pair coverage and the separate judge
+              Completed ratings only. Minimum two-rater primary coverage and the separate judge
               sample plus serious-mismatch reviews are reported independently; drafts
               and admin demos are excluded.
             </p>
@@ -163,11 +169,11 @@ export default async function AdminDashboardPage() {
             <div><strong>{progress.coverage.noPrimaryRating}</strong><span>No primary rating</span></div>
             <div>
               <strong>{progress.coverage.onePrimaryRating}</strong>
-              <span>One of two primary ratings</span>
+              <span>One primary rating</span>
             </div>
             <div className="coverage-complete">
               <strong>{progress.coverage.primaryComplete}</strong>
-              <span>Both primary ratings</span>
+              <span>At least two primary ratings</span>
             </div>
             <div><strong>{progress.coverage.judgePending}</strong><span>Judge review pending</span></div>
             <div className="coverage-complete">

@@ -21,11 +21,8 @@ import {
   TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
-import {
-  REQUIRED_JUDGE_RATINGS_PER_EPISODE,
-  REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
-} from "@/lib/rating-policy";
 import { getRaterIdentity } from "@/lib/server-auth";
+import { requiredRatingsForAssignment } from "@/lib/server-assignment-requirements";
 import {
   assignmentIncludesEpisode,
   isAssignedCohort,
@@ -349,12 +346,13 @@ export async function POST(request: Request) {
   }
 
   const reviewLayer = reviewLayerForAccount(rater.role, rater.assignmentCohort);
-  const requiredRatings = isJudgeCohort(rater.assignmentCohort)
-    ? REQUIRED_JUDGE_RATINGS_PER_EPISODE
-    : REQUIRED_PRIMARY_RATINGS_PER_EPISODE;
+  const requiredRatings = await requiredRatingsForAssignment(
+    db,
+    rater.assignmentCohort,
+  );
 
   // Administrative demo ratings are retained for demonstrations but never
-  // consume one of the paired-primary or judge-review study slots.
+  // consume one of the primary-group or judge-review study slots.
   if (status === "complete" && reviewLayer !== "admin_demo") {
     const completed = await db
       .prepare(`
@@ -372,7 +370,7 @@ export async function POST(request: Request) {
         {
           error: reviewLayer === "judge"
             ? "This episode already has its required judge review."
-            : "This episode already has both required independent primary ratings.",
+            : "Every active rater in this primary group has already completed this episode.",
         },
         { status: 409 },
       );

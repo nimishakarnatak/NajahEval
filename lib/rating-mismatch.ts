@@ -43,7 +43,7 @@ function flagValue(value: unknown): CriticalFlagValue {
 }
 
 /**
- * Compare the two completed primary ratings without disclosing their values.
+ * Compare completed primary ratings without disclosing their values.
  *
  * An ordinary mismatch means any selected score or categorical judgment
  * differs. A serious mismatch is deliberately narrower: a 1-versus-3 score,

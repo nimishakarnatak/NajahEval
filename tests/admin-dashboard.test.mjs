@@ -17,7 +17,7 @@ test("protects evaluator progress on both the admin page and API", async () => {
   assert.match(route, /status: 403/);
 });
 
-test("calculates paired-primary and judge progress without counting admin demos", async () => {
+test("calculates flexible primary-group and judge progress without counting admin demos", async () => {
   const [progress, policy] = await Promise.all([
     readFile(projectFile("lib/admin-progress.ts"), "utf8"),
     readFile(projectFile("lib/rating-policy.ts"), "utf8"),
@@ -37,7 +37,8 @@ test("calculates paired-primary and judge progress without counting admin demos"
   assert.match(progress, /primaryComplete/);
   assert.match(progress, /judgePending/);
   assert.match(progress, /judgeComplete/);
-  assert.match(progress, /judgeRequiredEpisodes \* REQUIRED_JUDGE_RATINGS_PER_EPISODE/);
+  assert.match(progress, /expectedRatings: assignments\.reduce/);
+  assert.match(progress, /option\.capacity \?\? Math\.max/);
   assert.match(progress, /judgeAssignmentForEpisode/);
   assert.match(progress, /summarizePrimaryMismatch/);
   assert.match(progress, /ASSIGNMENT_OPTIONS\.map/);

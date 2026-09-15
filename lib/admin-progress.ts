@@ -3,10 +3,7 @@ import {
   BUNDLED_DATASET_VERSION,
   ensureBundledDataset,
 } from "@/lib/bundled-dataset";
-import {
-  REQUIRED_JUDGE_RATINGS_PER_EPISODE,
-  REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
-} from "@/lib/rating-policy";
+import { REQUIRED_PRIMARY_RATINGS_PER_EPISODE } from "@/lib/rating-policy";
 import {
   ASSIGNMENT_OPTIONS,
   assignmentCohortLabel,
@@ -47,7 +44,7 @@ export type AssignmentProgress = {
   label: string;
   assignedEpisodes: number;
   activeMembers: number;
-  capacity: number;
+  capacity: number | null;
   completedCount: number;
   expectedCount: number;
   completionPercentage: number;
@@ -107,7 +104,7 @@ function timestampToIso(value: string | Date | null): string | null {
 }
 
 /**
- * Build progress for the paired primary-rater design and the separate judge
+ * Build progress for flexible primary-rater groups and the separate judge
  * layer. A rating is counted for a current assignment only when the immutable
  * assignment snapshot on the rating matches the evaluator's account. Legacy
  * and administrator-demo ratings remain exportable but do not affect study
@@ -316,14 +313,19 @@ export async function getAdminProgress(): Promise<AdminProgress> {
     const assignedEpisodes = isJudgeCohort(option.value)
       ? assignedEpisodeCountByJudge[option.value]
       : option.episodeCount;
-    const expectedCount = assignedEpisodes * option.capacity;
+    const activeMembers = members.filter(
+      (evaluator) => evaluator.isActive && evaluator.canRate,
+    ).length;
+    const requiredMembers = option.capacity ?? Math.max(
+      activeMembers,
+      REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
+    );
+    const expectedCount = assignedEpisodes * requiredMembers;
     return {
       assignmentCohort: option.value,
       label: assignmentCohortLabel(option.value),
       assignedEpisodes,
-      activeMembers: members.filter(
-        (evaluator) => evaluator.isActive && evaluator.canRate,
-      ).length,
+      activeMembers,
       capacity: option.capacity,
       completedCount,
       expectedCount,
@@ -360,9 +362,10 @@ export async function getAdminProgress(): Promise<AdminProgress> {
     ).length,
     completedRatings,
     draftRatings,
-    expectedRatings:
-      totalEpisodes * REQUIRED_PRIMARY_RATINGS_PER_EPISODE +
-      judgeRequiredEpisodes * REQUIRED_JUDGE_RATINGS_PER_EPISODE,
+    expectedRatings: assignments.reduce(
+      (total, assignment) => total + assignment.expectedCount,
+      0,
+    ),
     coverage: {
       noPrimaryRating: episodes.filter(
         (episode) => (mismatchByEpisode.get(episode.episodeId)?.ratingCount ?? 0) === 0,
