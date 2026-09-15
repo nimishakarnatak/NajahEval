@@ -93,6 +93,8 @@ export const NAJAH_SCHEMA_STATEMENTS = [
       episode_end_reason TEXT NOT NULL DEFAULT '',
       task_status TEXT NOT NULL DEFAULT '',
       task_incomplete_reason TEXT NOT NULL DEFAULT '',
+      most_useful_reflection TEXT NOT NULL DEFAULT '',
+      improvement_reflection TEXT NOT NULL DEFAULT '',
       skip_reason TEXT NOT NULL DEFAULT '',
       comments TEXT NOT NULL DEFAULT '',
       rubric_version TEXT NOT NULL,
@@ -134,6 +136,8 @@ export const NAJAH_SCHEMA_MIGRATION_STATEMENTS = [
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS assignment_cohort TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_status TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS task_incomplete_reason TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS most_useful_reflection TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS improvement_reflection TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS skip_reason TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE rubric_annotations ADD COLUMN IF NOT EXISTS critical_failure_observed TEXT NOT NULL DEFAULT ''",
   // These indexes must follow the ALTER statements. Existing production

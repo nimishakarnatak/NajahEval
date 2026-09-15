@@ -62,7 +62,7 @@ test("routes serious mismatches and notifies judges without revealing primary sc
 
   assert.match(episodes, /COUNT\(\*\) >= 2/);
   assert.match(episodes, /COUNT\(DISTINCT primary_rating\.scores_json\) > 1/);
-  assert.match(episodes, /COUNT\(DISTINCT primary_rating\.task_status\) > 1/);
+  assert.doesNotMatch(episodes, /COUNT\(DISTINCT primary_rating\.task_status\) > 1/);
   assert.match(episodes, /COUNT\(DISTINCT primary_rating\.critical_flags_json\) > 1/);
   assert.match(episodes, /reviewLayer === "judge"/);
   assert.match(episodes, /primary_serious_mismatch/);

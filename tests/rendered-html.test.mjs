@@ -240,12 +240,9 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(component, /A score of 1, 2, 3, or N\/A is required for every dimension/);
   assert.match(component, /Evidence turn numbers and score justifications are optional/);
   assert.match(component, /Evidence turn numbers and score justifications are optional/);
-  assert.match(component, /Task status/);
-  assert.match(component, /Why was the task not completed/);
-  assert.match(rubric, /No further participant reply was observed/);
-  assert.match(rubric, /Output delivered, but not acknowledged/);
-  assert.match(rubric, /The available conversation does not provide enough evidence/);
-  assert.match(rubric, /Cannot determine/);
+  assert.match(component, /Optional qualitative reflections/);
+  assert.match(component, /will not form part of the numerical quality score/);
+  assert.doesNotMatch(component, /Task outcome/);
   assert.match(component, /Submit (?:&|&amp;) next/);
   assert.match(component, /assigned review queue/);
   assert.doesNotMatch(`${component}\n${importRoute}`, /do_not_release|doNotRelease/);
@@ -255,23 +252,20 @@ test("includes the core annotation workflow without temporary release or review 
   );
 });
 
-test("separates task status from the conditional reason an incomplete task stopped", async () => {
+test("adds optional, non-scored qualitative reflections", async () => {
   const [component, rubric, styles] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(rubricPath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(rubric, /najah-evidence-v10/);
-  assert.match(rubric, /Completed and acknowledged/);
-  assert.match(rubric, /Participant moved to another module/);
-  assert.match(rubric, /No further Najah reply was observed/);
+  assert.match(rubric, /najah-evidence-v11/);
   assert.match(rubric, /Najah response-quality/);
   assert.match(rubric, /Whole module-episode/);
   assert.match(component, /Assess the quality of Najah’s responses in this episode/);
   assert.match(component, /Give one score per dimension for the complete module episode/);
-  assert.match(component, /status === "not_completed"/);
-  assert.match(styles, /\.episode-end-options label \{[^}]*grid-template-columns: 16px minmax\(0, 1fr\)/);
-  assert.match(styles, /\.episode-end-options input \{[^}]*width: 16px; height: 16px/);
+  assert.match(component, /mostUsefulReflection/);
+  assert.match(component, /improvementReflection/);
+  assert.match(styles, /\.qualitative-reflection-field textarea/);
 });
 
 test("keeps submission validation visible and reveals the first incomplete field", async () => {
@@ -287,8 +281,7 @@ test("keeps submission validation visible and reveals the first incomplete field
   assert.match(component, /id=\{`evidence-\$\{dimension\.key\}`\}/);
   assert.match(component, /id=\{`justification-\$\{dimension\.key\}`\}/);
   assert.match(component, /Optionally explain the evidence supporting this score/);
-  assert.match(component, /id="task-status"/);
-  assert.match(component, /id="task-incomplete-reason"/);
+  assert.match(component, /id="critical-failure-observed"/);
   assert.match(styles, /\.submit-error/);
   assert.match(styles, /\.score-card:focus-within/);
 });

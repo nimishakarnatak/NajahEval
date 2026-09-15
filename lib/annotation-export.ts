@@ -19,8 +19,8 @@ export type ExportAnnotationRow = {
   treatment: string;
   language: string;
   status: string;
-  taskStatus: string;
-  taskIncompleteReason: string;
+  mostUsefulReflection: string;
+  improvementReflection: string;
   skipReason: string;
   legacyEpisodeEndReason: string;
   criticalFailureObserved: string;
@@ -79,8 +79,6 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     "treatment",
     "language",
     "annotation_status",
-    "task_status",
-    "task_incomplete_reason",
     "skip_reason",
     "legacy_episode_end_reason",
     "critical_failure_observed",
@@ -93,6 +91,8 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
       `${flag.key}_flag`,
       `${flag.key}_evidence_explanation`,
     ]),
+    "most_useful_reflection",
+    "improvement_reflection",
     "comments",
     "rubric_version",
     "updated_at",
@@ -123,8 +123,6 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
       treatmentLabel(row.treatment),
       row.language,
       row.status,
-      row.taskStatus,
-      row.taskIncompleteReason,
       row.skipReason,
       row.legacyEpisodeEndReason,
       row.criticalFailureObserved,
@@ -137,6 +135,8 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
         criticalFlags[flag.key],
         criticalEvidence[flag.key],
       ]),
+      row.mostUsefulReflection,
+      row.improvementReflection,
       row.comments,
       row.rubricVersion,
       row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,

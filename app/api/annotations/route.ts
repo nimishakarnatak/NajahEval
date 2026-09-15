@@ -15,10 +15,6 @@ import {
   DimensionScore,
   RUBRIC_DIMENSIONS,
   RUBRIC_VERSION,
-  TASK_INCOMPLETE_REASONS,
-  TASK_STATUSES,
-  TaskIncompleteReason,
-  TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
 import { getRaterIdentity } from "@/lib/server-auth";
@@ -44,8 +40,8 @@ type AnnotationPayload = {
   criticalFlags?: Partial<Record<CriticalFlagKey, CriticalFlagValue>>;
   criticalEvidence?: Partial<Record<CriticalFlagKey, string>>;
   criticalFailureObserved?: CriticalFailureObserved | "";
-  taskStatus?: TaskStatus | "";
-  taskIncompleteReason?: TaskIncompleteReason | "";
+  mostUsefulReflection?: string;
+  improvementReflection?: string;
   skipReason?: string;
   comments?: string;
   status?: "draft" | "complete";
@@ -59,8 +55,8 @@ type NormalizedAnnotation = {
   criticalFlags: Record<CriticalFlagKey, CriticalFlagValue>;
   criticalEvidence: Record<CriticalFlagKey, string>;
   criticalFailureObserved: CriticalFailureObserved | "";
-  taskStatus: TaskStatus | "";
-  taskIncompleteReason: TaskIncompleteReason | "";
+  mostUsefulReflection: string;
+  improvementReflection: string;
   skipReason: string;
   comments: string;
 };
@@ -90,22 +86,6 @@ function validCriticalFailureObserved(
   );
 }
 
-/** Drafts may leave task status blank; completed ratings must select one. */
-function validTaskStatus(value: unknown): value is TaskStatus | "" {
-  return (
-    value === "" ||
-    TASK_STATUSES.some((status) => status.value === value)
-  );
-}
-
-/** The conditional reason accepts only the instrument's observable options. */
-function validTaskIncompleteReason(value: unknown): value is TaskIncompleteReason | "" {
-  return (
-    value === "" ||
-    TASK_INCOMPLETE_REASONS.some((reason) => reason.value === value)
-  );
-}
-
 /**
  * Normalizes a browser payload into complete keyed objects before validation or
  * storage. Trimming here keeps the database and CSV exports analysis-ready.
@@ -119,9 +99,10 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     (payload.criticalEvidence !== undefined && !isRecord(payload.criticalEvidence)) ||
     (payload.criticalFailureObserved !== undefined &&
       !validCriticalFailureObserved(payload.criticalFailureObserved)) ||
-    (payload.taskStatus !== undefined && !validTaskStatus(payload.taskStatus)) ||
-    (payload.taskIncompleteReason !== undefined &&
-      !validTaskIncompleteReason(payload.taskIncompleteReason)) ||
+    (payload.mostUsefulReflection !== undefined &&
+      typeof payload.mostUsefulReflection !== "string") ||
+    (payload.improvementReflection !== undefined &&
+      typeof payload.improvementReflection !== "string") ||
     (payload.skipReason !== undefined && typeof payload.skipReason !== "string") ||
     (payload.comments !== undefined && typeof payload.comments !== "string") ||
     (payload.action !== undefined && payload.action !== "save" && payload.action !== "skip")
@@ -201,9 +182,8 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     criticalFlags,
     criticalEvidence,
     criticalFailureObserved,
-    taskStatus: payload.taskStatus ?? "",
-    taskIncompleteReason:
-      payload.taskStatus === "not_completed" ? payload.taskIncompleteReason ?? "" : "",
+    mostUsefulReflection: payload.mostUsefulReflection?.trim().slice(0, 5000) ?? "",
+    improvementReflection: payload.improvementReflection?.trim().slice(0, 5000) ?? "",
     skipReason: payload.skipReason?.trim() ?? "",
     comments: payload.comments?.trim() ?? "",
   };
@@ -219,13 +199,6 @@ function completionError(annotation: NormalizedAnnotation): string | null {
   for (const dimension of RUBRIC_DIMENSIONS) {
     const score = annotation.scores[dimension.key];
     if (score === null) return `Select a score or N/A for ${dimension.label}.`;
-  }
-
-  if (!annotation.taskStatus) {
-    return "Select the task status.";
-  }
-  if (annotation.taskStatus === "not_completed" && !annotation.taskIncompleteReason) {
-    return "Select why the task was not completed.";
   }
 
   if (!annotation.criticalFailureObserved) {
@@ -312,8 +285,6 @@ export async function POST(request: Request) {
       .prepare(`
         SELECT
           scores_json AS "scoresJson",
-          task_status AS "taskStatus",
-          task_incomplete_reason AS "taskIncompleteReason",
           critical_failure_observed AS "criticalFailureObserved",
           critical_flags_json AS "criticalFlagsJson"
         FROM rubric_annotations
@@ -383,7 +354,8 @@ export async function POST(request: Request) {
         episode_id, rater_id, rater_email, review_layer, assignment_cohort,
         scores_json, evidence_turns_json,
         justifications_json, critical_failure_observed, critical_flags_json, critical_evidence_json,
-        task_status, task_incomplete_reason, skip_reason, comments, rubric_version, status, updated_at
+        most_useful_reflection, improvement_reflection,
+        skip_reason, comments, rubric_version, status, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(episode_id, rater_id) DO UPDATE SET
         rater_email = excluded.rater_email,
@@ -395,8 +367,8 @@ export async function POST(request: Request) {
         critical_failure_observed = excluded.critical_failure_observed,
         critical_flags_json = excluded.critical_flags_json,
         critical_evidence_json = excluded.critical_evidence_json,
-        task_status = excluded.task_status,
-        task_incomplete_reason = excluded.task_incomplete_reason,
+        most_useful_reflection = excluded.most_useful_reflection,
+        improvement_reflection = excluded.improvement_reflection,
         skip_reason = excluded.skip_reason,
         comments = excluded.comments,
         rubric_version = excluded.rubric_version,
@@ -415,8 +387,8 @@ export async function POST(request: Request) {
       annotation.criticalFailureObserved,
       JSON.stringify(annotation.criticalFlags),
       JSON.stringify(annotation.criticalEvidence),
-      annotation.taskStatus,
-      annotation.taskIncompleteReason,
+      annotation.mostUsefulReflection,
+      annotation.improvementReflection,
       annotation.skipReason,
       annotation.comments,
       RUBRIC_VERSION,

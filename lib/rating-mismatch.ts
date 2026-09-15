@@ -8,8 +8,6 @@ import {
 
 export type ComparablePrimaryRating = {
   scoresJson: string;
-  taskStatus: string;
-  taskIncompleteReason: string;
   criticalFailureObserved: string;
   criticalFlagsJson: string;
 };
@@ -47,8 +45,8 @@ function flagValue(value: unknown): CriticalFlagValue {
  *
  * An ordinary mismatch means any selected score or categorical judgment
  * differs. A serious mismatch is deliberately narrower: a 1-versus-3 score,
- * N/A-versus-substantive score, different task-status/end-reason judgment, or
- * different critical-failure screening/category judgment. Serious mismatches
+ * N/A-versus-substantive score, or a different critical-failure
+ * screening/category judgment. Serious mismatches
  * can add an episode to a judge's workload; ordinary mismatches are alerts only
  * when the episode is already in that judge's base sample.
  */
@@ -69,17 +67,12 @@ export function summarizePrimaryMismatch(
       flags: Object.fromEntries(
         CRITICAL_FLAG_KEYS.map((key) => [key, flagValue(flags[key])]),
       ) as Record<(typeof CRITICAL_FLAG_KEYS)[number], CriticalFlagValue>,
-      taskStatus: rating.taskStatus || "",
-      taskIncompleteReason: rating.taskIncompleteReason || "",
       criticalFailureObserved:
         rating.criticalFailureObserved as CriticalFailureObserved | "",
     };
   });
   const [left, right] = normalized;
 
-  const taskMismatch =
-    left.taskStatus !== right.taskStatus ||
-    left.taskIncompleteReason !== right.taskIncompleteReason;
   const criticalMismatch =
     left.criticalFailureObserved !== right.criticalFailureObserved ||
     CRITICAL_FLAG_KEYS.some((key) => left.flags[key] !== right.flags[key]);
@@ -96,7 +89,7 @@ export function summarizePrimaryMismatch(
 
   return {
     ratingCount: ratings.length,
-    mismatch: scoreMismatch || taskMismatch || criticalMismatch,
-    seriousMismatch: seriousScoreMismatch || taskMismatch || criticalMismatch,
+    mismatch: scoreMismatch || criticalMismatch,
+    seriousMismatch: seriousScoreMismatch || criticalMismatch,
   };
 }

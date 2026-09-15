@@ -54,18 +54,35 @@ test("uses observable, layered scope guidance without the old compound anchor", 
 });
 
 test("requires explanations only for skips and selected critical failures", async () => {
-  const route = await readFile(annotationRoutePath, "utf8");
+  const [route, app] = await Promise.all([
+    readFile(annotationRoutePath, "utf8"),
+    readFile(annotatorAppPath, "utf8"),
+  ]);
   assert.doesNotMatch(route, /Add the relevant turn number\(s\)/);
   assert.doesNotMatch(route, /Provide a written justification for/);
   assert.doesNotMatch(route, /if \(!annotation\.justifications\[dimension\.key\]\)/);
-  assert.match(route, /Select the task status/);
-  assert.match(route, /Select why the task was not completed/);
-  assert.match(route, /annotation\.taskStatus === "not_completed"/);
+  assert.doesNotMatch(route, /Select the task status/);
+  assert.doesNotMatch(app, /Task outcome/);
   assert.doesNotMatch(route, /received a score of/);
   assert.doesNotMatch(route, /genuinely cannot be assessed/);
   assert.match(route, /Select whether any critical failure was observed/);
   assert.match(route, /Select at least one critical-failure category/);
   assert.match(route, /Provide a brief explanation/);
+});
+
+test("stores two optional qualitative reflections outside the numerical score", async () => {
+  const [route, app, schema] = await Promise.all([
+    readFile(annotationRoutePath, "utf8"),
+    readFile(annotatorAppPath, "utf8"),
+    readFile(schemaPath, "utf8"),
+  ]);
+  assert.match(app, /Optional qualitative reflections/);
+  assert.match(app, /will not form part of the numerical quality score/);
+  assert.match(app, /What, if anything, was the most useful thing Najah did/);
+  assert.match(app, /What is one thing Najah could have done or said differently/);
+  assert.match(route, /most_useful_reflection, improvement_reflection/);
+  assert.match(schema, /most_useful_reflection TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /improvement_reflection TEXT NOT NULL DEFAULT ''/);
 });
 
 test("permanently deletes only the signed-in rater's selected drafts", async () => {
@@ -87,6 +104,8 @@ test("keeps evidence-rubric results separate from legacy pilot annotations", asy
   assert.match(schema, /CREATE TABLE IF NOT EXISTS rubric_annotations/);
   assert.match(schema, /task_status TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /task_incomplete_reason TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /most_useful_reflection TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /improvement_reflection TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /skip_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /critical_failure_observed TEXT NOT NULL DEFAULT ''/);
   assert.match(episodeRoute, /FROM rubric_annotations completed/);

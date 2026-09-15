@@ -69,8 +69,8 @@ not overlap. They are balanced across Groups A-C: Judge 1 receives 17/17/16 and
 Judge 2 receives 16/17/17 episodes from those groups. Once both primary ratings
 have been submitted, a serious mismatch outside the base sample is added to one
 judge's queue using a deterministic, non-overlapping allocation rule. A serious
-mismatch is a 1-versus-3 score, N/A-versus-substantive score, different task
-status or incomplete-task reason, or different critical-failure judgment.
+mismatch is a 1-versus-3 score, N/A-versus-substantive score, or a different
+critical-failure judgment.
 
 The design requires at least 600 primary ratings, increasing when more primary
 raters are assigned, plus 200 base judge reviews and two judge reviews for each
@@ -201,8 +201,9 @@ do not expose the production `DATABASE_URL` to untrusted preview deployments.
   justifications and evidence turn numbers are available but optional. A
   written explanation is required only when an evaluator skips an episode or
   selects a critical failure.
-- Every completed rating records task status. If the task was not completed, a
-  second required field records the observable reason the interaction stopped.
+- Two optional qualitative reflections capture what Najah did most usefully
+  and one specific way it could improve. These responses support process
+  evaluation and do not contribute to the numerical quality score.
 - Evaluators never see another evaluator's scores; they see only the completed
   count for their own review layer. The judge workspace separates fixed random
   assignments from mismatch reviews and shows Not started, Draft, Done,

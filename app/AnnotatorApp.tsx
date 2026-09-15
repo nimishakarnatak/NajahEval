@@ -20,10 +20,6 @@ import {
   RUBRIC_DIMENSIONS,
   RubricDimension,
   RubricSection,
-  TASK_INCOMPLETE_REASONS,
-  TASK_STATUSES,
-  TaskIncompleteReason,
-  TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
 import {
@@ -44,8 +40,8 @@ type AnnotationDraft = {
   criticalFlags: Record<CriticalFlagKey, CriticalFlagValue>;
   criticalEvidence: Record<CriticalFlagKey, string>;
   criticalFailureObserved: CriticalFailureObserved | "";
-  taskStatus: TaskStatus | "";
-  taskIncompleteReason: TaskIncompleteReason | "";
+  mostUsefulReflection: string;
+  improvementReflection: string;
   skipReason: string;
   comments: string;
 };
@@ -146,8 +142,8 @@ function emptyDraft(): AnnotationDraft {
     criticalFlags: keyedRecord(CRITICAL_FLAG_KEYS, () => null),
     criticalEvidence: keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
     criticalFailureObserved: "",
-    taskStatus: "",
-    taskIncompleteReason: "",
+    mostUsefulReflection: "",
+    improvementReflection: "",
     skipReason: "",
     comments: "",
   };
@@ -169,20 +165,6 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
         targetId: `rating-${dimension.key}`,
       };
     }
-  }
-
-  if (!draft.taskStatus) {
-    return {
-      message: "Select the task status.",
-      targetId: "task-status",
-    };
-  }
-
-  if (draft.taskStatus === "not_completed" && !draft.taskIncompleteReason) {
-    return {
-      message: "Select why the task was not completed.",
-      targetId: "task-incomplete-reason",
-    };
   }
 
   if (!draft.criticalFailureObserved) {
@@ -225,8 +207,8 @@ function draftFromEpisode(episode: Episode | undefined): AnnotationDraft {
     criticalFlags: { ...emptyDraft().criticalFlags, ...episode.criticalFlags },
     criticalEvidence: { ...emptyDraft().criticalEvidence, ...episode.criticalEvidence },
     criticalFailureObserved: episode.criticalFailureObserved ?? "",
-    taskStatus: episode.taskStatus ?? "",
-    taskIncompleteReason: episode.taskIncompleteReason ?? "",
+    mostUsefulReflection: episode.mostUsefulReflection ?? "",
+    improvementReflection: episode.improvementReflection ?? "",
     skipReason: episode.skipReason ?? "",
     comments: episode.comments ?? "",
   };
@@ -455,75 +437,6 @@ function ScoreCard({
         </label>
       )}
     </section>
-  );
-}
-
-/**
- * Records task progress separately from the observable event that interrupted
- * an incomplete task. The second question appears only when it is logically
- * applicable, keeping the exported fields mutually interpretable.
- */
-function TaskStatusCard({
-  status,
-  incompleteReason,
-  onStatusChange,
-  onIncompleteReasonChange,
-}: {
-  status: TaskStatus | "";
-  incompleteReason: TaskIncompleteReason | "";
-  onStatusChange: (value: TaskStatus) => void;
-  onIncompleteReasonChange: (value: TaskIncompleteReason) => void;
-}) {
-  return (
-    <div className="task-status-stack">
-      <fieldset className="episode-end-card" id="task-status">
-        <legend>Task status</legend>
-        <p>How far did the participant get with the task?</p>
-        <div className="episode-end-options">
-          {TASK_STATUSES.map((option) => (
-            <label key={option.value} className={status === option.value ? "selected" : ""}>
-              <input
-                type="radio"
-                name="task-status"
-                value={option.value}
-                checked={status === option.value}
-                aria-label={option.label}
-                onChange={() => onStatusChange(option.value)}
-              />
-              <span className="episode-option-copy">
-                <strong>{option.label}</strong>
-                <small>{option.description}</small>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      {status === "not_completed" && (
-        <fieldset className="episode-end-card conditional-card" id="task-incomplete-reason">
-          <legend>Why was the task not completed?</legend>
-          <p>Select the option best supported by the available conversation.</p>
-          <div className="episode-end-options">
-            {TASK_INCOMPLETE_REASONS.map((reason) => (
-              <label key={reason.value} className={incompleteReason === reason.value ? "selected" : ""}>
-                <input
-                  type="radio"
-                  name="task-incomplete-reason"
-                  value={reason.value}
-                  checked={incompleteReason === reason.value}
-                  aria-label={reason.label}
-                  onChange={() => onIncompleteReasonChange(reason.value)}
-                />
-                <span className="episode-option-copy">
-                  <strong>{reason.label}</strong>
-                  <small>{reason.description}</small>
-                </span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      )}
-    </div>
   );
 }
 
@@ -842,24 +755,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     markDraftChanged();
   }
 
-  /** Saves task progress and clears an inapplicable incomplete-task reason. */
-  function updateTaskStatus(value: TaskStatus) {
-    clearSubmissionFeedback();
-    setDraft((previous) => ({
-      ...previous,
-      taskStatus: value,
-      taskIncompleteReason: value === "not_completed" ? previous.taskIncompleteReason : "",
-    }));
-    markDraftChanged();
-  }
-
-  /** Records the observable interruption only for an incomplete task. */
-  function updateTaskIncompleteReason(value: TaskIncompleteReason) {
-    clearSubmissionFeedback();
-    setDraft((previous) => ({ ...previous, taskIncompleteReason: value }));
-    markDraftChanged();
-  }
-
   /** Updates the explanation attached to one selected failure category. */
   function updateCriticalEvidence(key: CriticalFlagKey, value: string) {
     clearSubmissionFeedback();
@@ -911,6 +806,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   function updateComments(value: string) {
     clearSubmissionFeedback();
     setDraft((previous) => ({ ...previous, comments: value }));
+    markDraftChanged();
+  }
+
+  /** Records one optional, non-scored qualitative reflection. */
+  function updateQualitativeReflection(
+    field: "mostUsefulReflection" | "improvementReflection",
+    value: string,
+  ) {
+    clearSubmissionFeedback();
+    setDraft((previous) => ({ ...previous, [field]: value }));
     markDraftChanged();
   }
 
@@ -1468,8 +1373,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       "treatment",
       "language",
       "annotation_status",
-      "task_status",
-      "task_incomplete_reason",
       "skip_reason",
       "legacy_episode_end_reason",
       "critical_failure_observed",
@@ -1482,6 +1385,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         `${flag.key}_flag`,
         `${flag.key}_evidence_explanation`,
       ]),
+      "most_useful_reflection",
+      "improvement_reflection",
       "comments",
     ];
     const rows = episodes
@@ -1498,8 +1403,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         treatmentLabel(episode.treatment),
         episode.language,
         episode.annotationStatus,
-        episode.taskStatus,
-        episode.taskIncompleteReason,
         episode.skipReason,
         episode.legacyEpisodeEndReason,
         episode.criticalFailureObserved,
@@ -1512,6 +1415,8 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           episode.criticalFlags[flag.key],
           episode.criticalEvidence[flag.key],
         ]),
+        episode.mostUsefulReflection,
+        episode.improvementReflection,
         episode.comments,
       ]);
     const csv = [columns, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
@@ -2196,22 +2101,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   </section>
                 ))}
 
-                <section className="rubric-section episode-ending-section">
-                  <div className="rubric-section-heading">
-                    <p className="eyebrow">Task outcome</p>
-                    <span>Record task progress first, then the observable reason only when the task was not completed.</span>
-                  </div>
-                  <TaskStatusCard
-                    status={draft.taskStatus}
-                    incompleteReason={draft.taskIncompleteReason}
-                    onStatusChange={updateTaskStatus}
-                    onIncompleteReasonChange={updateTaskIncompleteReason}
-                  />
-                </section>
-
                 <section className="rubric-section critical-section">
                   <div className="rubric-section-heading">
-                    <p className="eyebrow">5. Critical-failure screening</p>
+                    <p className="eyebrow">Critical-failure screening</p>
                     <span>Screen once, then identify every applicable failure only when the answer is Yes.</span>
                   </div>
                   <CriticalFailureCard
@@ -2222,6 +2114,31 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     onFlagChange={updateCriticalFlag}
                     onEvidenceChange={updateCriticalEvidence}
                   />
+                </section>
+
+                <section className="rubric-section qualitative-reflections-section">
+                  <div className="rubric-section-heading">
+                    <p className="eyebrow">Optional qualitative reflections</p>
+                    <span>These responses are intended to support the overall process evaluation and will not form part of the numerical quality score.</span>
+                  </div>
+                  <label className="form-field qualitative-reflection-field">
+                    <span>What, if anything, was the most useful thing Najah did in this episode? <small>optional</small></span>
+                    <textarea
+                      value={draft.mostUsefulReflection}
+                      onChange={(event) => updateQualitativeReflection("mostUsefulReflection", event.target.value)}
+                      placeholder="Optionally describe the most useful part of Najah’s contribution."
+                      rows={4}
+                    />
+                  </label>
+                  <label className="form-field qualitative-reflection-field">
+                    <span>What is one thing Najah could have done or said differently to improve this episode? <small>optional</small></span>
+                    <textarea
+                      value={draft.improvementReflection}
+                      onChange={(event) => updateQualitativeReflection("improvementReflection", event.target.value)}
+                      placeholder="Optionally suggest one specific improvement."
+                      rows={4}
+                    />
+                  </label>
                 </section>
 
                 <label className="form-field comments-field">

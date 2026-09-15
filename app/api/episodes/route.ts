@@ -133,8 +133,8 @@ export async function GET(request: Request) {
         current.critical_failure_observed AS "criticalFailureObserved",
         current.critical_flags_json AS "criticalFlagsJson",
         current.critical_evidence_json AS "criticalEvidenceJson",
-        current.task_status AS "taskStatus",
-        current.task_incomplete_reason AS "taskIncompleteReason",
+        current.most_useful_reflection AS "mostUsefulReflection",
+        current.improvement_reflection AS "improvementReflection",
         current.skip_reason AS "skipReason",
         current.episode_end_reason AS "legacyEpisodeEndReason",
         current.comments,
@@ -152,8 +152,6 @@ export async function GET(request: Request) {
             COUNT(*) >= 2
             AND (
               COUNT(DISTINCT primary_rating.scores_json) > 1
-              OR COUNT(DISTINCT primary_rating.task_status) > 1
-              OR COUNT(DISTINCT primary_rating.task_incomplete_reason) > 1
               OR COUNT(DISTINCT primary_rating.critical_failure_observed) > 1
               OR COUNT(DISTINCT primary_rating.critical_flags_json) > 1
             )
@@ -161,9 +159,7 @@ export async function GET(request: Request) {
           (
             COUNT(*) >= 2
             AND (
-              COUNT(DISTINCT primary_rating.task_status) > 1
-              OR COUNT(DISTINCT primary_rating.task_incomplete_reason) > 1
-              OR COUNT(DISTINCT primary_rating.critical_failure_observed) > 1
+              COUNT(DISTINCT primary_rating.critical_failure_observed) > 1
               OR COUNT(DISTINCT primary_rating.critical_flags_json) > 1
               OR EXISTS (
                 SELECT 1
@@ -255,9 +251,10 @@ export async function GET(request: Request) {
       criticalFailureObserved,
       criticalFlags,
       criticalEvidence: parseKeyedJson<string>(episode.criticalEvidenceJson, CRITICAL_FLAG_KEYS, () => ""),
-      taskStatus: typeof episode.taskStatus === "string" ? episode.taskStatus : "",
-      taskIncompleteReason:
-        typeof episode.taskIncompleteReason === "string" ? episode.taskIncompleteReason : "",
+      mostUsefulReflection:
+        typeof episode.mostUsefulReflection === "string" ? episode.mostUsefulReflection : "",
+      improvementReflection:
+        typeof episode.improvementReflection === "string" ? episode.improvementReflection : "",
       skipReason: typeof episode.skipReason === "string" ? episode.skipReason : "",
       legacyEpisodeEndReason:
         typeof episode.legacyEpisodeEndReason === "string" ? episode.legacyEpisodeEndReason : "",
