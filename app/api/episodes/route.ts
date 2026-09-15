@@ -8,6 +8,8 @@ import { resolveEpisodeLanguage } from "@/lib/language";
 import {
   CRITICAL_FLAG_KEYS,
   DIMENSION_KEYS,
+  PARTICIPANT_RESPONSE_KEYS,
+  STOPPING_FACTOR_KEYS,
   CriticalFailureObserved,
   CriticalFlagValue,
   DimensionScore,
@@ -116,7 +118,6 @@ export async function GET(request: Request) {
         e.module_objective AS "moduleObjective",
         e.prior_context AS "priorContext",
         e.transcript,
-        e.privacy_review_status AS "privacyReviewStatus",
         e.language_review_status AS "languageReviewStatus",
         COALESCE(primary_summary.primary_count, 0) AS "primaryRatingCount",
         COALESCE(primary_summary.primary_mismatch, FALSE) AS "primaryMismatch",
@@ -133,8 +134,18 @@ export async function GET(request: Request) {
         current.critical_failure_observed AS "criticalFailureObserved",
         current.critical_flags_json AS "criticalFlagsJson",
         current.critical_evidence_json AS "criticalEvidenceJson",
-        current.most_useful_reflection AS "mostUsefulReflection",
-        current.improvement_reflection AS "improvementReflection",
+        current.critical_evidence_turns_json AS "criticalEvidenceTurnsJson",
+        current.task_status AS "taskStatus",
+        current.task_incomplete_reason AS "taskIncompleteReason",
+        current.participant_responses_json AS "participantResponsesJson",
+        current.participant_response_other AS "participantResponseOther",
+        current.module_episode_ending AS "episodeEnding",
+        current.stopping_factors_json AS "stoppingFactorsJson",
+        current.stopping_factors_evidence_turns AS "stoppingFactorsEvidenceTurns",
+        current.stopping_factors_explanation AS "stoppingFactorsExplanation",
+        current.gender_context_handling AS "genderContextHandling",
+        current.most_useful_thing AS "mostUsefulThing",
+        current.suggested_improvement AS "suggestedImprovement",
         current.skip_reason AS "skipReason",
         current.episode_end_reason AS "legacyEpisodeEndReason",
         current.comments,
@@ -152,6 +163,12 @@ export async function GET(request: Request) {
             COUNT(*) >= 2
             AND (
               COUNT(DISTINCT primary_rating.scores_json) > 1
+              OR COUNT(DISTINCT primary_rating.task_status) > 1
+              OR COUNT(DISTINCT primary_rating.task_incomplete_reason) > 1
+              OR COUNT(DISTINCT primary_rating.participant_responses_json) > 1
+              OR COUNT(DISTINCT primary_rating.module_episode_ending) > 1
+              OR COUNT(DISTINCT primary_rating.stopping_factors_json) > 1
+              OR COUNT(DISTINCT primary_rating.gender_context_handling) > 1
               OR COUNT(DISTINCT primary_rating.critical_failure_observed) > 1
               OR COUNT(DISTINCT primary_rating.critical_flags_json) > 1
             )
@@ -159,7 +176,11 @@ export async function GET(request: Request) {
           (
             COUNT(*) >= 2
             AND (
-              COUNT(DISTINCT primary_rating.critical_failure_observed) > 1
+              COUNT(DISTINCT primary_rating.task_status) > 1
+              OR COUNT(DISTINCT primary_rating.task_incomplete_reason) > 1
+              OR COUNT(DISTINCT primary_rating.module_episode_ending) > 1
+              OR COUNT(DISTINCT primary_rating.gender_context_handling) > 1
+              OR COUNT(DISTINCT primary_rating.critical_failure_observed) > 1
               OR COUNT(DISTINCT primary_rating.critical_flags_json) > 1
               OR EXISTS (
                 SELECT 1
@@ -251,10 +272,23 @@ export async function GET(request: Request) {
       criticalFailureObserved,
       criticalFlags,
       criticalEvidence: parseKeyedJson<string>(episode.criticalEvidenceJson, CRITICAL_FLAG_KEYS, () => ""),
-      mostUsefulReflection:
-        typeof episode.mostUsefulReflection === "string" ? episode.mostUsefulReflection : "",
-      improvementReflection:
-        typeof episode.improvementReflection === "string" ? episode.improvementReflection : "",
+      criticalEvidenceTurns: parseKeyedJson<string>(episode.criticalEvidenceTurnsJson, CRITICAL_FLAG_KEYS, () => ""),
+      taskStatus: episode.taskStatus === "completed_acknowledged"
+        ? "outcome_delivered_confirmation_observed"
+        : episode.taskStatus === "output_delivered_unacknowledged"
+          ? "output_delivered_confirmation_not_observed"
+          : episode.taskStatus === "not_completed"
+            ? "in_progress_no_output"
+            : typeof episode.taskStatus === "string" ? episode.taskStatus : "",
+      participantResponses: parseKeyedJson<boolean>(episode.participantResponsesJson, PARTICIPANT_RESPONSE_KEYS, () => false),
+      participantResponseOther: typeof episode.participantResponseOther === "string" ? episode.participantResponseOther : "",
+      episodeEnding: typeof episode.episodeEnding === "string" ? episode.episodeEnding : "",
+      stoppingFactors: parseKeyedJson<boolean>(episode.stoppingFactorsJson, STOPPING_FACTOR_KEYS, () => false),
+      stoppingFactorsEvidenceTurns: typeof episode.stoppingFactorsEvidenceTurns === "string" ? episode.stoppingFactorsEvidenceTurns : "",
+      stoppingFactorsExplanation: typeof episode.stoppingFactorsExplanation === "string" ? episode.stoppingFactorsExplanation : "",
+      genderContextHandling: typeof episode.genderContextHandling === "string" ? episode.genderContextHandling : "",
+      mostUsefulThing: typeof episode.mostUsefulThing === "string" ? episode.mostUsefulThing : "",
+      suggestedImprovement: typeof episode.suggestedImprovement === "string" ? episode.suggestedImprovement : "",
       skipReason: typeof episode.skipReason === "string" ? episode.skipReason : "",
       legacyEpisodeEndReason:
         typeof episode.legacyEpisodeEndReason === "string" ? episode.legacyEpisodeEndReason : "",

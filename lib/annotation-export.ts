@@ -1,5 +1,10 @@
 import { studentStatusLabel, treatmentLabel } from "@/lib/episode-dimensions";
-import { CRITICAL_FLAGS, RUBRIC_DIMENSIONS } from "@/lib/rubric";
+import {
+  CRITICAL_FLAGS,
+  PARTICIPANT_RESPONSES,
+  RUBRIC_DIMENSIONS,
+  STOPPING_FACTORS,
+} from "@/lib/rubric";
 import { primaryCohortForOrder } from "@/lib/study-assignments";
 
 export type ExportAnnotationRow = {
@@ -15,12 +20,29 @@ export type ExportAnnotationRow = {
   studyOrder: number;
   judgeBaseAssignment: string;
   studentStatus: string;
+  participantGender: string;
+  activityGroup: string;
+  samplingWeight: number | string | null;
+  participantSamplingProbability: number | string | null;
+  focalEpisodeSelectionProbability: number | string | null;
+  combinedEpisodeInclusionProbability: number | string | null;
+  activityGroupValidationStatus: string;
+  privacyReviewStatus: string;
   module: string;
   treatment: string;
   language: string;
   status: string;
-  mostUsefulReflection: string;
-  improvementReflection: string;
+  taskStatus: string;
+  taskIncompleteReason: string;
+  participantResponsesJson: string;
+  participantResponseOther: string;
+  episodeEnding: string;
+  stoppingFactorsJson: string;
+  stoppingFactorsEvidenceTurns: string;
+  stoppingFactorsExplanation: string;
+  genderContextHandling: string;
+  mostUsefulThing: string;
+  suggestedImprovement: string;
   skipReason: string;
   legacyEpisodeEndReason: string;
   criticalFailureObserved: string;
@@ -29,6 +51,7 @@ export type ExportAnnotationRow = {
   justificationsJson: string;
   criticalFlagsJson: string;
   criticalEvidenceJson: string;
+  criticalEvidenceTurnsJson: string;
   comments: string;
   rubricVersion: string;
   updatedAt: string | Date;
@@ -75,10 +98,29 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     "primary_group",
     "judge_base_assignment",
     "student_status",
+    "participant_gender",
+    "activity_group",
+    "sampling_weight",
+    "participant_sampling_probability",
+    "focal_episode_selection_probability",
+    "combined_episode_inclusion_probability",
+    "activity_group_validation_status",
+    "privacy_review_status",
     "module",
     "treatment",
     "language",
     "annotation_status",
+    "task_status",
+    "legacy_task_incomplete_reason",
+    ...PARTICIPANT_RESPONSES.map((response) => `participant_response_${response.key}`),
+    "participant_response_other",
+    "module_episode_ending",
+    ...STOPPING_FACTORS.map((factor) => `stopping_factor_${factor.key}`),
+    "stopping_factors_evidence_turns",
+    "stopping_factors_explanation",
+    "gender_context_handling",
+    "most_useful_thing",
+    "suggested_improvement",
     "skip_reason",
     "legacy_episode_end_reason",
     "critical_failure_observed",
@@ -89,10 +131,9 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     ]),
     ...CRITICAL_FLAGS.flatMap((flag) => [
       `${flag.key}_flag`,
+      `${flag.key}_evidence_turns`,
       `${flag.key}_evidence_explanation`,
     ]),
-    "most_useful_reflection",
-    "improvement_reflection",
     "comments",
     "rubric_version",
     "updated_at",
@@ -104,6 +145,9 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     const justifications = keyedValues(row.justificationsJson);
     const criticalFlags = keyedValues(row.criticalFlagsJson);
     const criticalEvidence = keyedValues(row.criticalEvidenceJson);
+    const criticalEvidenceTurns = keyedValues(row.criticalEvidenceTurnsJson);
+    const participantResponses = keyedValues(row.participantResponsesJson);
+    const stoppingFactors = keyedValues(row.stoppingFactorsJson);
 
     return [
       row.raterId,
@@ -119,10 +163,29 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
       primaryCohortForOrder(Number(row.studyOrder)),
       row.judgeBaseAssignment,
       studentStatusLabel(row.studentStatus),
+      row.participantGender,
+      row.activityGroup,
+      row.samplingWeight,
+      row.participantSamplingProbability,
+      row.focalEpisodeSelectionProbability,
+      row.combinedEpisodeInclusionProbability,
+      row.activityGroupValidationStatus,
+      row.privacyReviewStatus,
       row.module,
       treatmentLabel(row.treatment),
       row.language,
       row.status,
+      row.taskStatus,
+      row.taskIncompleteReason,
+      ...PARTICIPANT_RESPONSES.map((response) => participantResponses[response.key]),
+      row.participantResponseOther,
+      row.episodeEnding,
+      ...STOPPING_FACTORS.map((factor) => stoppingFactors[factor.key]),
+      row.stoppingFactorsEvidenceTurns,
+      row.stoppingFactorsExplanation,
+      row.genderContextHandling,
+      row.mostUsefulThing,
+      row.suggestedImprovement,
       row.skipReason,
       row.legacyEpisodeEndReason,
       row.criticalFailureObserved,
@@ -133,10 +196,9 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
       ]),
       ...CRITICAL_FLAGS.flatMap((flag) => [
         criticalFlags[flag.key],
+        criticalEvidenceTurns[flag.key],
         criticalEvidence[flag.key],
       ]),
-      row.mostUsefulReflection,
-      row.improvementReflection,
       row.comments,
       row.rubricVersion,
       row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,

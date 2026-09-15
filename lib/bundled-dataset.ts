@@ -8,14 +8,21 @@ const finalDatasetCsv = readFileSync(
   "utf8",
 );
 
-/** Stable marker used to detect whether this exact bundled sample is in Postgres. */
-export const BUNDLED_DATASET_VERSION = "najah-activity-sample-v4-flexible-judge-review";
+/** Version used by the currently published CSV, which predates the version column. */
+const LEGACY_BUNDLED_DATASET_VERSION = "najah-activity-sample-v4-flexible-judge-review";
 
 type BundledEpisode = {
   episodeId: string;
   studyOrder: number;
   judgeBaseAssignment: "" | "judge_1" | "judge_2";
   studentStatus: string;
+  participantGender: string;
+  activityGroup: string;
+  samplingWeight: number | null;
+  participantSamplingProbability: number | null;
+  focalEpisodeSelectionProbability: number | null;
+  combinedEpisodeInclusionProbability: number | null;
+  activityGroupValidationStatus: string;
   language: string;
   module: string;
   treatment: string;
@@ -24,6 +31,11 @@ type BundledEpisode = {
   transcript: string;
   privacyReviewStatus: string;
   languageReviewStatus: string;
+};
+
+type BundledDataset = {
+  version: string;
+  episodes: BundledEpisode[];
 };
 
 /**
@@ -77,7 +89,15 @@ function parseCsv(text: string): string[][] {
  * Converts the compact, reviewed CSV into the fields stored by the website.
  * Throws during startup if a future dataset is missing any required column.
  */
-function readBundledEpisodes(csv: string): BundledEpisode[] {
+function optionalNumber(value: string | undefined): number | null {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Read one internally versioned dataset while retaining legacy compatibility. */
+function readBundledDataset(csv: string): BundledDataset {
   const rows = parseCsv(csv);
   const headers = (rows.shift() ?? []).map((header) =>
     header.trim().replace(/^\ufeff/, ""),
@@ -100,6 +120,18 @@ function readBundledEpisodes(csv: string): BundledEpisode[] {
     throw new Error(`The bundled Najah dataset is missing: ${missingHeaders.join(", ")}`);
   }
 
+  const versionIndex = headers.indexOf("dataset_version");
+  const declaredVersions = new Set(
+    rows
+      .filter((row) => row.some((value) => value.trim()))
+      .map((row) => (versionIndex >= 0 ? (row[versionIndex] ?? "").trim() : ""))
+      .filter(Boolean),
+  );
+  if (declaredVersions.size > 1) {
+    throw new Error("The bundled Najah CSV contains more than one dataset version.");
+  }
+  const version = [...declaredVersions][0] ?? LEGACY_BUNDLED_DATASET_VERSION;
+
   const episodes = rows
     .filter((row) => row.some((value) => value.trim()))
     .map((row) => {
@@ -111,6 +143,20 @@ function readBundledEpisodes(csv: string): BundledEpisode[] {
         studyOrder: Number(record.rater_item_order),
         judgeBaseAssignment: "" as const,
         studentStatus: record.student_status.trim() || "unknown",
+        participantGender: record.participant_gender?.trim() || "unknown",
+        activityGroup: record.activity_group?.trim() || "",
+        samplingWeight: optionalNumber(record.sampling_weight),
+        participantSamplingProbability: optionalNumber(
+          record.participant_sampling_probability,
+        ),
+        focalEpisodeSelectionProbability: optionalNumber(
+          record.focal_episode_selection_probability,
+        ),
+        combinedEpisodeInclusionProbability: optionalNumber(
+          record.combined_episode_inclusion_probability,
+        ),
+        activityGroupValidationStatus:
+          record.activity_group_validation_status?.trim() || "",
         language: record.language.trim() || "unknown",
         module: record.module.trim() || "unknown",
         treatment: record.treatment.trim() || "unknown",
@@ -139,8 +185,70 @@ function readBundledEpisodes(csv: string): BundledEpisode[] {
     throw new Error("The bundled Najah dataset must have unique study orders from 1 to 300.");
   }
 
+  validateBalancedActivityCohorts(episodes);
   assignJudgeBaseSamples(episodes);
-  return episodes;
+  return { version, episodes };
+}
+
+/**
+ * Guard the activity-stratified study design encoded by study order.
+ *
+ * Activity is deliberately retained as server-side analysis metadata rather
+ * than returned by the rater episode API. When a versioned activity sample is
+ * bundled, every primary-rater cohort must contain 100 episodes and 33 or 34
+ * Low, Medium, and High episodes. This prevents a future CSV reorder from
+ * confounding activity group with rater team.
+ */
+function validateBalancedActivityCohorts(episodes: BundledEpisode[]): void {
+  const activityGroups = ["low", "medium", "high"] as const;
+  if (!episodes.some((episode) => episode.activityGroup)) return;
+
+  if (
+    episodes.some(
+      (episode) =>
+        !activityGroups.includes(
+          episode.activityGroup as (typeof activityGroups)[number],
+        ),
+    )
+  ) {
+    throw new Error(
+      "Every episode in the activity-stratified dataset must have a recognized activity group.",
+    );
+  }
+
+  for (const activityGroup of activityGroups) {
+    const total = episodes.filter(
+      (episode) => episode.activityGroup === activityGroup,
+    ).length;
+    if (total !== 100) {
+      throw new Error(`The bundled dataset must contain 100 ${activityGroup} episodes.`);
+    }
+  }
+
+  const cohorts = [
+    { label: "Group A", start: 1, end: 100 },
+    { label: "Group B", start: 101, end: 200 },
+    { label: "Group C", start: 201, end: 300 },
+  ];
+  for (const cohort of cohorts) {
+    const assigned = episodes.filter(
+      (episode) =>
+        episode.studyOrder >= cohort.start && episode.studyOrder <= cohort.end,
+    );
+    if (assigned.length !== 100) {
+      throw new Error(`${cohort.label} must contain exactly 100 episodes.`);
+    }
+    for (const activityGroup of activityGroups) {
+      const count = assigned.filter(
+        (episode) => episode.activityGroup === activityGroup,
+      ).length;
+      if (count < 33 || count > 34) {
+        throw new Error(
+          `${cohort.label} must contain 33 or 34 ${activityGroup} episodes.`,
+        );
+      }
+    }
+  }
 }
 
 /** Stable non-cryptographic rank used only for reproducible random sampling. */
@@ -191,7 +299,12 @@ function assignJudgeBaseSamples(episodes: BundledEpisode[]): void {
   }
 }
 
-const BUNDLED_EPISODES = readBundledEpisodes(finalDatasetCsv);
+const BUNDLED_DATASET = readBundledDataset(finalDatasetCsv);
+
+/** Stable marker read from the CSV so a reviewed replacement starts a new batch. */
+export const BUNDLED_DATASET_VERSION = BUNDLED_DATASET.version;
+
+const BUNDLED_EPISODES = BUNDLED_DATASET.episodes;
 
 /** Number of reviewed episodes automatically available to every rater. */
 export const BUNDLED_EPISODE_COUNT = BUNDLED_EPISODES.length;
@@ -225,6 +338,13 @@ export async function ensureBundledDataset(db: AppDatabase): Promise<void> {
       episode.studyOrder,
       episode.judgeBaseAssignment,
       episode.studentStatus,
+      episode.participantGender,
+      episode.activityGroup,
+      episode.samplingWeight,
+      episode.participantSamplingProbability,
+      episode.focalEpisodeSelectionProbability,
+      episode.combinedEpisodeInclusionProbability,
+      episode.activityGroupValidationStatus,
       episode.language,
       episode.module,
       episode.treatment,
@@ -244,7 +364,11 @@ export async function ensureBundledDataset(db: AppDatabase): Promise<void> {
   await db.execute(
     `
       INSERT INTO episodes (
-        episode_id, study_order, judge_base_assignment, student_status, language, module, treatment,
+        episode_id, study_order, judge_base_assignment, student_status,
+        participant_gender, activity_group, sampling_weight,
+        participant_sampling_probability, focal_episode_selection_probability,
+        combined_episode_inclusion_probability, activity_group_validation_status,
+        language, module, treatment,
         module_objective, prior_context, transcript,
         privacy_review_status, language_review_status,
         import_batch, imported_by
@@ -253,6 +377,13 @@ export async function ensureBundledDataset(db: AppDatabase): Promise<void> {
         study_order = excluded.study_order,
         judge_base_assignment = excluded.judge_base_assignment,
         student_status = excluded.student_status,
+        participant_gender = excluded.participant_gender,
+        activity_group = excluded.activity_group,
+        sampling_weight = excluded.sampling_weight,
+        participant_sampling_probability = excluded.participant_sampling_probability,
+        focal_episode_selection_probability = excluded.focal_episode_selection_probability,
+        combined_episode_inclusion_probability = excluded.combined_episode_inclusion_probability,
+        activity_group_validation_status = excluded.activity_group_validation_status,
         language = excluded.language,
         module = excluded.module,
         treatment = excluded.treatment,

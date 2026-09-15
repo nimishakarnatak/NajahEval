@@ -39,6 +39,50 @@ test("defines all nine evidence-based dimensions and seven critical-failure cate
   }
 });
 
+test("includes every revised participant, ending, stopping, gender, and qualitative field", async () => {
+  const [rubric, app, route, schema] = await Promise.all([
+    readFile(rubricPath, "utf8"),
+    readFile(annotatorAppPath, "utf8"),
+    readFile(annotationRoutePath, "utf8"),
+    readFile(schemaPath, "utf8"),
+  ]);
+  for (const key of [
+    "providedRequestedInformation",
+    "attemptedRequestedAction",
+    "usedOrRespondedToOutput",
+    "askedFollowUpQuestion",
+    "correctedOrDisagreed",
+    "expressedSatisfaction",
+    "expressedConfusionOrFrustration",
+    "changedModule",
+    "noFurtherReply",
+    "noClearResponse",
+    "cannotDetermine",
+    "otherObservableResponse",
+  ]) assert.match(rubric, new RegExp(`"${key}"`));
+  assert.match(rubric, /The intended output or outcome was delivered/);
+  assert.match(rubric, /Repetition or loss of context/);
+  assert.match(rubric, /Request for sensitive personal information/);
+  assert.match(rubric, /Gender-related guidance was restrictive/);
+  assert.match(app, /most useful thing Najah did/);
+  assert.match(app, /done or said differently/);
+  for (const column of [
+    "participant_responses_json",
+    "participant_response_other",
+    "module_episode_ending",
+    "stopping_factors_json",
+    "stopping_factors_evidence_turns",
+    "stopping_factors_explanation",
+    "gender_context_handling",
+    "most_useful_thing",
+    "suggested_improvement",
+    "critical_evidence_turns_json",
+  ]) {
+    assert.match(schema, new RegExp(column));
+    assert.match(route, new RegExp(column));
+  }
+});
+
 test("uses observable, layered scope guidance without the old compound anchor", async () => {
   const [rubric, app] = await Promise.all([
     readFile(rubricPath, "utf8"),
@@ -53,36 +97,21 @@ test("uses observable, layered scope guidance without the old compound anchor", 
   assert.doesNotMatch(rubric, /presents inappropriate authority/);
 });
 
-test("requires explanations only for skips and selected critical failures", async () => {
-  const [route, app] = await Promise.all([
-    readFile(annotationRoutePath, "utf8"),
-    readFile(annotatorAppPath, "utf8"),
-  ]);
+test("keeps routine score notes optional and validates the revised categorical questions", async () => {
+  const route = await readFile(annotationRoutePath, "utf8");
   assert.doesNotMatch(route, /Add the relevant turn number\(s\)/);
   assert.doesNotMatch(route, /Provide a written justification for/);
   assert.doesNotMatch(route, /if \(!annotation\.justifications\[dimension\.key\]\)/);
-  assert.doesNotMatch(route, /Select the task status/);
-  assert.doesNotMatch(app, /Task outcome/);
+  assert.match(route, /Select the task status/);
+  assert.match(route, /Select at least one observable participant response/);
+  assert.match(route, /Select how the available module episode ended/);
+  assert.match(route, /Select how gender-related context was handled/);
+  assert.match(route, /Provide the evidence turn number\(s\) for the stopping factor/);
   assert.doesNotMatch(route, /received a score of/);
   assert.doesNotMatch(route, /genuinely cannot be assessed/);
   assert.match(route, /Select whether any critical failure was observed/);
   assert.match(route, /Select at least one critical-failure category/);
   assert.match(route, /Provide a brief explanation/);
-});
-
-test("stores two optional qualitative reflections outside the numerical score", async () => {
-  const [route, app, schema] = await Promise.all([
-    readFile(annotationRoutePath, "utf8"),
-    readFile(annotatorAppPath, "utf8"),
-    readFile(schemaPath, "utf8"),
-  ]);
-  assert.match(app, /Optional qualitative reflections/);
-  assert.match(app, /will not form part of the numerical quality score/);
-  assert.match(app, /What, if anything, was the most useful thing Najah did/);
-  assert.match(app, /What is one thing Najah could have done or said differently/);
-  assert.match(route, /most_useful_reflection, improvement_reflection/);
-  assert.match(schema, /most_useful_reflection TEXT NOT NULL DEFAULT ''/);
-  assert.match(schema, /improvement_reflection TEXT NOT NULL DEFAULT ''/);
 });
 
 test("permanently deletes only the signed-in rater's selected drafts", async () => {
@@ -102,12 +131,16 @@ test("keeps evidence-rubric results separate from legacy pilot annotations", asy
     readFile(schemaPath, "utf8"),
   ]);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS rubric_annotations/);
-  assert.doesNotMatch(schema, /task_status TEXT NOT NULL DEFAULT ''/);
-  assert.doesNotMatch(schema, /task_incomplete_reason TEXT NOT NULL DEFAULT ''/);
-  assert.match(schema, /most_useful_reflection TEXT NOT NULL DEFAULT ''/);
-  assert.match(schema, /improvement_reflection TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /task_status TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /task_incomplete_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /skip_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /critical_failure_observed TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /participant_responses_json TEXT NOT NULL DEFAULT '\{\}'/);
+  assert.match(schema, /module_episode_ending TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /stopping_factors_json TEXT NOT NULL DEFAULT '\{\}'/);
+  assert.match(schema, /gender_context_handling TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /most_useful_thing TEXT NOT NULL DEFAULT ''/);
+  assert.match(schema, /suggested_improvement TEXT NOT NULL DEFAULT ''/);
   assert.match(episodeRoute, /FROM rubric_annotations completed/);
   assert.match(episodeRoute, /LEFT JOIN rubric_annotations current/);
 });

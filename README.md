@@ -42,17 +42,40 @@ serverless function's temporary filesystem.
 
 ## Activity-based sampling design
 
-The current dataset samples 100 unique participants from each of three
-separated activity groups: low (1-4 participant turns), medium (8-12), and high
-(20 or more). Activity is calculated across every eligible module episode in a
-participant's available history before one focal episode is selected. Najah
-messages are excluded. Participants with 5-7 or 13-19 turns remain in a
-transition group for later scale analyses but are not sampled initially.
+The dataset bundled for the next release samples 100 unique participants from
+each of three completion-based activity groups. Low means exactly one
+uncompleted module with at least seven participant turns; Medium means exactly
+one completed module; and High means at least one completed module plus another
+distinct module started. One focal module episode is selected per participant.
 
 Activity is descriptive, not a proxy for positive engagement. High activity can
 reflect productive work, persistence, confusion, retries, or technical issues.
 The activity measure and group are deliberately omitted from the rater-facing
-CSV so they cannot influence human judgments.
+API and interface so they cannot influence human judgments.
+
+The 300 focal episodes are ordered so that every primary-rater cohort contains
+100 episodes and 33 or 34 participants from each activity group:
+
+| Primary cohort | Low | Medium | High | Total |
+| --- | ---: | ---: | ---: | ---: |
+| Group A | 34 | 33 | 33 | 100 |
+| Group B | 33 | 34 | 33 | 100 |
+| Group C | 33 | 33 | 34 | 100 |
+
+The server validates this allocation when loading the bundled CSV and refuses
+an incorrectly ordered activity-stratified dataset. This prevents rater-team
+severity from becoming inseparable from participant activity.
+
+The bundled version retains explicit pending-review metadata. Project-owner
+processing approval has been recorded, while the separate human completion and
+episode-level privacy checks remain auditable. If a completion decision changes,
+sampling must be rerun before treating the activity classifications as final.
+The versioned import creates a new active database batch without deleting or
+silently reconnecting ratings from the earlier dataset.
+
+The database stores participant gender, activity group, sampling probabilities,
+and privacy-review status for administrator exports. These analysis and audit
+fields are not selected by the rater-facing episode endpoint.
 
 ## Evaluator assignment design
 
@@ -69,8 +92,8 @@ not overlap. They are balanced across Groups A-C: Judge 1 receives 17/17/16 and
 Judge 2 receives 16/17/17 episodes from those groups. Once both primary ratings
 have been submitted, a serious mismatch outside the base sample is added to one
 judge's queue using a deterministic, non-overlapping allocation rule. A serious
-mismatch is a 1-versus-3 score, N/A-versus-substantive score, or a different
-critical-failure judgment.
+mismatch is a 1-versus-3 score, N/A-versus-substantive score, different task
+status or incomplete-task reason, or different critical-failure judgment.
 
 The design requires at least 600 primary ratings, increasing when more primary
 raters are assigned, plus 200 base judge reviews and two judge reviews for each
@@ -198,12 +221,16 @@ do not expose the production `DATABASE_URL` to untrusted preview deployments.
   removed. Export columns identify the account role, current assignment, saved
   review layer, and assignment at the time of rating.
 - Every rubric dimension requires a score of 1, 2, 3, or N/A. Score
-  justifications and evidence turn numbers are available but optional. A
-  written explanation is required only when an evaluator skips an episode or
-  selects a critical failure.
-- Two optional qualitative reflections capture what Najah did most usefully
-  and one specific way it could improve. These responses support process
-  evaluation and do not contribute to the numerical quality score.
+  justifications and evidence turn numbers are available but optional.
+- Every completed rating separately records task outcome, observable
+  participant responses, the module-episode ending, and gender-context
+  handling. When applicable, raters also code observable factors immediately
+  before stopping; evidence and a short explanation are required whenever a
+  stopping factor is selected.
+- A written reason is required when an evaluator skips an episode. Evidence
+  turn numbers and a short explanation are required for every selected critical
+  failure. Two optional qualitative reflections support process evaluation but
+  are excluded from numerical quality scores.
 - Evaluators never see another evaluator's scores; they see only the completed
   count for their own review layer. The judge workspace separates fixed random
   assignments from mismatch reviews and shows Not started, Draft, Done,

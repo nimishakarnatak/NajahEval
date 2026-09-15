@@ -13,8 +13,18 @@ import {
   DIMENSION_KEYS,
   DimensionKey,
   DimensionScore,
+  EPISODE_ENDINGS,
+  EpisodeEnding,
+  GENDER_CONTEXT_OPTIONS,
+  GenderContextHandling,
+  PARTICIPANT_RESPONSE_KEYS,
+  ParticipantResponseKey,
   RUBRIC_DIMENSIONS,
   RUBRIC_VERSION,
+  STOPPING_FACTOR_KEYS,
+  StoppingFactorKey,
+  TASK_STATUSES,
+  TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
 import { getRaterIdentity } from "@/lib/server-auth";
@@ -39,9 +49,18 @@ type AnnotationPayload = {
   justifications?: Partial<Record<DimensionKey, string>>;
   criticalFlags?: Partial<Record<CriticalFlagKey, CriticalFlagValue>>;
   criticalEvidence?: Partial<Record<CriticalFlagKey, string>>;
+  criticalEvidenceTurns?: Partial<Record<CriticalFlagKey, string>>;
   criticalFailureObserved?: CriticalFailureObserved | "";
-  mostUsefulReflection?: string;
-  improvementReflection?: string;
+  taskStatus?: TaskStatus | "";
+  participantResponses?: Partial<Record<ParticipantResponseKey, boolean>>;
+  participantResponseOther?: string;
+  episodeEnding?: EpisodeEnding | "";
+  stoppingFactors?: Partial<Record<StoppingFactorKey, boolean>>;
+  stoppingFactorsEvidenceTurns?: string;
+  stoppingFactorsExplanation?: string;
+  genderContextHandling?: GenderContextHandling | "";
+  mostUsefulThing?: string;
+  suggestedImprovement?: string;
   skipReason?: string;
   comments?: string;
   status?: "draft" | "complete";
@@ -54,9 +73,18 @@ type NormalizedAnnotation = {
   justifications: Record<DimensionKey, string>;
   criticalFlags: Record<CriticalFlagKey, CriticalFlagValue>;
   criticalEvidence: Record<CriticalFlagKey, string>;
+  criticalEvidenceTurns: Record<CriticalFlagKey, string>;
   criticalFailureObserved: CriticalFailureObserved | "";
-  mostUsefulReflection: string;
-  improvementReflection: string;
+  taskStatus: TaskStatus | "";
+  participantResponses: Record<ParticipantResponseKey, boolean>;
+  participantResponseOther: string;
+  episodeEnding: EpisodeEnding | "";
+  stoppingFactors: Record<StoppingFactorKey, boolean>;
+  stoppingFactorsEvidenceTurns: string;
+  stoppingFactorsExplanation: string;
+  genderContextHandling: GenderContextHandling | "";
+  mostUsefulThing: string;
+  suggestedImprovement: string;
   skipReason: string;
   comments: string;
 };
@@ -86,6 +114,35 @@ function validCriticalFailureObserved(
   );
 }
 
+/** Drafts may leave task status blank; completed ratings must select one. */
+function validTaskStatus(value: unknown): value is TaskStatus | "" {
+  return (
+    value === "" ||
+    TASK_STATUSES.some((status) => status.value === value)
+  );
+}
+
+/** Drafts may leave the module ending blank; submissions may not. */
+function validEpisodeEnding(value: unknown): value is EpisodeEnding | "" {
+  return (
+    value === "" ||
+    EPISODE_ENDINGS.some((option) => option.value === value)
+  );
+}
+
+/** Drafts may leave gender-context handling blank; submissions may not. */
+function validGenderContext(value: unknown): value is GenderContextHandling | "" {
+  return value === "" || GENDER_CONTEXT_OPTIONS.some((option) => option.value === value);
+}
+
+/** Whether conditional pre-stopping factors apply to this record. */
+function stoppingFactorsApply(taskStatus: TaskStatus | "", episodeEnding: EpisodeEnding | ""): boolean {
+  return taskStatus === "not_meaningfully_started" ||
+    taskStatus === "in_progress_no_output" ||
+    taskStatus === "output_delivered_confirmation_not_observed" ||
+    episodeEnding === "no_further_participant_reply";
+}
+
 /**
  * Normalizes a browser payload into complete keyed objects before validation or
  * storage. Trimming here keeps the database and CSV exports analysis-ready.
@@ -97,12 +154,19 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     (payload.justifications !== undefined && !isRecord(payload.justifications)) ||
     (payload.criticalFlags !== undefined && !isRecord(payload.criticalFlags)) ||
     (payload.criticalEvidence !== undefined && !isRecord(payload.criticalEvidence)) ||
+    (payload.criticalEvidenceTurns !== undefined && !isRecord(payload.criticalEvidenceTurns)) ||
+    (payload.participantResponses !== undefined && !isRecord(payload.participantResponses)) ||
+    (payload.stoppingFactors !== undefined && !isRecord(payload.stoppingFactors)) ||
     (payload.criticalFailureObserved !== undefined &&
       !validCriticalFailureObserved(payload.criticalFailureObserved)) ||
-    (payload.mostUsefulReflection !== undefined &&
-      typeof payload.mostUsefulReflection !== "string") ||
-    (payload.improvementReflection !== undefined &&
-      typeof payload.improvementReflection !== "string") ||
+    (payload.taskStatus !== undefined && !validTaskStatus(payload.taskStatus)) ||
+    (payload.episodeEnding !== undefined && !validEpisodeEnding(payload.episodeEnding)) ||
+    (payload.genderContextHandling !== undefined && !validGenderContext(payload.genderContextHandling)) ||
+    (payload.participantResponseOther !== undefined && typeof payload.participantResponseOther !== "string") ||
+    (payload.stoppingFactorsEvidenceTurns !== undefined && typeof payload.stoppingFactorsEvidenceTurns !== "string") ||
+    (payload.stoppingFactorsExplanation !== undefined && typeof payload.stoppingFactorsExplanation !== "string") ||
+    (payload.mostUsefulThing !== undefined && typeof payload.mostUsefulThing !== "string") ||
+    (payload.suggestedImprovement !== undefined && typeof payload.suggestedImprovement !== "string") ||
     (payload.skipReason !== undefined && typeof payload.skipReason !== "string") ||
     (payload.comments !== undefined && typeof payload.comments !== "string") ||
     (payload.action !== undefined && payload.action !== "save" && payload.action !== "skip")
@@ -115,6 +179,9 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
   const justificationSource = (payload.justifications ?? {}) as Record<string, unknown>;
   const flagSource = (payload.criticalFlags ?? {}) as Record<string, unknown>;
   const criticalEvidenceSource = (payload.criticalEvidence ?? {}) as Record<string, unknown>;
+  const criticalEvidenceTurnsSource = (payload.criticalEvidenceTurns ?? {}) as Record<string, unknown>;
+  const participantResponseSource = (payload.participantResponses ?? {}) as Record<string, unknown>;
+  const stoppingFactorSource = (payload.stoppingFactors ?? {}) as Record<string, unknown>;
 
   const scores = keyedRecord(DIMENSION_KEYS, () => null as DimensionScore);
   const evidenceTurns = keyedRecord(DIMENSION_KEYS, () => "");
@@ -133,12 +200,37 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
 
   const criticalFlags = keyedRecord(CRITICAL_FLAG_KEYS, () => null as CriticalFlagValue);
   const criticalEvidence = keyedRecord(CRITICAL_FLAG_KEYS, () => "");
+  const criticalEvidenceTurns = keyedRecord(CRITICAL_FLAG_KEYS, () => "");
   for (const key of CRITICAL_FLAG_KEYS) {
     const flag = flagSource[key] ?? null;
     const evidence = criticalEvidenceSource[key] ?? "";
-    if (!validCriticalFlag(flag) || typeof evidence !== "string") return null;
+    const evidenceTurns = criticalEvidenceTurnsSource[key] ?? "";
+    if (!validCriticalFlag(flag) || typeof evidence !== "string" || typeof evidenceTurns !== "string") return null;
     criticalFlags[key] = flag;
     criticalEvidence[key] = evidence.trim();
+    criticalEvidenceTurns[key] = evidenceTurns.trim();
+  }
+
+  const participantResponses = keyedRecord(PARTICIPANT_RESPONSE_KEYS, () => false);
+  for (const key of PARTICIPANT_RESPONSE_KEYS) {
+    const value = participantResponseSource[key] ?? false;
+    if (typeof value !== "boolean") return null;
+    participantResponses[key] = value;
+  }
+  if (participantResponses.noClearResponse || participantResponses.cannotDetermine) {
+    const selectedExclusive = participantResponses.cannotDetermine ? "cannotDetermine" : "noClearResponse";
+    for (const key of PARTICIPANT_RESPONSE_KEYS) participantResponses[key] = key === selectedExclusive;
+  }
+
+  const stoppingFactors = keyedRecord(STOPPING_FACTOR_KEYS, () => false);
+  for (const key of STOPPING_FACTOR_KEYS) {
+    const value = stoppingFactorSource[key] ?? false;
+    if (typeof value !== "boolean") return null;
+    stoppingFactors[key] = value;
+  }
+  if (stoppingFactors.noObservableProblem || stoppingFactors.cannotDetermine) {
+    const selectedExclusive = stoppingFactors.cannotDetermine ? "cannotDetermine" : "noObservableProblem";
+    for (const key of STOPPING_FACTOR_KEYS) stoppingFactors[key] = key === selectedExclusive;
   }
 
   // Older browser clients submitted only six category-level Yes/No values.
@@ -160,17 +252,20 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     for (const key of CRITICAL_FLAG_KEYS) {
       criticalFlags[key] = "no";
       criticalEvidence[key] = "";
+      criticalEvidenceTurns[key] = "";
     }
   } else if (criticalFailureObserved === "cannot_determine") {
     for (const key of CRITICAL_FLAG_KEYS) {
       criticalFlags[key] = null;
       criticalEvidence[key] = "";
+      criticalEvidenceTurns[key] = "";
     }
   } else if (criticalFailureObserved === "yes") {
     for (const key of CRITICAL_FLAG_KEYS) {
       if (criticalFlags[key] !== "yes") {
         criticalFlags[key] = "no";
         criticalEvidence[key] = "";
+        criticalEvidenceTurns[key] = "";
       }
     }
   }
@@ -181,9 +276,26 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     justifications,
     criticalFlags,
     criticalEvidence,
+    criticalEvidenceTurns,
     criticalFailureObserved,
-    mostUsefulReflection: payload.mostUsefulReflection?.trim().slice(0, 5000) ?? "",
-    improvementReflection: payload.improvementReflection?.trim().slice(0, 5000) ?? "",
+    taskStatus: payload.taskStatus ?? "",
+    participantResponses,
+    participantResponseOther: participantResponses.otherObservableResponse
+      ? payload.participantResponseOther?.trim() ?? ""
+      : "",
+    episodeEnding: payload.episodeEnding ?? "",
+    stoppingFactors: stoppingFactorsApply(payload.taskStatus ?? "", payload.episodeEnding ?? "")
+      ? stoppingFactors
+      : keyedRecord(STOPPING_FACTOR_KEYS, () => false),
+    stoppingFactorsEvidenceTurns: stoppingFactorsApply(payload.taskStatus ?? "", payload.episodeEnding ?? "")
+      ? payload.stoppingFactorsEvidenceTurns?.trim() ?? ""
+      : "",
+    stoppingFactorsExplanation: stoppingFactorsApply(payload.taskStatus ?? "", payload.episodeEnding ?? "")
+      ? payload.stoppingFactorsExplanation?.trim() ?? ""
+      : "",
+    genderContextHandling: payload.genderContextHandling ?? "",
+    mostUsefulThing: payload.mostUsefulThing?.trim() ?? "",
+    suggestedImprovement: payload.suggestedImprovement?.trim() ?? "",
     skipReason: payload.skipReason?.trim() ?? "",
     comments: payload.comments?.trim() ?? "",
   };
@@ -201,6 +313,29 @@ function completionError(annotation: NormalizedAnnotation): string | null {
     if (score === null) return `Select a score or N/A for ${dimension.label}.`;
   }
 
+  if (!annotation.taskStatus) {
+    return "Select the task status.";
+  }
+  if (!PARTICIPANT_RESPONSE_KEYS.some((key) => annotation.participantResponses[key])) {
+    return "Select at least one observable participant response.";
+  }
+  if (annotation.participantResponses.otherObservableResponse && !annotation.participantResponseOther) {
+    return "Describe the other observable participant response.";
+  }
+  if (!annotation.episodeEnding) {
+    return "Select how the available module episode ended.";
+  }
+  if (stoppingFactorsApply(annotation.taskStatus, annotation.episodeEnding)) {
+    if (!STOPPING_FACTOR_KEYS.some((key) => annotation.stoppingFactors[key])) {
+      return "Select at least one factor visible immediately before the episode stopped.";
+    }
+    if (!annotation.stoppingFactorsEvidenceTurns) {
+      return "Provide the evidence turn number(s) for the stopping factor(s).";
+    }
+    if (!annotation.stoppingFactorsExplanation) {
+      return "Briefly explain the stopping factor(s).";
+    }
+  }
   if (!annotation.criticalFailureObserved) {
     return "Select whether any critical failure was observed.";
   }
@@ -212,10 +347,16 @@ function completionError(annotation: NormalizedAnnotation): string | null {
       return "Select at least one critical-failure category.";
     }
     for (const flag of selectedFlags) {
+      if (!annotation.criticalEvidenceTurns[flag.key]) {
+        return `Provide evidence turn number(s) for ${flag.label}.`;
+      }
       if (!annotation.criticalEvidence[flag.key]) {
         return `Provide a brief explanation for ${flag.label}.`;
       }
     }
+  }
+  if (!annotation.genderContextHandling) {
+    return "Select how gender-related context was handled.";
   }
   return null;
 }
@@ -285,6 +426,12 @@ export async function POST(request: Request) {
       .prepare(`
         SELECT
           scores_json AS "scoresJson",
+          task_status AS "taskStatus",
+          task_incomplete_reason AS "taskIncompleteReason",
+          participant_responses_json AS "participantResponsesJson",
+          module_episode_ending AS "episodeEnding",
+          stopping_factors_json AS "stoppingFactorsJson",
+          gender_context_handling AS "genderContextHandling",
           critical_failure_observed AS "criticalFailureObserved",
           critical_flags_json AS "criticalFlagsJson"
         FROM rubric_annotations
@@ -353,10 +500,14 @@ export async function POST(request: Request) {
       INSERT INTO rubric_annotations (
         episode_id, rater_id, rater_email, review_layer, assignment_cohort,
         scores_json, evidence_turns_json,
-        justifications_json, critical_failure_observed, critical_flags_json, critical_evidence_json,
-        most_useful_reflection, improvement_reflection,
+        justifications_json, critical_failure_observed, critical_flags_json,
+        critical_evidence_json, critical_evidence_turns_json,
+        task_status, task_incomplete_reason,
+        participant_responses_json, participant_response_other, module_episode_ending,
+        stopping_factors_json, stopping_factors_evidence_turns, stopping_factors_explanation,
+        gender_context_handling, most_useful_thing, suggested_improvement,
         skip_reason, comments, rubric_version, status, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(episode_id, rater_id) DO UPDATE SET
         rater_email = excluded.rater_email,
         review_layer = excluded.review_layer,
@@ -367,8 +518,18 @@ export async function POST(request: Request) {
         critical_failure_observed = excluded.critical_failure_observed,
         critical_flags_json = excluded.critical_flags_json,
         critical_evidence_json = excluded.critical_evidence_json,
-        most_useful_reflection = excluded.most_useful_reflection,
-        improvement_reflection = excluded.improvement_reflection,
+        critical_evidence_turns_json = excluded.critical_evidence_turns_json,
+        task_status = excluded.task_status,
+        task_incomplete_reason = excluded.task_incomplete_reason,
+        participant_responses_json = excluded.participant_responses_json,
+        participant_response_other = excluded.participant_response_other,
+        module_episode_ending = excluded.module_episode_ending,
+        stopping_factors_json = excluded.stopping_factors_json,
+        stopping_factors_evidence_turns = excluded.stopping_factors_evidence_turns,
+        stopping_factors_explanation = excluded.stopping_factors_explanation,
+        gender_context_handling = excluded.gender_context_handling,
+        most_useful_thing = excluded.most_useful_thing,
+        suggested_improvement = excluded.suggested_improvement,
         skip_reason = excluded.skip_reason,
         comments = excluded.comments,
         rubric_version = excluded.rubric_version,
@@ -387,8 +548,18 @@ export async function POST(request: Request) {
       annotation.criticalFailureObserved,
       JSON.stringify(annotation.criticalFlags),
       JSON.stringify(annotation.criticalEvidence),
-      annotation.mostUsefulReflection,
-      annotation.improvementReflection,
+      JSON.stringify(annotation.criticalEvidenceTurns),
+      annotation.taskStatus,
+      "",
+      JSON.stringify(annotation.participantResponses),
+      annotation.participantResponseOther,
+      annotation.episodeEnding,
+      JSON.stringify(annotation.stoppingFactors),
+      annotation.stoppingFactorsEvidenceTurns,
+      annotation.stoppingFactorsExplanation,
+      annotation.genderContextHandling,
+      annotation.mostUsefulThing,
+      annotation.suggestedImprovement,
       annotation.skipReason,
       annotation.comments,
       RUBRIC_VERSION,

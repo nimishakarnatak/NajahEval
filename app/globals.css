@@ -663,13 +663,18 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .critical-category-card legend { padding: 0 3px; font-size: 11px; font-weight: 800; }
 .critical-category-card > p { margin: 2px 0 10px; color: var(--muted); font-size: 8px; line-height: 1.5; }
 .critical-flag-list { display: grid; gap: 8px; }
+.compact-check-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.compact-check-list .critical-checkbox-row { padding: 9px 10px; border: 1px solid #d9e0de; border-radius: 8px; background: white; }
+.compact-check-list .critical-checkbox-row.selected { border-color: var(--green); background: var(--green-soft); color: var(--green-dark); }
 .critical-flag-card { padding: 10px; border: 1px solid #eadfdc; border-radius: 10px; background: #fffdfc; }
 .critical-flag-card.selected { border-color: #c9766b; background: #fff8f6; }
 .critical-checkbox-row { display: grid; grid-template-columns: 17px minmax(0, 1fr); align-items: start; gap: 10px; cursor: pointer; }
 .critical-checkbox-row input { width: 17px; height: 17px; min-width: 17px; margin: 2px 0 0; padding: 0; accent-color: var(--green); box-shadow: none; }
 .critical-checkbox-row:hover .episode-option-copy strong { color: var(--green); }
 .critical-flag-card.selected .episode-option-copy strong { color: #8d3730; }
-.critical-evidence-field textarea { border-color: #dfb7b0; background: #fffafa; }
+.critical-evidence-field { display: grid; gap: 2px; }
+.critical-evidence-field textarea, .critical-evidence-field input { border-color: #dfb7b0; background: #fffafa; }
+.conditional-evidence-grid { display: grid; gap: 2px; margin-top: 10px; }
 
 .form-field { margin-top: 15px; }
 .form-field > span small { color: #8b9492; font-weight: 500; letter-spacing: 0; text-transform: none; }
@@ -701,6 +706,9 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .score-card:focus-within, .episode-end-card:focus-within, .critical-category-card:focus-within, .critical-flag-card:focus-within {
   border-color: #69a895;
   box-shadow: 0 0 0 3px rgba(18, 110, 90, .1);
+}
+@media (max-width: 520px) {
+  .compact-check-list { grid-template-columns: 1fr; }
 }
 .primary-button, .secondary-button, .danger-secondary-button, .danger-button, .text-button { min-height: 39px; border-radius: 9px; padding: 0 13px; font-size: 11px; font-weight: 750; }
 .primary-button { border: 1px solid var(--green); background: var(--green); color: white; box-shadow: 0 6px 16px rgba(18,110,90,.18); }

@@ -62,6 +62,13 @@ CREATE TABLE IF NOT EXISTS episodes (
   study_order INTEGER NOT NULL DEFAULT 0,
   judge_base_assignment TEXT NOT NULL DEFAULT '',
   student_status TEXT NOT NULL DEFAULT 'unknown',
+  participant_gender TEXT NOT NULL DEFAULT 'unknown',
+  activity_group TEXT NOT NULL DEFAULT '',
+  sampling_weight DOUBLE PRECISION,
+  participant_sampling_probability DOUBLE PRECISION,
+  focal_episode_selection_probability DOUBLE PRECISION,
+  combined_episode_inclusion_probability DOUBLE PRECISION,
+  activity_group_validation_status TEXT NOT NULL DEFAULT '',
   language TEXT NOT NULL,
   module TEXT NOT NULL,
   treatment TEXT NOT NULL DEFAULT 'unknown',
@@ -107,9 +114,19 @@ CREATE TABLE IF NOT EXISTS rubric_annotations (
   critical_failure_observed TEXT NOT NULL DEFAULT '',
   critical_flags_json TEXT NOT NULL DEFAULT '{}',
   critical_evidence_json TEXT NOT NULL DEFAULT '{}',
+  critical_evidence_turns_json TEXT NOT NULL DEFAULT '{}',
   episode_end_reason TEXT NOT NULL DEFAULT '',
-  most_useful_reflection TEXT NOT NULL DEFAULT '',
-  improvement_reflection TEXT NOT NULL DEFAULT '',
+  task_status TEXT NOT NULL DEFAULT '',
+  task_incomplete_reason TEXT NOT NULL DEFAULT '',
+  participant_responses_json TEXT NOT NULL DEFAULT '{}',
+  participant_response_other TEXT NOT NULL DEFAULT '',
+  module_episode_ending TEXT NOT NULL DEFAULT '',
+  stopping_factors_json TEXT NOT NULL DEFAULT '{}',
+  stopping_factors_evidence_turns TEXT NOT NULL DEFAULT '',
+  stopping_factors_explanation TEXT NOT NULL DEFAULT '',
+  gender_context_handling TEXT NOT NULL DEFAULT '',
+  most_useful_thing TEXT NOT NULL DEFAULT '',
+  suggested_improvement TEXT NOT NULL DEFAULT '',
   skip_reason TEXT NOT NULL DEFAULT '',
   comments TEXT NOT NULL DEFAULT '',
   rubric_version TEXT NOT NULL,
@@ -134,6 +151,8 @@ CREATE INDEX IF NOT EXISTS idx_users_assignment_cohort
   ON users(assignment_cohort);
 CREATE INDEX IF NOT EXISTS idx_episodes_study_order
   ON episodes(study_order);
+CREATE INDEX IF NOT EXISTS idx_episodes_activity_group
+  ON episodes(activity_group);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
   ON auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry

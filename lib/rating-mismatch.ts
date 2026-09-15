@@ -8,6 +8,12 @@ import {
 
 export type ComparablePrimaryRating = {
   scoresJson: string;
+  taskStatus: string;
+  taskIncompleteReason: string;
+  participantResponsesJson: string;
+  episodeEnding: string;
+  stoppingFactorsJson: string;
+  genderContextHandling: string;
   criticalFailureObserved: string;
   criticalFlagsJson: string;
 };
@@ -45,8 +51,8 @@ function flagValue(value: unknown): CriticalFlagValue {
  *
  * An ordinary mismatch means any selected score or categorical judgment
  * differs. A serious mismatch is deliberately narrower: a 1-versus-3 score,
- * N/A-versus-substantive score, or a different critical-failure
- * screening/category judgment. Serious mismatches
+ * N/A-versus-substantive score, different task-status/end-reason judgment, or
+ * different critical-failure screening/category judgment. Serious mismatches
  * can add an episode to a judge's workload; ordinary mismatches are alerts only
  * when the episode is already in that judge's base sample.
  */
@@ -60,6 +66,8 @@ export function summarizePrimaryMismatch(
   const normalized = ratings.slice(0, 2).map((rating) => {
     const scores = parseObject(rating.scoresJson);
     const flags = parseObject(rating.criticalFlagsJson);
+    const participantResponses = parseObject(rating.participantResponsesJson);
+    const stoppingFactors = parseObject(rating.stoppingFactorsJson);
     return {
       scores: Object.fromEntries(
         DIMENSION_KEYS.map((key) => [key, scoreValue(scores[key])]),
@@ -67,12 +75,27 @@ export function summarizePrimaryMismatch(
       flags: Object.fromEntries(
         CRITICAL_FLAG_KEYS.map((key) => [key, flagValue(flags[key])]),
       ) as Record<(typeof CRITICAL_FLAG_KEYS)[number], CriticalFlagValue>,
+      taskStatus: rating.taskStatus || "",
+      taskIncompleteReason: rating.taskIncompleteReason || "",
+      participantResponses,
+      episodeEnding: rating.episodeEnding || "",
+      stoppingFactors,
+      genderContextHandling: rating.genderContextHandling || "",
       criticalFailureObserved:
         rating.criticalFailureObserved as CriticalFailureObserved | "",
     };
   });
   const [left, right] = normalized;
 
+  const taskMismatch =
+    left.taskStatus !== right.taskStatus ||
+    left.taskIncompleteReason !== right.taskIncompleteReason ||
+    left.episodeEnding !== right.episodeEnding ||
+    left.genderContextHandling !== right.genderContextHandling;
+  const participantResponseMismatch =
+    JSON.stringify(left.participantResponses) !== JSON.stringify(right.participantResponses);
+  const stoppingFactorMismatch =
+    JSON.stringify(left.stoppingFactors) !== JSON.stringify(right.stoppingFactors);
   const criticalMismatch =
     left.criticalFailureObserved !== right.criticalFailureObserved ||
     CRITICAL_FLAG_KEYS.some((key) => left.flags[key] !== right.flags[key]);
@@ -89,7 +112,7 @@ export function summarizePrimaryMismatch(
 
   return {
     ratingCount: ratings.length,
-    mismatch: scoreMismatch || criticalMismatch,
-    seriousMismatch: seriousScoreMismatch || criticalMismatch,
+    mismatch: scoreMismatch || taskMismatch || participantResponseMismatch || stoppingFactorMismatch || criticalMismatch,
+    seriousMismatch: seriousScoreMismatch || taskMismatch || criticalMismatch,
   };
 }

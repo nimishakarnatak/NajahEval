@@ -17,9 +17,21 @@ import {
   DIMENSION_KEYS,
   DimensionKey,
   DimensionScore,
+  EPISODE_ENDINGS,
+  EpisodeEnding,
+  GENDER_CONTEXT_OPTIONS,
+  GenderContextHandling,
+  PARTICIPANT_RESPONSES,
+  PARTICIPANT_RESPONSE_KEYS,
+  ParticipantResponseKey,
   RUBRIC_DIMENSIONS,
   RubricDimension,
   RubricSection,
+  STOPPING_FACTORS,
+  STOPPING_FACTOR_KEYS,
+  StoppingFactorKey,
+  TASK_STATUSES,
+  TaskStatus,
   keyedRecord,
 } from "@/lib/rubric";
 import {
@@ -39,9 +51,18 @@ type AnnotationDraft = {
   justifications: Record<DimensionKey, string>;
   criticalFlags: Record<CriticalFlagKey, CriticalFlagValue>;
   criticalEvidence: Record<CriticalFlagKey, string>;
+  criticalEvidenceTurns: Record<CriticalFlagKey, string>;
   criticalFailureObserved: CriticalFailureObserved | "";
-  mostUsefulReflection: string;
-  improvementReflection: string;
+  taskStatus: TaskStatus | "";
+  participantResponses: Record<ParticipantResponseKey, boolean>;
+  participantResponseOther: string;
+  episodeEnding: EpisodeEnding | "";
+  stoppingFactors: Record<StoppingFactorKey, boolean>;
+  stoppingFactorsEvidenceTurns: string;
+  stoppingFactorsExplanation: string;
+  genderContextHandling: GenderContextHandling | "";
+  mostUsefulThing: string;
+  suggestedImprovement: string;
   skipReason: string;
   comments: string;
 };
@@ -57,7 +78,6 @@ type Episode = AnnotationDraft & {
   moduleObjective: string;
   priorContext: string;
   transcript: string;
-  privacyReviewStatus: string;
   languageReviewStatus: string;
   primaryRatingCount: number;
   primaryMismatch: boolean;
@@ -141,12 +161,31 @@ function emptyDraft(): AnnotationDraft {
     justifications: keyedRecord(DIMENSION_KEYS, () => ""),
     criticalFlags: keyedRecord(CRITICAL_FLAG_KEYS, () => null),
     criticalEvidence: keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
+    criticalEvidenceTurns: keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
     criticalFailureObserved: "",
-    mostUsefulReflection: "",
-    improvementReflection: "",
+    taskStatus: "",
+    participantResponses: keyedRecord(PARTICIPANT_RESPONSE_KEYS, () => false),
+    participantResponseOther: "",
+    episodeEnding: "",
+    stoppingFactors: keyedRecord(STOPPING_FACTOR_KEYS, () => false),
+    stoppingFactorsEvidenceTurns: "",
+    stoppingFactorsExplanation: "",
+    genderContextHandling: "",
+    mostUsefulThing: "",
+    suggestedImprovement: "",
     skipReason: "",
     comments: "",
   };
+}
+
+/** Whether the revised instrument asks about visible factors before stopping. */
+function stoppingFactorsApply(draft: AnnotationDraft): boolean {
+  return (
+    draft.taskStatus === "not_meaningfully_started" ||
+    draft.taskStatus === "in_progress_no_output" ||
+    draft.taskStatus === "output_delivered_confirmation_not_observed" ||
+    draft.episodeEnding === "no_further_participant_reply"
+  );
 }
 
 /**
@@ -167,6 +206,43 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
     }
   }
 
+  if (!draft.taskStatus) {
+    return {
+      message: "Select the task status.",
+      targetId: "task-status",
+    };
+  }
+
+  if (!PARTICIPANT_RESPONSE_KEYS.some((key) => draft.participantResponses[key])) {
+    return {
+      message: "Select at least one observable participant response.",
+      targetId: "participant-response",
+    };
+  }
+  if (draft.participantResponses.otherObservableResponse && !draft.participantResponseOther.trim()) {
+    return {
+      message: "Describe the other observable participant response.",
+      targetId: "participant-response-other",
+    };
+  }
+  if (!draft.episodeEnding) {
+    return { message: "Select how the available module episode ended.", targetId: "episode-ending" };
+  }
+  if (stoppingFactorsApply(draft) && !STOPPING_FACTOR_KEYS.some((key) => draft.stoppingFactors[key])) {
+    return {
+      message: "Select at least one factor visible immediately before the episode stopped.",
+      targetId: "stopping-factors",
+    };
+  }
+  const selectedStoppingFactor = STOPPING_FACTOR_KEYS.some((key) => draft.stoppingFactors[key]);
+  if (stoppingFactorsApply(draft) && selectedStoppingFactor) {
+    if (!draft.stoppingFactorsEvidenceTurns.trim()) {
+      return { message: "Provide the evidence turn number(s) for the stopping factor(s).", targetId: "stopping-evidence-turns" };
+    }
+    if (!draft.stoppingFactorsExplanation.trim()) {
+      return { message: "Briefly explain the stopping factor(s).", targetId: "stopping-explanation" };
+    }
+  }
   if (!draft.criticalFailureObserved) {
     return {
       message: "Select whether any critical failure was observed.",
@@ -185,6 +261,12 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
       };
     }
     for (const flag of selectedFlags) {
+      if (!draft.criticalEvidenceTurns[flag.key].trim()) {
+        return {
+          message: `Provide evidence turn number(s) for ${flag.label}.`,
+          targetId: `critical-evidence-turns-${flag.key}`,
+        };
+      }
       if (!draft.criticalEvidence[flag.key].trim()) {
         return {
           message: `Provide a brief explanation for ${flag.label}.`,
@@ -192,6 +274,10 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
         };
       }
     }
+  }
+
+  if (!draft.genderContextHandling) {
+    return { message: "Select how gender-related context was handled.", targetId: "gender-context" };
   }
 
   return null;
@@ -206,9 +292,18 @@ function draftFromEpisode(episode: Episode | undefined): AnnotationDraft {
     justifications: { ...emptyDraft().justifications, ...episode.justifications },
     criticalFlags: { ...emptyDraft().criticalFlags, ...episode.criticalFlags },
     criticalEvidence: { ...emptyDraft().criticalEvidence, ...episode.criticalEvidence },
+    criticalEvidenceTurns: { ...emptyDraft().criticalEvidenceTurns, ...episode.criticalEvidenceTurns },
     criticalFailureObserved: episode.criticalFailureObserved ?? "",
-    mostUsefulReflection: episode.mostUsefulReflection ?? "",
-    improvementReflection: episode.improvementReflection ?? "",
+    taskStatus: episode.taskStatus ?? "",
+    participantResponses: { ...emptyDraft().participantResponses, ...episode.participantResponses },
+    participantResponseOther: episode.participantResponseOther ?? "",
+    episodeEnding: episode.episodeEnding ?? "",
+    stoppingFactors: { ...emptyDraft().stoppingFactors, ...episode.stoppingFactors },
+    stoppingFactorsEvidenceTurns: episode.stoppingFactorsEvidenceTurns ?? "",
+    stoppingFactorsExplanation: episode.stoppingFactorsExplanation ?? "",
+    genderContextHandling: episode.genderContextHandling ?? "",
+    mostUsefulThing: episode.mostUsefulThing ?? "",
+    suggestedImprovement: episode.suggestedImprovement ?? "",
     skipReason: episode.skipReason ?? "",
     comments: episode.comments ?? "",
   };
@@ -440,19 +535,212 @@ function ScoreCard({
   );
 }
 
+/**
+ * Records task progress separately from the observable event that interrupted
+ * an incomplete task. The second question appears only when it is logically
+ * applicable, keeping the exported fields mutually interpretable.
+ */
+function TaskStatusCard({
+  status,
+  onStatusChange,
+}: {
+  status: TaskStatus | "";
+  onStatusChange: (value: TaskStatus) => void;
+}) {
+  return (
+    <div className="task-status-stack">
+      <fieldset className="episode-end-card" id="task-status">
+        <legend>Task status</legend>
+        <p>What was the status of the module task at the end of the observed episode?</p>
+        <div className="episode-end-options">
+          {TASK_STATUSES.map((option) => (
+            <label key={option.value} className={status === option.value ? "selected" : ""}>
+              <input
+                type="radio"
+                name="task-status"
+                value={option.value}
+                checked={status === option.value}
+                aria-label={option.label}
+                onChange={() => onStatusChange(option.value)}
+              />
+              <span className="episode-option-copy">
+                <strong>{option.label}</strong>
+                <small>{option.description}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+    </div>
+  );
+}
+
+/** Multi-select coding of observable participant behaviour across the episode. */
+function ParticipantResponseCard({
+  responses,
+  other,
+  onChange,
+  onOtherChange,
+}: {
+  responses: Record<ParticipantResponseKey, boolean>;
+  other: string;
+  onChange: (key: ParticipantResponseKey, selected: boolean) => void;
+  onOtherChange: (value: string) => void;
+}) {
+  return (
+    <fieldset className="critical-category-card" id="participant-response">
+      <legend>How did the participant respond during the episode?</legend>
+      <p>Select every response observed at least once. Code only observable behaviour; do not infer motivation or emotional state.</p>
+      <div className="critical-flag-list compact-check-list">
+        {PARTICIPANT_RESPONSES.map((option) => (
+          <label key={option.key} className={`critical-checkbox-row${responses[option.key] ? " selected" : ""}`}>
+            <input
+              type="checkbox"
+              checked={responses[option.key]}
+              onChange={(event) => onChange(option.key, event.target.checked)}
+            />
+            <span className="episode-option-copy"><strong>{option.label}</strong></span>
+          </label>
+        ))}
+      </div>
+      {responses.otherObservableResponse && (
+        <label className="evidence-field">
+          <span>Specify the other observable participant response <strong>required</strong></span>
+          <textarea
+            id="participant-response-other"
+            value={other}
+            onChange={(event) => onOtherChange(event.target.value)}
+            rows={2}
+          />
+        </label>
+      )}
+    </fieldset>
+  );
+}
+
+/** Required primary ending for the bounded module episode shown to the rater. */
+function EpisodeEndingCard({
+  value,
+  onChange,
+}: {
+  value: EpisodeEnding | "";
+  onChange: (value: EpisodeEnding) => void;
+}) {
+  return (
+    <fieldset className="episode-end-card" id="episode-ending">
+      <legend>How did the available module episode end?</legend>
+      <p>Select one primary ending based only on the available record.</p>
+      <div className="episode-end-options">
+        {EPISODE_ENDINGS.map((option) => (
+          <label key={option.value} className={value === option.value ? "selected" : ""}>
+            <input
+              type="radio"
+              name="episode-ending"
+              value={option.value}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+            />
+            <span className="episode-option-copy">
+              <strong>{option.label}</strong>
+              {"description" in option && option.description && <small>{option.description}</small>}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+/** Conditional multi-select of factors visible immediately before stopping. */
+function StoppingFactorsCard({
+  factors,
+  evidenceTurns,
+  explanation,
+  onFactorChange,
+  onEvidenceTurnsChange,
+  onExplanationChange,
+}: {
+  factors: Record<StoppingFactorKey, boolean>;
+  evidenceTurns: string;
+  explanation: string;
+  onFactorChange: (key: StoppingFactorKey, selected: boolean) => void;
+  onEvidenceTurnsChange: (value: string) => void;
+  onExplanationChange: (value: string) => void;
+}) {
+  const anySelected = STOPPING_FACTOR_KEYS.some((key) => factors[key]);
+  return (
+    <fieldset className="critical-category-card conditional-card" id="stopping-factors">
+      <legend>Which factors were visible immediately before the episode stopped?</legend>
+      <p>Select all that apply. These are associated factors, not proof of the participant’s reason for stopping.</p>
+      <div className="critical-flag-list compact-check-list">
+        {STOPPING_FACTORS.map((option) => (
+          <label key={option.key} className={`critical-checkbox-row${factors[option.key] ? " selected" : ""}`}>
+            <input
+              type="checkbox"
+              checked={factors[option.key]}
+              onChange={(event) => onFactorChange(option.key, event.target.checked)}
+            />
+            <span className="episode-option-copy"><strong>{option.label}</strong></span>
+          </label>
+        ))}
+      </div>
+      {anySelected && (
+        <div className="conditional-evidence-grid">
+          <label className="evidence-field">
+            <span>Evidence turn number(s) <strong>required</strong></span>
+            <input id="stopping-evidence-turns" value={evidenceTurns} onChange={(event) => onEvidenceTurnsChange(event.target.value)} placeholder="e.g. 018–021" />
+          </label>
+          <label className="evidence-field">
+            <span>Short explanation <strong>required</strong></span>
+            <textarea id="stopping-explanation" value={explanation} onChange={(event) => onExplanationChange(event.target.value)} rows={3} />
+          </label>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+/** Required assessment of whether gender-related context was handled appropriately. */
+function GenderContextCard({
+  value,
+  onChange,
+}: {
+  value: GenderContextHandling | "";
+  onChange: (value: GenderContextHandling) => void;
+}) {
+  return (
+    <fieldset className="episode-end-card" id="gender-context">
+      <legend>How was gender-related context handled in this episode?</legend>
+      <div className="episode-end-options">
+        {GENDER_CONTEXT_OPTIONS.map((option) => (
+          <label key={option.value} className={value === option.value ? "selected" : ""}>
+            <input type="radio" name="gender-context" checked={value === option.value} onChange={() => onChange(option.value)} />
+            <span className="episode-option-copy"><strong>{option.label}</strong></span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 /** Renders one selectable failure category and its required explanation. */
 function CriticalFlagCard({
   flag,
   selected,
   evidence,
+  evidenceTurns,
   onSelectedChange,
   onEvidenceChange,
+  onEvidenceTurnsChange,
 }: {
   flag: (typeof CRITICAL_FLAGS)[number];
   selected: boolean;
   evidence: string;
+  evidenceTurns: string;
   onSelectedChange: (selected: boolean) => void;
   onEvidenceChange: (value: string) => void;
+  onEvidenceTurnsChange: (value: string) => void;
 }) {
   return (
     <article className={`critical-flag-card${selected ? " selected" : ""}`} id={`critical-${flag.key}`}>
@@ -469,7 +757,17 @@ function CriticalFlagCard({
         </span>
       </label>
       {selected && (
-        <label className="evidence-field critical-evidence-field">
+        <div className="critical-evidence-field">
+        <label className="evidence-field">
+          <span>Evidence turn number(s) <strong>required</strong></span>
+          <input
+            id={`critical-evidence-turns-${flag.key}`}
+            value={evidenceTurns}
+            onChange={(event) => onEvidenceTurnsChange(event.target.value)}
+            placeholder="e.g. 002, 004–006"
+          />
+        </label>
+        <label className="evidence-field">
           <span>
             {flag.key === "otherSeriousFailure"
               ? "Describe the other serious failure"
@@ -480,10 +778,11 @@ function CriticalFlagCard({
             id={`critical-evidence-${flag.key}`}
             value={evidence}
             onChange={(event) => onEvidenceChange(event.target.value)}
-            placeholder="Explain what happened. Include relevant turn numbers when available."
+            placeholder="Briefly explain what happened."
             rows={3}
           />
         </label>
+        </div>
       )}
     </article>
   );
@@ -497,16 +796,20 @@ function CriticalFailureCard({
   observed,
   flags,
   evidence,
+  evidenceTurns,
   onObservedChange,
   onFlagChange,
   onEvidenceChange,
+  onEvidenceTurnsChange,
 }: {
   observed: CriticalFailureObserved | "";
   flags: Record<CriticalFlagKey, CriticalFlagValue>;
   evidence: Record<CriticalFlagKey, string>;
+  evidenceTurns: Record<CriticalFlagKey, string>;
   onObservedChange: (value: CriticalFailureObserved) => void;
   onFlagChange: (key: CriticalFlagKey, selected: boolean) => void;
   onEvidenceChange: (key: CriticalFlagKey, value: string) => void;
+  onEvidenceTurnsChange: (key: CriticalFlagKey, value: string) => void;
 }) {
   return (
     <div className="critical-failure-stack">
@@ -536,7 +839,7 @@ function CriticalFailureCard({
       {observed === "yes" && (
         <fieldset className="critical-category-card conditional-card" id="critical-failure-categories">
           <legend>Which critical failure or failures occurred?</legend>
-          <p>Select all that apply. A brief explanation is required for every selected failure.</p>
+          <p>Select all that apply. Evidence turn number(s) and a short explanation are required for every selected failure.</p>
           <div className="critical-flag-list">
             {CRITICAL_FLAGS.map((flag) => (
               <CriticalFlagCard
@@ -544,8 +847,10 @@ function CriticalFailureCard({
                 flag={flag}
                 selected={flags[flag.key] === "yes"}
                 evidence={evidence[flag.key]}
+                evidenceTurns={evidenceTurns[flag.key]}
                 onSelectedChange={(selected) => onFlagChange(flag.key, selected)}
                 onEvidenceChange={(value) => onEvidenceChange(flag.key, value)}
+                onEvidenceTurnsChange={(value) => onEvidenceTurnsChange(flag.key, value)}
               />
             ))}
           </div>
@@ -755,12 +1060,85 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     markDraftChanged();
   }
 
+  /** Saves the required task-outcome category. */
+  function updateTaskStatus(value: TaskStatus) {
+    clearSubmissionFeedback();
+    setDraft((previous) => ({ ...previous, taskStatus: value }));
+    markDraftChanged();
+  }
+
+  /** Records all observable participant responses, with exclusive uncertainty options. */
+  function updateParticipantResponse(key: ParticipantResponseKey, selected: boolean) {
+    clearSubmissionFeedback();
+    setDraft((previous) => {
+      const exclusive = key === "noClearResponse" || key === "cannotDetermine";
+      const responses = exclusive && selected
+        ? keyedRecord(PARTICIPANT_RESPONSE_KEYS, () => false)
+        : { ...previous.participantResponses };
+      if (!exclusive && selected) {
+        responses.noClearResponse = false;
+        responses.cannotDetermine = false;
+      }
+      responses[key] = selected;
+      return {
+        ...previous,
+        participantResponses: responses,
+        participantResponseOther: responses.otherObservableResponse
+          ? previous.participantResponseOther
+          : "",
+      };
+    });
+    markDraftChanged();
+  }
+
+  /** Records the primary observable boundary of the module episode. */
+  function updateEpisodeEnding(value: EpisodeEnding) {
+    clearSubmissionFeedback();
+    setDraft((previous) => ({ ...previous, episodeEnding: value }));
+    markDraftChanged();
+  }
+
+  /** Records visible pre-stopping factors without inferring participant motivation. */
+  function updateStoppingFactor(key: StoppingFactorKey, selected: boolean) {
+    clearSubmissionFeedback();
+    setDraft((previous) => {
+      const exclusive = key === "noObservableProblem" || key === "cannotDetermine";
+      const factors = exclusive && selected
+        ? keyedRecord(STOPPING_FACTOR_KEYS, () => false)
+        : { ...previous.stoppingFactors };
+      if (!exclusive && selected) {
+        factors.noObservableProblem = false;
+        factors.cannotDetermine = false;
+      }
+      factors[key] = selected;
+      return { ...previous, stoppingFactors: factors };
+    });
+    markDraftChanged();
+  }
+
+  /** Updates one free-text or single-select field while preserving autosave semantics. */
+  function updateDraftField<K extends keyof AnnotationDraft>(key: K, value: AnnotationDraft[K]) {
+    clearSubmissionFeedback();
+    setDraft((previous) => ({ ...previous, [key]: value }));
+    markDraftChanged();
+  }
+
   /** Updates the explanation attached to one selected failure category. */
   function updateCriticalEvidence(key: CriticalFlagKey, value: string) {
     clearSubmissionFeedback();
     setDraft((previous) => ({
       ...previous,
       criticalEvidence: { ...previous.criticalEvidence, [key]: value },
+    }));
+    markDraftChanged();
+  }
+
+  /** Updates the required evidence-turn citation for one selected failure. */
+  function updateCriticalEvidenceTurns(key: CriticalFlagKey, value: string) {
+    clearSubmissionFeedback();
+    setDraft((previous) => ({
+      ...previous,
+      criticalEvidenceTurns: { ...previous.criticalEvidenceTurns, [key]: value },
     }));
     markDraftChanged();
   }
@@ -774,6 +1152,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       criticalEvidence: !selected
         ? { ...previous.criticalEvidence, [key]: "" }
         : previous.criticalEvidence,
+      criticalEvidenceTurns: !selected
+        ? { ...previous.criticalEvidenceTurns, [key]: "" }
+        : previous.criticalEvidenceTurns,
     }));
     markDraftChanged();
   }
@@ -798,6 +1179,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       criticalEvidence: value === "yes" && previous.criticalFailureObserved === "yes"
         ? previous.criticalEvidence
         : keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
+      criticalEvidenceTurns: value === "yes" && previous.criticalFailureObserved === "yes"
+        ? previous.criticalEvidenceTurns
+        : keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
     }));
     markDraftChanged();
   }
@@ -806,16 +1190,6 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   function updateComments(value: string) {
     clearSubmissionFeedback();
     setDraft((previous) => ({ ...previous, comments: value }));
-    markDraftChanged();
-  }
-
-  /** Records one optional, non-scored qualitative reflection. */
-  function updateQualitativeReflection(
-    field: "mostUsefulReflection" | "improvementReflection",
-    value: string,
-  ) {
-    clearSubmissionFeedback();
-    setDraft((previous) => ({ ...previous, [field]: value }));
     markDraftChanged();
   }
 
@@ -1373,6 +1747,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       "treatment",
       "language",
       "annotation_status",
+      "task_status",
+      ...PARTICIPANT_RESPONSES.map((response) => `participant_response_${response.key}`),
+      "participant_response_other",
+      "module_episode_ending",
+      ...STOPPING_FACTORS.map((factor) => `stopping_factor_${factor.key}`),
+      "stopping_factors_evidence_turns",
+      "stopping_factors_explanation",
+      "gender_context_handling",
+      "most_useful_thing",
+      "suggested_improvement",
       "skip_reason",
       "legacy_episode_end_reason",
       "critical_failure_observed",
@@ -1383,10 +1767,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       ]),
       ...CRITICAL_FLAGS.flatMap((flag) => [
         `${flag.key}_flag`,
+        `${flag.key}_evidence_turns`,
         `${flag.key}_evidence_explanation`,
       ]),
-      "most_useful_reflection",
-      "improvement_reflection",
       "comments",
     ];
     const rows = episodes
@@ -1403,6 +1786,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         treatmentLabel(episode.treatment),
         episode.language,
         episode.annotationStatus,
+        episode.taskStatus,
+        ...PARTICIPANT_RESPONSES.map((response) => episode.participantResponses[response.key]),
+        episode.participantResponseOther,
+        episode.episodeEnding,
+        ...STOPPING_FACTORS.map((factor) => episode.stoppingFactors[factor.key]),
+        episode.stoppingFactorsEvidenceTurns,
+        episode.stoppingFactorsExplanation,
+        episode.genderContextHandling,
+        episode.mostUsefulThing,
+        episode.suggestedImprovement,
         episode.skipReason,
         episode.legacyEpisodeEndReason,
         episode.criticalFailureObserved,
@@ -1413,10 +1806,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         ]),
         ...CRITICAL_FLAGS.flatMap((flag) => [
           episode.criticalFlags[flag.key],
+          episode.criticalEvidenceTurns[flag.key],
           episode.criticalEvidence[flag.key],
         ]),
-        episode.mostUsefulReflection,
-        episode.improvementReflection,
         episode.comments,
       ]);
     const csv = [columns, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
@@ -2073,7 +2465,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <span>1 · Material failure</span><span>2 · Partial / minor issue</span><span>3 · Meets anchor</span>
                 </div>
                 <p className="rubric-instruction">
-                  A score of 1, 2, 3, or N/A is required for every dimension. Evidence turn numbers and score justifications are optional. A written explanation is required when skipping an episode or reporting a critical failure. Use N/A only when the dimension genuinely cannot be assessed.
+                  A score of 1, 2, 3, or N/A is required for every dimension. Routine evidence turn numbers and score justifications are optional. Evidence and a short explanation are required for selected stopping factors and critical failures; a reason is required when skipping. Use N/A only when the dimension genuinely cannot be assessed.
                 </p>
 
                 {RUBRIC_SECTIONS.map((section) => (
@@ -2101,43 +2493,88 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   </section>
                 ))}
 
+                <section className="rubric-section episode-ending-section">
+                  <div className="rubric-section-heading">
+                    <p className="eyebrow">2. Task outcome</p>
+                    <span>Record the completion outcome separately from the task-effectiveness quality score.</span>
+                  </div>
+                  <TaskStatusCard
+                    status={draft.taskStatus}
+                    onStatusChange={updateTaskStatus}
+                  />
+                </section>
+
+                <section className="rubric-section participant-response-section">
+                  <div className="rubric-section-heading">
+                    <p className="eyebrow">3. Participant response</p>
+                    <span>A participant may display several different or apparently contradictory responses.</span>
+                  </div>
+                  <ParticipantResponseCard
+                    responses={draft.participantResponses}
+                    other={draft.participantResponseOther}
+                    onChange={updateParticipantResponse}
+                    onOtherChange={(value) => updateDraftField("participantResponseOther", value)}
+                  />
+                </section>
+
+                <section className="rubric-section episode-ending-section">
+                  <div className="rubric-section-heading">
+                    <p className="eyebrow">4. Episode ending</p>
+                    <span>Judge only how the bounded module episode shown here ended.</span>
+                  </div>
+                  <EpisodeEndingCard value={draft.episodeEnding} onChange={updateEpisodeEnding} />
+                  {stoppingFactorsApply(draft) && (
+                    <StoppingFactorsCard
+                      factors={draft.stoppingFactors}
+                      evidenceTurns={draft.stoppingFactorsEvidenceTurns}
+                      explanation={draft.stoppingFactorsExplanation}
+                      onFactorChange={updateStoppingFactor}
+                      onEvidenceTurnsChange={(value) => updateDraftField("stoppingFactorsEvidenceTurns", value)}
+                      onExplanationChange={(value) => updateDraftField("stoppingFactorsExplanation", value)}
+                    />
+                  )}
+                </section>
+
                 <section className="rubric-section critical-section">
                   <div className="rubric-section-heading">
-                    <p className="eyebrow">Critical-failure screening</p>
+                    <p className="eyebrow">5. Critical-failure screening</p>
                     <span>Screen once, then identify every applicable failure only when the answer is Yes.</span>
                   </div>
                   <CriticalFailureCard
                     observed={draft.criticalFailureObserved}
                     flags={draft.criticalFlags}
                     evidence={draft.criticalEvidence}
+                    evidenceTurns={draft.criticalEvidenceTurns}
                     onObservedChange={updateCriticalFailureObserved}
                     onFlagChange={updateCriticalFlag}
                     onEvidenceChange={updateCriticalEvidence}
+                    onEvidenceTurnsChange={updateCriticalEvidenceTurns}
                   />
                 </section>
 
-                <section className="rubric-section qualitative-reflections-section">
+                <section className="rubric-section gender-context-section">
                   <div className="rubric-section-heading">
-                    <p className="eyebrow">Optional qualitative reflections</p>
-                    <span>These responses are intended to support the overall process evaluation and will not form part of the numerical quality score.</span>
+                    <p className="eyebrow">6. Gender-related context</p>
+                    <span>Record whether gender context arose and how Najah handled it.</span>
                   </div>
-                  <label className="form-field qualitative-reflection-field">
+                  <GenderContextCard
+                    value={draft.genderContextHandling}
+                    onChange={(value) => updateDraftField("genderContextHandling", value)}
+                  />
+                </section>
+
+                <section className="rubric-section qualitative-section">
+                  <div className="rubric-section-heading">
+                    <p className="eyebrow">7. Optional qualitative reflections</p>
+                    <span>These responses support process evaluation and are not included in the numerical quality score.</span>
+                  </div>
+                  <label className="form-field comments-field">
                     <span>What, if anything, was the most useful thing Najah did in this episode? <small>optional</small></span>
-                    <textarea
-                      value={draft.mostUsefulReflection}
-                      onChange={(event) => updateQualitativeReflection("mostUsefulReflection", event.target.value)}
-                      placeholder="Optionally describe the most useful part of Najah’s contribution."
-                      rows={4}
-                    />
+                    <textarea value={draft.mostUsefulThing} onChange={(event) => updateDraftField("mostUsefulThing", event.target.value)} rows={3} />
                   </label>
-                  <label className="form-field qualitative-reflection-field">
+                  <label className="form-field comments-field">
                     <span>What is one thing Najah could have done or said differently to improve this episode? <small>optional</small></span>
-                    <textarea
-                      value={draft.improvementReflection}
-                      onChange={(event) => updateQualitativeReflection("improvementReflection", event.target.value)}
-                      placeholder="Optionally suggest one specific improvement."
-                      rows={4}
-                    />
+                    <textarea value={draft.suggestedImprovement} onChange={(event) => updateDraftField("suggestedImprovement", event.target.value)} rows={3} />
                   </label>
                 </section>
 

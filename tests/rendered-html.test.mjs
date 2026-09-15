@@ -110,11 +110,25 @@ test("bundles and automatically seeds the 300-episode final dataset", async () =
     readFile(datasetCsvPath, "utf8"),
     readFile(episodesRoutePath, "utf8"),
   ]);
-  assert.equal((datasetCsv.match(/^\d+,E\d+,/gm) ?? []).length, 300);
-  assert.match(datasetCsv, /^rater_item_order,episode_id,student_status,language,module,treatment,/);
-  assert.doesNotMatch(datasetCsv.split("\n", 1)[0], /activity/);
+  const normalizedDatasetCsv = datasetCsv.replace(/^\ufeff/, "");
+  assert.equal(
+    (
+      normalizedDatasetCsv.match(
+        /^najah-completion-activity-v1-pending-review,\d+,N2E\d+,/gm,
+      ) ?? []
+    ).length,
+    300,
+  );
+  assert.match(
+    normalizedDatasetCsv,
+    /^dataset_version,rater_item_order,episode_id,student_status,participant_gender,language,module,treatment,/,
+  );
+  assert.match(normalizedDatasetCsv.split("\n", 1)[0], /activity_group/);
   assert.match(bundledDataset, /BUNDLED_EPISODE_COUNT/);
   assert.match(bundledDataset, /ON CONFLICT\(episode_id\) DO UPDATE/);
+  assert.match(bundledDataset, /validateBalancedActivityCohorts/);
+  assert.match(bundledDataset, /33 or 34/);
+  assert.doesNotMatch(episodesRoute, /e\.activity_group/);
   assert.match(episodesRoute, /ensureBundledDataset\(db\)/);
   assert.match(component, /assigned review queue/);
   assert.doesNotMatch(component, /Import CSV/);
@@ -238,11 +252,18 @@ test("includes the core annotation workflow without temporary release or review 
   assert.match(rubric, /Other serious failure/);
   assert.doesNotMatch(component, /A written justification is required for every score/);
   assert.match(component, /A score of 1, 2, 3, or N\/A is required for every dimension/);
-  assert.match(component, /Evidence turn numbers and score justifications are optional/);
-  assert.match(component, /Evidence turn numbers and score justifications are optional/);
-  assert.match(component, /Optional qualitative reflections/);
-  assert.match(component, /will not form part of the numerical quality score/);
-  assert.doesNotMatch(component, /Task outcome/);
+  assert.match(component, /Routine evidence turn numbers and score justifications are optional/);
+  assert.match(component, /Task status/);
+  assert.match(component, /How did the participant respond during the episode/);
+  assert.match(component, /How did the available module episode end/);
+  assert.match(component, /Which factors were visible immediately before the episode stopped/);
+  assert.match(component, /How was gender-related context handled/);
+  assert.match(component, /most useful thing Najah did/);
+  assert.match(component, /done or said differently/);
+  assert.match(rubric, /No subsequent participant response was observed/);
+  assert.match(rubric, /Output delivered; participant confirmation not observed/);
+  assert.match(rubric, /The available conversation does not provide enough evidence/);
+  assert.match(rubric, /Cannot determine/);
   assert.match(component, /Submit (?:&|&amp;) next/);
   assert.match(component, /assigned review queue/);
   assert.doesNotMatch(`${component}\n${importRoute}`, /do_not_release|doNotRelease/);
@@ -252,20 +273,24 @@ test("includes the core annotation workflow without temporary release or review 
   );
 });
 
-test("adds optional, non-scored qualitative reflections", async () => {
+test("separates task outcome, participant response, and episode ending", async () => {
   const [component, rubric, styles] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(rubricPath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(rubric, /najah-evidence-v11/);
+  assert.match(rubric, /Outcome delivered; participant confirmation observed/);
+  assert.match(rubric, /Participant moved to another module/);
+  assert.match(rubric, /No subsequent Najah response was observed/);
   assert.match(rubric, /Najah response-quality/);
   assert.match(rubric, /Whole module-episode/);
   assert.match(component, /Assess the quality of Najah’s responses in this episode/);
   assert.match(component, /Give one score per dimension for the complete module episode/);
-  assert.match(component, /mostUsefulReflection/);
-  assert.match(component, /improvementReflection/);
-  assert.match(styles, /\.qualitative-reflection-field textarea/);
+  assert.match(component, /stoppingFactorsApply/);
+  assert.match(component, /Code only observable behaviour/);
+  assert.match(styles, /\.episode-end-options label \{[^}]*grid-template-columns: 16px minmax\(0, 1fr\)/);
+  assert.match(styles, /\.episode-end-options input \{[^}]*width: 16px; height: 16px/);
 });
 
 test("keeps submission validation visible and reveals the first incomplete field", async () => {
@@ -281,7 +306,10 @@ test("keeps submission validation visible and reveals the first incomplete field
   assert.match(component, /id=\{`evidence-\$\{dimension\.key\}`\}/);
   assert.match(component, /id=\{`justification-\$\{dimension\.key\}`\}/);
   assert.match(component, /Optionally explain the evidence supporting this score/);
-  assert.match(component, /id="critical-failure-observed"/);
+  assert.match(component, /id="task-status"/);
+  assert.match(component, /id="participant-response"/);
+  assert.match(component, /id="episode-ending"/);
+  assert.match(component, /id="gender-context"/);
   assert.match(styles, /\.submit-error/);
   assert.match(styles, /\.score-card:focus-within/);
 });

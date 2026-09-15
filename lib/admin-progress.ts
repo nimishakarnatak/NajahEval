@@ -205,6 +205,12 @@ export async function getAdminProgress(): Promise<AdminProgress> {
         ra.assignment_cohort AS "assignmentCohort",
         ra.status,
         ra.scores_json AS "scoresJson",
+        ra.task_status AS "taskStatus",
+        ra.task_incomplete_reason AS "taskIncompleteReason",
+        ra.participant_responses_json AS "participantResponsesJson",
+        ra.module_episode_ending AS "episodeEnding",
+        ra.stopping_factors_json AS "stoppingFactorsJson",
+        ra.gender_context_handling AS "genderContextHandling",
         ra.critical_failure_observed AS "criticalFailureObserved",
         ra.critical_flags_json AS "criticalFlagsJson"
       FROM rubric_annotations ra
