@@ -137,14 +137,14 @@ test("opens a personal progress list with direct episode navigation", async () =
   assert.match(component, /Select any episode to open it in the evaluation workspace/);
 });
 
-test("uses a two-rating minimum plus all assigned primary raters and one judge review", async () => {
+test("uses a two-rating minimum plus all assigned primary raters and two judge reviews", async () => {
   const [component, policy, annotationRoute] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(ratingPolicyPath, "utf8"),
     readFile(new URL("../app/api/annotations/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(policy, /REQUIRED_PRIMARY_RATINGS_PER_EPISODE = 2/);
-  assert.match(policy, /REQUIRED_JUDGE_RATINGS_PER_EPISODE = 1/);
+  assert.match(policy, /REQUIRED_JUDGE_RATINGS_PER_EPISODE = 2/);
   assert.match(component, /completedRaterCount < requiredRatingsPerEpisode/);
   assert.match(component, /current\.completedRaterCount\}\/\{requiredRatingsPerEpisode\}/);
   assert.match(component, /fully rated/);
@@ -152,7 +152,7 @@ test("uses a two-rating minimum plus all assigned primary raters and one judge r
   assert.match(annotationRoute, /review_layer = \?/);
   assert.match(annotationRoute, /assignment_cohort = \?/);
   assert.match(annotationRoute, /Every active rater in this primary group/);
-  assert.match(annotationRoute, /required judge review/);
+  assert.match(annotationRoute, /Both assigned judges/);
 });
 
 test("uses queue and progress lists instead of a conflicting episode search", async () => {

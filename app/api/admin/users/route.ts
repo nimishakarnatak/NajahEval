@@ -70,7 +70,7 @@ function assignmentEpisodePredicate(assignment: AssignmentCohort): string {
   return "FALSE";
 }
 
-/** Retain one active account per judge assignment; primary groups are unlimited. */
+/** Enforce the two-place judge limit; primary groups remain unlimited. */
 async function assignmentAvailabilityError(
   db: ReturnType<typeof getDatabase>,
   assignment: AssignmentCohort,
@@ -91,7 +91,7 @@ async function assignmentAvailabilityError(
     .bind(assignment, excludedUserId)
     .first<{ count: number | string }>();
   if (Number(row?.count ?? 0) < capacity) return null;
-  return "This judge assignment already has its one active judge.";
+  return "This judge assignment already has its two active judges.";
 }
 
 /**

@@ -3,7 +3,10 @@ import {
   BUNDLED_DATASET_VERSION,
   ensureBundledDataset,
 } from "@/lib/bundled-dataset";
-import { REQUIRED_PRIMARY_RATINGS_PER_EPISODE } from "@/lib/rating-policy";
+import {
+  REQUIRED_JUDGE_RATINGS_PER_EPISODE,
+  REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
+} from "@/lib/rating-policy";
 import {
   ASSIGNMENT_OPTIONS,
   assignmentCohortLabel,
@@ -345,13 +348,13 @@ export async function getAdminProgress(): Promise<AdminProgress> {
   const judgeCompletedEpisodes = episodes.filter((episode) => {
     const requiredJudge = requiredJudgeByEpisode.get(episode.episodeId);
     if (!requiredJudge) return false;
-    return currentStudyRatings.some(
+    return currentStudyRatings.filter(
       (rating) =>
         rating.episodeId === episode.episodeId &&
         rating.reviewLayer === "judge" &&
         rating.assignmentCohort === requiredJudge &&
         rating.status === "complete",
-    );
+    ).length >= REQUIRED_JUDGE_RATINGS_PER_EPISODE;
   }).length;
 
   return {

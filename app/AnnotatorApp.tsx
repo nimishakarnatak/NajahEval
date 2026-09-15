@@ -2051,7 +2051,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <h1>{current.moduleObjective || `Evaluate the ${MODULE_LABELS[current.module] || current.module} guidance.`}</h1>
                   <div className="independence-note">
                     <span>◎</span> {current.completedRaterCount}/{requiredRatingsPerEpisode}{" "}
-                    {reviewLayer === "judge" ? "judge review complete" : "independent primary ratings complete"}
+                    {reviewLayer === "judge" ? "independent judge reviews complete" : "independent primary ratings complete"}
                   </div>
                   {reviewLayer === "judge" && current.primaryMismatch && (
                     <div className="judge-mismatch-alert" role="status">

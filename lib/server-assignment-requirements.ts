@@ -14,8 +14,8 @@ import {
  *
  * Primary groups have no fixed membership limit. Every active rater assigned to
  * the group is expected to review its 100 episodes, while the study retains a
- * minimum of two independent primary ratings. Judge assignments remain limited
- * to one active judge and therefore require one review.
+ * minimum of two independent primary ratings. Each judge queue has two active
+ * places and therefore requires two independent judge reviews.
  */
 export async function requiredRatingsForAssignment(
   db: ReturnType<typeof getDatabase>,

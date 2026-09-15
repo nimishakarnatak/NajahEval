@@ -369,7 +369,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error: reviewLayer === "judge"
-            ? "This episode already has its required judge review."
+            ? "Both assigned judges have already completed this episode."
             : "Every active rater in this primary group has already completed this episode.",
         },
         { status: 409 },

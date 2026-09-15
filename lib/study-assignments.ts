@@ -48,14 +48,14 @@ export const ASSIGNMENT_OPTIONS: readonly {
     label: "Judge 1",
     description: "A seeded random sample of 50 episodes plus assigned serious mismatches.",
     episodeCount: 50,
-    capacity: 1,
+    capacity: 2,
   },
   {
     value: "judge_2",
     label: "Judge 2",
     description: "A separate seeded random sample of 50 episodes plus assigned serious mismatches.",
     episodeCount: 50,
-    capacity: 1,
+    capacity: 2,
   },
 ];
 

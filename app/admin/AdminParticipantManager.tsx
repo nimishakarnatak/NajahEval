@@ -229,7 +229,7 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
           <p className="admin-eyebrow">Participant access</p>
           <h2 id="participant-access-title">Raters, judges and viewers</h2>
           <p>
-            Assign any number of raters to each 100-episode group and one judge to each
+            Assign any number of raters to each 100-episode group and up to two judges to each
             random-sample plus serious-mismatch queue.
           </p>
         </div>
@@ -238,7 +238,7 @@ export function AdminParticipantManager({ adminEmail }: { adminEmail: string }) 
 
       <div className="admin-role-guide">
         <div><strong>Primary rater</strong><span>Rates the same 100-episode Group A, B, or C queue as every other rater assigned to that group.</span></div>
-        <div><strong>Judge</strong><span>Independently reviews 50 random episodes plus assigned serious-mismatch cases.</span></div>
+        <div><strong>Judge</strong><span>Shares a 50-episode random queue with one other judge and independently reviews its assigned serious-mismatch cases.</span></div>
         <div><strong>Viewer</strong><span>Can read conversations but cannot save or submit ratings.</span></div>
         <div><strong>Admin + Demo rater</strong><span>Manages the study and may demonstrate rating without affecting study coverage. Assigned to {adminEmail}.</span></div>
       </div>

@@ -6,5 +6,5 @@
  */
 export const REQUIRED_PRIMARY_RATINGS_PER_EPISODE = 2;
 
-/** Every episode receives one separate quality-assurance judge review. */
-export const REQUIRED_JUDGE_RATINGS_PER_EPISODE = 1;
+/** Every assigned judge episode receives two independent quality-assurance reviews. */
+export const REQUIRED_JUDGE_RATINGS_PER_EPISODE = 2;

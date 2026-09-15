@@ -58,11 +58,11 @@ CSV so they cannot influence human judgments.
 
 The 300 episodes are fielded through two distinct review layers:
 
-- **Group A:** two blinded primary raters independently rate study orders 1–100.
-- **Group B:** two blinded primary raters independently rate study orders 101–200.
-- **Group C:** two blinded primary raters independently rate study orders 201–300.
-- **Judge 1:** one judge reviews a fixed random sample of 50 episodes plus assigned serious mismatches.
-- **Judge 2:** one judge reviews a separate fixed random sample of 50 episodes plus assigned serious mismatches.
+- **Group A:** every assigned blinded primary rater independently rates study orders 1–100.
+- **Group B:** every assigned blinded primary rater independently rates study orders 101–200.
+- **Group C:** every assigned blinded primary rater independently rates study orders 201–300.
+- **Judge 1:** two judges independently review a fixed random sample of 50 episodes plus assigned serious mismatches.
+- **Judge 2:** two judges independently review a separate fixed random sample of 50 episodes plus assigned serious mismatches.
 
 The 100 base judge episodes are selected reproducibly from episode IDs and do
 not overlap. They are balanced across Groups A-C: Judge 1 receives 17/17/16 and
@@ -72,17 +72,18 @@ judge's queue using a deterministic, non-overlapping allocation rule. A serious
 mismatch is a 1-versus-3 score, N/A-versus-substantive score, different task
 status or incomplete-task reason, or different critical-failure judgment.
 
-The design therefore requires 600 primary ratings and 100 base judge reviews,
-plus one judge review for each serious mismatch outside the base samples.
+The design requires at least 600 primary ratings, increasing when more primary
+raters are assigned, plus 200 base judge reviews and two judge reviews for each
+serious mismatch outside the base samples.
 Ordinary primary-rating differences are shown as alerts only when the episode
 is already in the judge's base sample. Judges never see either primary rater's
 identity or actual answers.
 Administrator demo ratings and pre-assignment legacy ratings are stored and
 exportable, but do not count toward required study coverage.
 
-The administrator assigns accounts to groups from the dashboard. A Group A, B,
-or C assignment has capacity for two active raters; a judge assignment has
-capacity for one active judge. An unassigned rater sees no study episodes until
+The administrator assigns accounts to groups from the dashboard. Group A, B,
+and C have no fixed membership limit; each judge assignment has capacity for
+two active judges. An unassigned rater sees no study episodes until
 the administrator selects a queue.
 
 ## Publish from GitHub to Netlify

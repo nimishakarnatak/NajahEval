@@ -129,7 +129,7 @@ export default async function AdminDashboardPage() {
               <h2 id="assignment-progress-title">Progress by assigned team</h2>
               <p>
                 Groups A–C can contain any number of primary raters sharing the same 100 episodes.
-                Each judge receives a separate reproducible random sample of 50 episodes.
+                Each judge queue has two places and a separate reproducible random sample of 50 episodes.
                 Serious primary-rating mismatches outside those samples are added to one
                 judge&apos;s queue.
               </p>
@@ -161,7 +161,7 @@ export default async function AdminDashboardPage() {
             <h2>Coverage across the dataset</h2>
             <p>
               Completed ratings only. Minimum two-rater primary coverage and the separate judge
-              sample plus serious-mismatch reviews are reported independently; drafts
+              samples plus serious-mismatch reviews are reported independently; drafts
               and admin demos are excluded.
             </p>
           </div>
@@ -175,10 +175,10 @@ export default async function AdminDashboardPage() {
               <strong>{progress.coverage.primaryComplete}</strong>
               <span>At least two primary ratings</span>
             </div>
-            <div><strong>{progress.coverage.judgePending}</strong><span>Judge review pending</span></div>
+            <div><strong>{progress.coverage.judgePending}</strong><span>Two-judge review incomplete</span></div>
             <div className="coverage-complete">
               <strong>{progress.coverage.judgeComplete}</strong>
-              <span>Judge review complete</span>
+              <span>Both judge reviews complete</span>
             </div>
           </div>
         </section>

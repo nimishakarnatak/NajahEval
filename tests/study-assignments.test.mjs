@@ -14,7 +14,7 @@ test("defines three unlimited shared groups and two reproducible 50-episode judg
     assert.match(assignments, new RegExp(`value: "${group}"[\\s\\S]*?episodeCount: 100[\\s\\S]*?capacity: null`));
   }
   for (const judge of ["judge_1", "judge_2"]) {
-    assert.match(assignments, new RegExp(`value: "${judge}"[\\s\\S]*?episodeCount: 50[\\s\\S]*?capacity: 1`));
+    assert.match(assignments, new RegExp(`value: "${judge}"[\\s\\S]*?episodeCount: 50[\\s\\S]*?capacity: 2`));
   }
   assert.match(assignments, /if \(baseAssignment\) return baseAssignment/);
   assert.match(assignments, /order % 2 === 1 \? "judge_1" : "judge_2"/);
@@ -45,7 +45,7 @@ test("enforces assignment visibility, flexible primary membership, and separate 
   assert.match(annotations, /reviewLayer !== "admin_demo"/);
   assert.match(users, /assignmentCapacity/);
   assert.match(users, /capacity === null/);
-  assert.match(users, /one active judge/);
+  assert.match(users, /two active judges/);
   assert.match(requirements, /Math\.max/);
   assert.match(requirements, /REQUIRED_PRIMARY_RATINGS_PER_EPISODE/);
   assert.match(episodes, /requiredRatingsForAssignment/);

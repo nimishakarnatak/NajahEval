@@ -32,7 +32,7 @@ test("calculates flexible primary-group and judge progress without counting admi
   assert.match(progress, /notStartedCount/);
   assert.match(progress, /completionPercentage/);
   assert.match(policy, /REQUIRED_PRIMARY_RATINGS_PER_EPISODE = 2/);
-  assert.match(policy, /REQUIRED_JUDGE_RATINGS_PER_EPISODE = 1/);
+  assert.match(policy, /REQUIRED_JUDGE_RATINGS_PER_EPISODE = 2/);
   assert.match(progress, /onePrimaryRating/);
   assert.match(progress, /primaryComplete/);
   assert.match(progress, /judgePending/);
