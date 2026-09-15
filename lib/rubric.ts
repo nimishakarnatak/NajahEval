@@ -4,7 +4,7 @@
  * Keeping a version in each saved row makes future rubric revisions auditable
  * and prevents results from different instruments being silently combined.
  */
-export const RUBRIC_VERSION = "najah-evidence-v11";
+export const RUBRIC_VERSION = "najah-evidence-v12";
 
 /**
  * Mutually exclusive judgments about how far the participant's module task
@@ -89,7 +89,186 @@ export const TASK_INCOMPLETE_REASONS = [
 
 export type TaskIncompleteReason = (typeof TASK_INCOMPLETE_REASONS)[number]["value"];
 
-export const PARTICIPANT_RESPONSE_KEYS = [
+/**
+ * Observable actions taken by the participant in response to Najah.
+ *
+ * These are kept separate from expressed reactions so analysts can distinguish
+ * what a participant did from what they explicitly said they felt or thought.
+ */
+export const PARTICIPANT_BEHAVIOUR_KEYS = [
+  "providedRequestedInformation",
+  "attemptedRequestedAction",
+  "usedOrRespondedToOutput",
+  "askedFollowUpQuestion",
+  "correctedOrDisagreed",
+  "rejectedOrDeclinedOutput",
+  "declinedInformationOrAction",
+  "repeatedOrRestatedRequest",
+  "requestedDifferentApproach",
+  "otherObservableBehaviour",
+  "noClearBehaviouralResponse",
+  "cannotDetermine",
+] as const;
+
+export type ParticipantBehaviourKey = (typeof PARTICIPANT_BEHAVIOUR_KEYS)[number];
+
+export type ParticipantBehaviourGroup =
+  | "Task-progressing behaviour"
+  | "Challenging or non-progressing behaviour"
+  | "Other or uncertain behaviour";
+
+export const PARTICIPANT_BEHAVIOURS: readonly {
+  key: ParticipantBehaviourKey;
+  label: string;
+  group: ParticipantBehaviourGroup;
+  definition: string;
+  example?: string;
+}[] = [
+  {
+    key: "providedRequestedInformation",
+    label: "Provided information requested by Najah",
+    group: "Task-progressing behaviour",
+    definition: "The participant supplied information, preferences, clarification, or material that Najah requested.",
+    example: "I have two years of marketing experience.",
+  },
+  {
+    key: "attemptedRequestedAction",
+    label: "Attempted or completed an action requested by Najah",
+    group: "Task-progressing behaviour",
+    definition: "The participant attempted or completed a concrete action suggested or requested by Najah.",
+    example: "The participant uploaded a CV or drafted the requested paragraph.",
+  },
+  {
+    key: "usedOrRespondedToOutput",
+    label: "Used, accepted, revised, or otherwise responded to an output",
+    group: "Task-progressing behaviour",
+    definition: "The participant engaged with an output by using it, accepting it, revising it, or requesting a change to it.",
+    example: "I will use this version, but can you shorten the final paragraph?",
+  },
+  {
+    key: "askedFollowUpQuestion",
+    label: "Asked a follow-up or clarification question",
+    group: "Task-progressing behaviour",
+    definition: "The participant requested further information, explanation, or assistance related to Najah's response.",
+    example: "What do you mean by transferable skills?",
+  },
+  {
+    key: "correctedOrDisagreed",
+    label: "Corrected or disagreed with Najah",
+    group: "Challenging or non-progressing behaviour",
+    definition: "The participant explicitly challenged or corrected something Najah said.",
+    example: "No, I am studying economics, not engineering.",
+  },
+  {
+    key: "rejectedOrDeclinedOutput",
+    label: "Explicitly rejected or declined Najah’s output",
+    group: "Challenging or non-progressing behaviour",
+    definition: "The participant stated that they did not accept, want, or intend to use Najah’s output.",
+    example: "I don't want to use this version.",
+  },
+  {
+    key: "declinedInformationOrAction",
+    label: "Explicitly declined to provide requested information or complete a requested action",
+    group: "Challenging or non-progressing behaviour",
+    definition: "The participant stated that they could not or would not provide information or perform an action requested by Najah.",
+    example: "I cannot upload my CV.",
+  },
+  {
+    key: "repeatedOrRestatedRequest",
+    label: "Repeated or restated a request after Najah's response",
+    group: "Challenging or non-progressing behaviour",
+    definition: "The participant asked substantially the same question again or restated their need after receiving a response.",
+    example: "But I am asking which jobs I can apply for.",
+  },
+  {
+    key: "requestedDifferentApproach",
+    label: "Asked Najah to change its approach or provide a different response",
+    group: "Challenging or non-progressing behaviour",
+    definition: "The participant explicitly requested a different format, direction, tone, level of detail, or type of assistance.",
+    example: "Please make it shorter and focus only on my experience.",
+  },
+  {
+    key: "otherObservableBehaviour",
+    label: "Other observable behaviour — please specify",
+    group: "Other or uncertain behaviour",
+    definition: "A clearly observable participant action does not fit any option above.",
+  },
+  {
+    key: "noClearBehaviouralResponse",
+    label: "No clear behavioural response was observed",
+    group: "Other or uncertain behaviour",
+    definition: "A participant message was present, but it did not provide enough evidence to classify a behavioural response.",
+  },
+  {
+    key: "cannotDetermine",
+    label: "Cannot determine from the available record",
+    group: "Other or uncertain behaviour",
+    definition: "The record is missing, corrupted, or otherwise insufficient to assess participant behaviour.",
+  },
+];
+
+/** Explicit reactions expressed by the participant in their messages. */
+export const PARTICIPANT_REACTION_KEYS = [
+  "expressedSatisfaction",
+  "expressedDissatisfaction",
+  "expressedConfusion",
+  "expressedFrustration",
+  "otherExpressedReaction",
+  "noExplicitReaction",
+  "cannotDetermine",
+] as const;
+
+export type ParticipantReactionKey = (typeof PARTICIPANT_REACTION_KEYS)[number];
+
+export const PARTICIPANT_REACTIONS: readonly {
+  key: ParticipantReactionKey;
+  label: string;
+  definition: string;
+  example?: string;
+}[] = [
+  {
+    key: "expressedSatisfaction",
+    label: "Expressed satisfaction or appreciation",
+    definition: "The participant provided positive feedback, expressed thanks or approval, or indicated that Najah's response was useful.",
+    example: "Thank you, this is very helpful.",
+  },
+  {
+    key: "expressedDissatisfaction",
+    label: "Expressed dissatisfaction or criticism",
+    definition: "The participant explicitly indicated that Najah’s response was inadequate, unhelpful, inappropriate, or incorrect.",
+    example: "This does not answer my question.",
+  },
+  {
+    key: "expressedConfusion",
+    label: "Expressed confusion or uncertainty",
+    definition: "The participant indicated that something was unclear or that they were unsure how to understand or proceed with Najah’s response.",
+    example: "I don't understand what you mean.",
+  },
+  {
+    key: "expressedFrustration",
+    label: "Expressed frustration or irritation",
+    definition: "The participant explicitly showed annoyance, impatience, or repeated dissatisfaction.",
+    example: "I already answered this. Why are you asking me again?",
+  },
+  {
+    key: "otherExpressedReaction",
+    label: "Other expressed reaction — please specify",
+    definition: "A clearly expressed participant reaction does not fit any option above.",
+  },
+  {
+    key: "noExplicitReaction",
+    label: "No explicit reaction was observed",
+    definition: "The participant did not explicitly express a reaction, even if they replied or took an action.",
+  },
+  {
+    key: "cannotDetermine",
+    label: "Cannot determine from the available record",
+    definition: "The record is missing, corrupted, or otherwise insufficient to assess expressed reactions.",
+  },
+];
+
+/** Legacy v11 keys retained only for migration of saved ratings. */
+export const LEGACY_PARTICIPANT_RESPONSE_KEYS = [
   "providedRequestedInformation",
   "attemptedRequestedAction",
   "usedOrRespondedToOutput",
@@ -103,26 +282,6 @@ export const PARTICIPANT_RESPONSE_KEYS = [
   "cannotDetermine",
   "otherObservableResponse",
 ] as const;
-
-export type ParticipantResponseKey = (typeof PARTICIPANT_RESPONSE_KEYS)[number];
-
-export const PARTICIPANT_RESPONSES: readonly {
-  key: ParticipantResponseKey;
-  label: string;
-}[] = [
-  { key: "providedRequestedInformation", label: "Provided requested information" },
-  { key: "attemptedRequestedAction", label: "Attempted or completed a requested action" },
-  { key: "usedOrRespondedToOutput", label: "Used, accepted, or responded to an output" },
-  { key: "askedFollowUpQuestion", label: "Asked a follow-up question" },
-  { key: "correctedOrDisagreed", label: "Corrected or disagreed with Najah" },
-  { key: "expressedSatisfaction", label: "Expressed satisfaction or appreciation" },
-  { key: "expressedConfusionOrFrustration", label: "Expressed confusion or frustration" },
-  { key: "changedModule", label: "Changed to another module" },
-  { key: "noFurtherReply", label: "Did not provide a further reply" },
-  { key: "noClearResponse", label: "No clear participant response was observed" },
-  { key: "cannotDetermine", label: "Cannot determine" },
-  { key: "otherObservableResponse", label: "Other observable participant response" },
-];
 
 export const EPISODE_ENDINGS = [
   {

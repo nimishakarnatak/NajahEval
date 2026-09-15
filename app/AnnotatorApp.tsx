@@ -21,9 +21,13 @@ import {
   EpisodeEnding,
   GENDER_CONTEXT_OPTIONS,
   GenderContextHandling,
-  PARTICIPANT_RESPONSES,
-  PARTICIPANT_RESPONSE_KEYS,
-  ParticipantResponseKey,
+  PARTICIPANT_BEHAVIOURS,
+  PARTICIPANT_BEHAVIOUR_KEYS,
+  ParticipantBehaviourGroup,
+  ParticipantBehaviourKey,
+  PARTICIPANT_REACTIONS,
+  PARTICIPANT_REACTION_KEYS,
+  ParticipantReactionKey,
   RUBRIC_DIMENSIONS,
   RubricDimension,
   RubricSection,
@@ -54,8 +58,12 @@ type AnnotationDraft = {
   criticalEvidenceTurns: Record<CriticalFlagKey, string>;
   criticalFailureObserved: CriticalFailureObserved | "";
   taskStatus: TaskStatus | "";
-  participantResponses: Record<ParticipantResponseKey, boolean>;
-  participantResponseOther: string;
+  participantBehaviours: Record<ParticipantBehaviourKey, boolean>;
+  participantBehaviourEvidenceTurns: Record<ParticipantBehaviourKey, string>;
+  participantBehaviourOther: string;
+  participantReactions: Record<ParticipantReactionKey, boolean>;
+  participantReactionEvidenceTurns: Record<ParticipantReactionKey, string>;
+  participantReactionOther: string;
   episodeEnding: EpisodeEnding | "";
   stoppingFactors: Record<StoppingFactorKey, boolean>;
   stoppingFactorsEvidenceTurns: string;
@@ -164,8 +172,12 @@ function emptyDraft(): AnnotationDraft {
     criticalEvidenceTurns: keyedRecord(CRITICAL_FLAG_KEYS, () => ""),
     criticalFailureObserved: "",
     taskStatus: "",
-    participantResponses: keyedRecord(PARTICIPANT_RESPONSE_KEYS, () => false),
-    participantResponseOther: "",
+    participantBehaviours: keyedRecord(PARTICIPANT_BEHAVIOUR_KEYS, () => false),
+    participantBehaviourEvidenceTurns: keyedRecord(PARTICIPANT_BEHAVIOUR_KEYS, () => ""),
+    participantBehaviourOther: "",
+    participantReactions: keyedRecord(PARTICIPANT_REACTION_KEYS, () => false),
+    participantReactionEvidenceTurns: keyedRecord(PARTICIPANT_REACTION_KEYS, () => ""),
+    participantReactionOther: "",
     episodeEnding: "",
     stoppingFactors: keyedRecord(STOPPING_FACTOR_KEYS, () => false),
     stoppingFactorsEvidenceTurns: "",
@@ -213,16 +225,28 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
     };
   }
 
-  if (!PARTICIPANT_RESPONSE_KEYS.some((key) => draft.participantResponses[key])) {
+  if (!PARTICIPANT_BEHAVIOUR_KEYS.some((key) => draft.participantBehaviours[key])) {
     return {
-      message: "Select at least one observable participant response.",
-      targetId: "participant-response",
+      message: "Select at least one observable participant behaviour.",
+      targetId: "participant-behaviour",
     };
   }
-  if (draft.participantResponses.otherObservableResponse && !draft.participantResponseOther.trim()) {
+  if (draft.participantBehaviours.otherObservableBehaviour && !draft.participantBehaviourOther.trim()) {
     return {
-      message: "Describe the other observable participant response.",
-      targetId: "participant-response-other",
+      message: "Describe the other observable participant behaviour.",
+      targetId: "participant-behaviour-other",
+    };
+  }
+  if (!PARTICIPANT_REACTION_KEYS.some((key) => draft.participantReactions[key])) {
+    return {
+      message: "Select at least one explicitly expressed participant reaction.",
+      targetId: "participant-reaction",
+    };
+  }
+  if (draft.participantReactions.otherExpressedReaction && !draft.participantReactionOther.trim()) {
+    return {
+      message: "Describe the other expressed participant reaction.",
+      targetId: "participant-reaction-other",
     };
   }
   if (!draft.episodeEnding) {
@@ -295,8 +319,12 @@ function draftFromEpisode(episode: Episode | undefined): AnnotationDraft {
     criticalEvidenceTurns: { ...emptyDraft().criticalEvidenceTurns, ...episode.criticalEvidenceTurns },
     criticalFailureObserved: episode.criticalFailureObserved ?? "",
     taskStatus: episode.taskStatus ?? "",
-    participantResponses: { ...emptyDraft().participantResponses, ...episode.participantResponses },
-    participantResponseOther: episode.participantResponseOther ?? "",
+    participantBehaviours: { ...emptyDraft().participantBehaviours, ...episode.participantBehaviours },
+    participantBehaviourEvidenceTurns: { ...emptyDraft().participantBehaviourEvidenceTurns, ...episode.participantBehaviourEvidenceTurns },
+    participantBehaviourOther: episode.participantBehaviourOther ?? "",
+    participantReactions: { ...emptyDraft().participantReactions, ...episode.participantReactions },
+    participantReactionEvidenceTurns: { ...emptyDraft().participantReactionEvidenceTurns, ...episode.participantReactionEvidenceTurns },
+    participantReactionOther: episode.participantReactionOther ?? "",
     episodeEnding: episode.episodeEnding ?? "",
     stoppingFactors: { ...emptyDraft().stoppingFactors, ...episode.stoppingFactors },
     stoppingFactorsEvidenceTurns: episode.stoppingFactorsEvidenceTurns ?? "",
@@ -576,39 +604,141 @@ function TaskStatusCard({
   );
 }
 
-/** Multi-select coding of observable participant behaviour across the episode. */
-function ParticipantResponseCard({
-  responses,
+const PARTICIPANT_BEHAVIOUR_GROUPS: readonly ParticipantBehaviourGroup[] = [
+  "Task-progressing behaviour",
+  "Challenging or non-progressing behaviour",
+  "Other or uncertain behaviour",
+];
+
+/** Multi-select coding of what the participant observably did in the episode. */
+function ParticipantBehaviourCard({
+  behaviours,
+  evidenceTurns,
   other,
   onChange,
+  onEvidenceTurnsChange,
   onOtherChange,
 }: {
-  responses: Record<ParticipantResponseKey, boolean>;
+  behaviours: Record<ParticipantBehaviourKey, boolean>;
+  evidenceTurns: Record<ParticipantBehaviourKey, string>;
   other: string;
-  onChange: (key: ParticipantResponseKey, selected: boolean) => void;
+  onChange: (key: ParticipantBehaviourKey, selected: boolean) => void;
+  onEvidenceTurnsChange: (key: ParticipantBehaviourKey, value: string) => void;
   onOtherChange: (value: string) => void;
 }) {
   return (
-    <fieldset className="critical-category-card" id="participant-response">
-      <legend>How did the participant respond during the episode?</legend>
-      <p>Select every response observed at least once. Code only observable behaviour; do not infer motivation or emotional state.</p>
-      <div className="critical-flag-list compact-check-list">
-        {PARTICIPANT_RESPONSES.map((option) => (
-          <label key={option.key} className={`critical-checkbox-row${responses[option.key] ? " selected" : ""}`}>
-            <input
-              type="checkbox"
-              checked={responses[option.key]}
-              onChange={(event) => onChange(option.key, event.target.checked)}
-            />
-            <span className="episode-option-copy"><strong>{option.label}</strong></span>
-          </label>
-        ))}
-      </div>
-      {responses.otherObservableResponse && (
+    <fieldset className="critical-category-card participant-response-card" id="participant-behaviour">
+      <legend>How did the participant respond to Najah during this module episode?</legend>
+      <p>Select every behaviour observed at least once. Select options supported by the participant&apos;s messages.</p>
+      {PARTICIPANT_BEHAVIOUR_GROUPS.map((group) => (
+        <section className="participant-option-group" key={group}>
+          <h4>{group}</h4>
+          <div className="participant-option-list">
+            {PARTICIPANT_BEHAVIOURS.filter((option) => option.group === group).map((option) => {
+              const selected = behaviours[option.key];
+              return (
+                <div className={`participant-option-card${selected ? " selected" : ""}`} key={option.key}>
+                  <label className="critical-checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={(event) => onChange(option.key, event.target.checked)}
+                    />
+                    <span className="episode-option-copy"><strong>{option.label}</strong></span>
+                  </label>
+                  <details className="participant-definition">
+                    <summary>View definition and example</summary>
+                    <p>{option.definition}</p>
+                    {option.example && <p><strong>Illustrative example:</strong> “{option.example}”</p>}
+                  </details>
+                  {selected && option.key !== "noClearBehaviouralResponse" && option.key !== "cannotDetermine" && (
+                    <label className="participant-turn-field">
+                      <span>Participant message turn number(s) <small>optional</small></span>
+                      <input
+                        value={evidenceTurns[option.key]}
+                        onChange={(event) => onEvidenceTurnsChange(option.key, event.target.value)}
+                        placeholder="e.g. 004, 008–010"
+                      />
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+      {behaviours.otherObservableBehaviour && (
         <label className="evidence-field">
-          <span>Specify the other observable participant response <strong>required</strong></span>
+          <span>Specify the other observable participant behaviour <strong>required</strong></span>
           <textarea
-            id="participant-response-other"
+            id="participant-behaviour-other"
+            value={other}
+            onChange={(event) => onOtherChange(event.target.value)}
+            rows={2}
+          />
+        </label>
+      )}
+    </fieldset>
+  );
+}
+
+/** Multi-select coding of reactions explicitly expressed by the participant. */
+function ParticipantReactionCard({
+  reactions,
+  evidenceTurns,
+  other,
+  onChange,
+  onEvidenceTurnsChange,
+  onOtherChange,
+}: {
+  reactions: Record<ParticipantReactionKey, boolean>;
+  evidenceTurns: Record<ParticipantReactionKey, string>;
+  other: string;
+  onChange: (key: ParticipantReactionKey, selected: boolean) => void;
+  onEvidenceTurnsChange: (key: ParticipantReactionKey, value: string) => void;
+  onOtherChange: (value: string) => void;
+}) {
+  return (
+    <fieldset className="critical-category-card participant-response-card" id="participant-reaction">
+      <legend>What reactions did the participant explicitly express during this module episode?</legend>
+      <p>Select every reaction observed at least once. Select reactions that are explicit in the participant&apos;s messages.</p>
+      <div className="participant-option-list">
+        {PARTICIPANT_REACTIONS.map((option) => {
+          const selected = reactions[option.key];
+          return (
+            <div className={`participant-option-card${selected ? " selected" : ""}`} key={option.key}>
+              <label className="critical-checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={(event) => onChange(option.key, event.target.checked)}
+                />
+                <span className="episode-option-copy"><strong>{option.label}</strong></span>
+              </label>
+              <details className="participant-definition">
+                <summary>View definition and example</summary>
+                <p>{option.definition}</p>
+                {option.example && <p><strong>Illustrative example:</strong> “{option.example}”</p>}
+              </details>
+              {selected && option.key !== "noExplicitReaction" && option.key !== "cannotDetermine" && (
+                <label className="participant-turn-field">
+                  <span>Participant message turn number(s) <small>optional</small></span>
+                  <input
+                    value={evidenceTurns[option.key]}
+                    onChange={(event) => onEvidenceTurnsChange(option.key, event.target.value)}
+                    placeholder="e.g. 004, 008–010"
+                  />
+                </label>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {reactions.otherExpressedReaction && (
+        <label className="evidence-field">
+          <span>Specify the other expressed participant reaction <strong>required</strong></span>
+          <textarea
+            id="participant-reaction-other"
             value={other}
             onChange={(event) => onOtherChange(event.target.value)}
             rows={2}
@@ -1067,27 +1197,87 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     markDraftChanged();
   }
 
-  /** Records all observable participant responses, with exclusive uncertainty options. */
-  function updateParticipantResponse(key: ParticipantResponseKey, selected: boolean) {
+  /** Records observable participant behaviour, with mutually exclusive neutral options. */
+  function updateParticipantBehaviour(key: ParticipantBehaviourKey, selected: boolean) {
     clearSubmissionFeedback();
     setDraft((previous) => {
-      const exclusive = key === "noClearResponse" || key === "cannotDetermine";
-      const responses = exclusive && selected
-        ? keyedRecord(PARTICIPANT_RESPONSE_KEYS, () => false)
-        : { ...previous.participantResponses };
+      const exclusive = key === "noClearBehaviouralResponse" || key === "cannotDetermine";
+      const behaviours = exclusive && selected
+        ? keyedRecord(PARTICIPANT_BEHAVIOUR_KEYS, () => false)
+        : { ...previous.participantBehaviours };
       if (!exclusive && selected) {
-        responses.noClearResponse = false;
-        responses.cannotDetermine = false;
+        behaviours.noClearBehaviouralResponse = false;
+        behaviours.cannotDetermine = false;
       }
-      responses[key] = selected;
+      behaviours[key] = selected;
+      const updatedEvidenceTurns = exclusive && selected
+        ? keyedRecord(PARTICIPANT_BEHAVIOUR_KEYS, () => "")
+        : { ...previous.participantBehaviourEvidenceTurns };
+      if (!selected) updatedEvidenceTurns[key] = "";
       return {
         ...previous,
-        participantResponses: responses,
-        participantResponseOther: responses.otherObservableResponse
-          ? previous.participantResponseOther
+        participantBehaviours: behaviours,
+        participantBehaviourEvidenceTurns: updatedEvidenceTurns,
+        participantBehaviourOther: behaviours.otherObservableBehaviour
+          ? previous.participantBehaviourOther
           : "",
       };
     });
+    markDraftChanged();
+  }
+
+  /** Records an optional participant-message turn reference for one behaviour. */
+  function updateParticipantBehaviourEvidenceTurns(key: ParticipantBehaviourKey, value: string) {
+    clearSubmissionFeedback();
+    setDraft((previous) => ({
+      ...previous,
+      participantBehaviourEvidenceTurns: {
+        ...previous.participantBehaviourEvidenceTurns,
+        [key]: value,
+      },
+    }));
+    markDraftChanged();
+  }
+
+  /** Records explicit participant reactions, with mutually exclusive neutral options. */
+  function updateParticipantReaction(key: ParticipantReactionKey, selected: boolean) {
+    clearSubmissionFeedback();
+    setDraft((previous) => {
+      const exclusive = key === "noExplicitReaction" || key === "cannotDetermine";
+      const reactions = exclusive && selected
+        ? keyedRecord(PARTICIPANT_REACTION_KEYS, () => false)
+        : { ...previous.participantReactions };
+      if (!exclusive && selected) {
+        reactions.noExplicitReaction = false;
+        reactions.cannotDetermine = false;
+      }
+      reactions[key] = selected;
+      const updatedEvidenceTurns = exclusive && selected
+        ? keyedRecord(PARTICIPANT_REACTION_KEYS, () => "")
+        : { ...previous.participantReactionEvidenceTurns };
+      if (!selected) updatedEvidenceTurns[key] = "";
+      return {
+        ...previous,
+        participantReactions: reactions,
+        participantReactionEvidenceTurns: updatedEvidenceTurns,
+        participantReactionOther: reactions.otherExpressedReaction
+          ? previous.participantReactionOther
+          : "",
+      };
+    });
+    markDraftChanged();
+  }
+
+  /** Records an optional participant-message turn reference for one reaction. */
+  function updateParticipantReactionEvidenceTurns(key: ParticipantReactionKey, value: string) {
+    clearSubmissionFeedback();
+    setDraft((previous) => ({
+      ...previous,
+      participantReactionEvidenceTurns: {
+        ...previous.participantReactionEvidenceTurns,
+        [key]: value,
+      },
+    }));
     markDraftChanged();
   }
 
@@ -1748,8 +1938,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       "language",
       "annotation_status",
       "task_status",
-      ...PARTICIPANT_RESPONSES.map((response) => `participant_response_${response.key}`),
-      "participant_response_other",
+      ...PARTICIPANT_BEHAVIOURS.flatMap((behaviour) => [
+        `participant_behaviour_${behaviour.key}`,
+        `participant_behaviour_${behaviour.key}_message_turns`,
+      ]),
+      "participant_behaviour_other",
+      ...PARTICIPANT_REACTIONS.flatMap((reaction) => [
+        `participant_reaction_${reaction.key}`,
+        `participant_reaction_${reaction.key}_message_turns`,
+      ]),
+      "participant_reaction_other",
       "module_episode_ending",
       ...STOPPING_FACTORS.map((factor) => `stopping_factor_${factor.key}`),
       "stopping_factors_evidence_turns",
@@ -1787,8 +1985,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         episode.language,
         episode.annotationStatus,
         episode.taskStatus,
-        ...PARTICIPANT_RESPONSES.map((response) => episode.participantResponses[response.key]),
-        episode.participantResponseOther,
+        ...PARTICIPANT_BEHAVIOURS.flatMap((behaviour) => [
+          episode.participantBehaviours[behaviour.key],
+          episode.participantBehaviourEvidenceTurns[behaviour.key],
+        ]),
+        episode.participantBehaviourOther,
+        ...PARTICIPANT_REACTIONS.flatMap((reaction) => [
+          episode.participantReactions[reaction.key],
+          episode.participantReactionEvidenceTurns[reaction.key],
+        ]),
+        episode.participantReactionOther,
         episode.episodeEnding,
         ...STOPPING_FACTORS.map((factor) => episode.stoppingFactors[factor.key]),
         episode.stoppingFactorsEvidenceTurns,
@@ -2559,14 +2765,31 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
                   <section className="rubric-section participant-response-section">
                     <div className="rubric-section-heading">
-                      <p className="eyebrow">B.1 Participant response</p>
-                      <span>A participant may display several different or apparently contradictory responses.</span>
+                      <p className="eyebrow">B.1 Observable participant behaviour</p>
+                      <span>Record every behaviour observed at least once; optional turn references help locate the supporting message.</span>
                     </div>
-                    <ParticipantResponseCard
-                      responses={draft.participantResponses}
-                      other={draft.participantResponseOther}
-                      onChange={updateParticipantResponse}
-                      onOtherChange={(value) => updateDraftField("participantResponseOther", value)}
+                    <ParticipantBehaviourCard
+                      behaviours={draft.participantBehaviours}
+                      evidenceTurns={draft.participantBehaviourEvidenceTurns}
+                      other={draft.participantBehaviourOther}
+                      onChange={updateParticipantBehaviour}
+                      onEvidenceTurnsChange={updateParticipantBehaviourEvidenceTurns}
+                      onOtherChange={(value) => updateDraftField("participantBehaviourOther", value)}
+                    />
+                  </section>
+
+                  <section className="rubric-section participant-response-section">
+                    <div className="rubric-section-heading">
+                      <p className="eyebrow">B.2 Explicitly expressed participant reaction</p>
+                      <span>Record reactions that the participant expressed directly; optional turn references help locate the supporting message.</span>
+                    </div>
+                    <ParticipantReactionCard
+                      reactions={draft.participantReactions}
+                      evidenceTurns={draft.participantReactionEvidenceTurns}
+                      other={draft.participantReactionOther}
+                      onChange={updateParticipantReaction}
+                      onEvidenceTurnsChange={updateParticipantReactionEvidenceTurns}
+                      onOtherChange={(value) => updateDraftField("participantReactionOther", value)}
                     />
                   </section>
                 </section>

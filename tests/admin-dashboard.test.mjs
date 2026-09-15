@@ -153,7 +153,8 @@ test("provides evaluator, primary, judge, and combined administrator exports", a
   assert.match(exporter, /rubric_version/);
   assert.match(exporter, /skip_reason/);
   assert.match(exporter, /critical_failure_observed/);
-  assert.match(exporter, /participant_response_/);
+  assert.match(exporter, /participant_behaviour_/);
+  assert.match(exporter, /participant_reaction_/);
   assert.match(exporter, /module_episode_ending/);
   assert.match(exporter, /stopping_factor_/);
   assert.match(exporter, /gender_context_handling/);

@@ -52,13 +52,19 @@ test("includes every revised participant, ending, stopping, gender, and qualitat
     "usedOrRespondedToOutput",
     "askedFollowUpQuestion",
     "correctedOrDisagreed",
+    "rejectedOrDeclinedOutput",
+    "declinedInformationOrAction",
+    "repeatedOrRestatedRequest",
+    "requestedDifferentApproach",
+    "otherObservableBehaviour",
+    "noClearBehaviouralResponse",
     "expressedSatisfaction",
-    "expressedConfusionOrFrustration",
-    "changedModule",
-    "noFurtherReply",
-    "noClearResponse",
+    "expressedDissatisfaction",
+    "expressedConfusion",
+    "expressedFrustration",
+    "otherExpressedReaction",
+    "noExplicitReaction",
     "cannotDetermine",
-    "otherObservableResponse",
   ]) assert.match(rubric, new RegExp(`"${key}"`));
   assert.match(rubric, /The intended output or outcome was delivered/);
   assert.match(rubric, /Repetition or loss of context/);
@@ -69,6 +75,12 @@ test("includes every revised participant, ending, stopping, gender, and qualitat
   for (const column of [
     "participant_responses_json",
     "participant_response_other",
+    "participant_behaviours_json",
+    "participant_behaviour_evidence_turns_json",
+    "participant_behaviour_other",
+    "participant_reactions_json",
+    "participant_reaction_evidence_turns_json",
+    "participant_reaction_other",
     "module_episode_ending",
     "stopping_factors_json",
     "stopping_factors_evidence_turns",
@@ -103,7 +115,8 @@ test("keeps routine score notes optional and validates the revised categorical q
   assert.doesNotMatch(route, /Provide a written justification for/);
   assert.doesNotMatch(route, /if \(!annotation\.justifications\[dimension\.key\]\)/);
   assert.match(route, /Select the task status/);
-  assert.match(route, /Select at least one observable participant response/);
+  assert.match(route, /Select at least one observable participant behaviour/);
+  assert.match(route, /Select at least one explicitly expressed participant reaction/);
   assert.match(route, /Select how the available module episode ended/);
   assert.match(route, /Select how gender-related context was handled/);
   assert.match(route, /Provide the evidence turn number\(s\) for the stopping factor/);
@@ -136,6 +149,8 @@ test("keeps evidence-rubric results separate from legacy pilot annotations", asy
   assert.match(schema, /skip_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /critical_failure_observed TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /participant_responses_json TEXT NOT NULL DEFAULT '\{\}'/);
+  assert.match(schema, /participant_behaviours_json TEXT NOT NULL DEFAULT '\{\}'/);
+  assert.match(schema, /participant_reactions_json TEXT NOT NULL DEFAULT '\{\}'/);
   assert.match(schema, /module_episode_ending TEXT NOT NULL DEFAULT ''/);
   assert.match(schema, /stopping_factors_json TEXT NOT NULL DEFAULT '\{\}'/);
   assert.match(schema, /gender_context_handling TEXT NOT NULL DEFAULT ''/);

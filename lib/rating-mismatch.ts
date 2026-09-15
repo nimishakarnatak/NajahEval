@@ -11,6 +11,8 @@ export type ComparablePrimaryRating = {
   taskStatus: string;
   taskIncompleteReason: string;
   participantResponsesJson: string;
+  participantBehavioursJson: string;
+  participantReactionsJson: string;
   episodeEnding: string;
   stoppingFactorsJson: string;
   genderContextHandling: string;
@@ -66,7 +68,16 @@ export function summarizePrimaryMismatch(
   const normalized = ratings.slice(0, 2).map((rating) => {
     const scores = parseObject(rating.scoresJson);
     const flags = parseObject(rating.criticalFlagsJson);
-    const participantResponses = parseObject(rating.participantResponsesJson);
+    let participantBehaviours = parseObject(rating.participantBehavioursJson);
+    let participantReactions = parseObject(rating.participantReactionsJson);
+    if (
+      !Object.values(participantBehaviours).some((value) => value === true) &&
+      !Object.values(participantReactions).some((value) => value === true)
+    ) {
+      // Preserve comparison of pre-v12 ratings that used one combined object.
+      participantBehaviours = { legacy: parseObject(rating.participantResponsesJson) };
+      participantReactions = {};
+    }
     const stoppingFactors = parseObject(rating.stoppingFactorsJson);
     return {
       scores: Object.fromEntries(
@@ -77,7 +88,8 @@ export function summarizePrimaryMismatch(
       ) as Record<(typeof CRITICAL_FLAG_KEYS)[number], CriticalFlagValue>,
       taskStatus: rating.taskStatus || "",
       taskIncompleteReason: rating.taskIncompleteReason || "",
-      participantResponses,
+      participantBehaviours,
+      participantReactions,
       episodeEnding: rating.episodeEnding || "",
       stoppingFactors,
       genderContextHandling: rating.genderContextHandling || "",
@@ -93,7 +105,8 @@ export function summarizePrimaryMismatch(
     left.episodeEnding !== right.episodeEnding ||
     left.genderContextHandling !== right.genderContextHandling;
   const participantResponseMismatch =
-    JSON.stringify(left.participantResponses) !== JSON.stringify(right.participantResponses);
+    JSON.stringify(left.participantBehaviours) !== JSON.stringify(right.participantBehaviours) ||
+    JSON.stringify(left.participantReactions) !== JSON.stringify(right.participantReactions);
   const stoppingFactorMismatch =
     JSON.stringify(left.stoppingFactors) !== JSON.stringify(right.stoppingFactors);
   const criticalMismatch =

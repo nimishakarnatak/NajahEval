@@ -703,6 +703,22 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .compact-check-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .compact-check-list .critical-checkbox-row { padding: 9px 10px; border: 1px solid #d9e0de; border-radius: 8px; background: white; }
 .compact-check-list .critical-checkbox-row.selected { border-color: var(--green); background: var(--green-soft); color: var(--green-dark); }
+.participant-response-card { display: grid; gap: 12px; }
+.participant-option-group { display: grid; gap: 7px; }
+.participant-option-group h4 { margin: 0; color: #50605b; font-size: 8px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.participant-option-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.participant-option-card { min-width: 0; padding: 9px 10px; border: 1px solid #d9e0de; border-radius: 8px; background: white; }
+.participant-option-card.selected { border-color: var(--green); background: var(--green-soft); box-shadow: inset 0 0 0 1px rgba(18, 110, 90, .06); }
+.participant-option-card .critical-checkbox-row { color: #485652; }
+.participant-option-card.selected .critical-checkbox-row { color: var(--green-dark); }
+.participant-definition { margin: 5px 0 0 27px; color: var(--muted); font-size: 8px; line-height: 1.45; }
+.participant-definition summary { width: fit-content; color: var(--green); font-weight: 700; cursor: pointer; }
+.participant-definition p { margin: 5px 0 0; }
+.participant-definition p strong { color: #4f5c59; }
+.participant-turn-field { display: grid; gap: 5px; margin: 8px 0 0 27px; }
+.participant-turn-field > span { color: #4f5c59; font-size: 8px; font-weight: 700; }
+.participant-turn-field > span small { color: #8b9492; font-weight: 500; }
+.participant-turn-field input { height: 32px; padding: 0 9px; font-size: 9px; background: white; }
 .critical-flag-card { padding: 10px; border: 1px solid #eadfdc; border-radius: 10px; background: #fffdfc; }
 .critical-flag-card.selected { border-color: #c9766b; background: #fff8f6; }
 .critical-checkbox-row { display: grid; grid-template-columns: 17px minmax(0, 1fr); align-items: start; gap: 10px; cursor: pointer; }
@@ -746,6 +762,7 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 }
 @media (max-width: 520px) {
   .compact-check-list { grid-template-columns: 1fr; }
+  .participant-option-list { grid-template-columns: 1fr; }
 }
 .primary-button, .secondary-button, .danger-secondary-button, .danger-button, .text-button { min-height: 39px; border-radius: 9px; padding: 0 13px; font-size: 11px; font-weight: 750; }
 .primary-button { border: 1px solid var(--green); background: var(--green); color: white; box-shadow: 0 6px 16px rgba(18,110,90,.18); }

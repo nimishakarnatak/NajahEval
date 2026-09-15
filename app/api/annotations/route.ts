@@ -17,8 +17,11 @@ import {
   EpisodeEnding,
   GENDER_CONTEXT_OPTIONS,
   GenderContextHandling,
-  PARTICIPANT_RESPONSE_KEYS,
-  ParticipantResponseKey,
+  LEGACY_PARTICIPANT_RESPONSE_KEYS,
+  PARTICIPANT_BEHAVIOUR_KEYS,
+  ParticipantBehaviourKey,
+  PARTICIPANT_REACTION_KEYS,
+  ParticipantReactionKey,
   RUBRIC_DIMENSIONS,
   RUBRIC_VERSION,
   STOPPING_FACTOR_KEYS,
@@ -52,7 +55,14 @@ type AnnotationPayload = {
   criticalEvidenceTurns?: Partial<Record<CriticalFlagKey, string>>;
   criticalFailureObserved?: CriticalFailureObserved | "";
   taskStatus?: TaskStatus | "";
-  participantResponses?: Partial<Record<ParticipantResponseKey, boolean>>;
+  participantBehaviours?: Partial<Record<ParticipantBehaviourKey, boolean>>;
+  participantBehaviourEvidenceTurns?: Partial<Record<ParticipantBehaviourKey, string>>;
+  participantBehaviourOther?: string;
+  participantReactions?: Partial<Record<ParticipantReactionKey, boolean>>;
+  participantReactionEvidenceTurns?: Partial<Record<ParticipantReactionKey, string>>;
+  participantReactionOther?: string;
+  /** Legacy v11 fields accepted during a rolling deployment. */
+  participantResponses?: Partial<Record<(typeof LEGACY_PARTICIPANT_RESPONSE_KEYS)[number], boolean>>;
   participantResponseOther?: string;
   episodeEnding?: EpisodeEnding | "";
   stoppingFactors?: Partial<Record<StoppingFactorKey, boolean>>;
@@ -76,8 +86,12 @@ type NormalizedAnnotation = {
   criticalEvidenceTurns: Record<CriticalFlagKey, string>;
   criticalFailureObserved: CriticalFailureObserved | "";
   taskStatus: TaskStatus | "";
-  participantResponses: Record<ParticipantResponseKey, boolean>;
-  participantResponseOther: string;
+  participantBehaviours: Record<ParticipantBehaviourKey, boolean>;
+  participantBehaviourEvidenceTurns: Record<ParticipantBehaviourKey, string>;
+  participantBehaviourOther: string;
+  participantReactions: Record<ParticipantReactionKey, boolean>;
+  participantReactionEvidenceTurns: Record<ParticipantReactionKey, string>;
+  participantReactionOther: string;
   episodeEnding: EpisodeEnding | "";
   stoppingFactors: Record<StoppingFactorKey, boolean>;
   stoppingFactorsEvidenceTurns: string;
@@ -155,6 +169,10 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     (payload.criticalFlags !== undefined && !isRecord(payload.criticalFlags)) ||
     (payload.criticalEvidence !== undefined && !isRecord(payload.criticalEvidence)) ||
     (payload.criticalEvidenceTurns !== undefined && !isRecord(payload.criticalEvidenceTurns)) ||
+    (payload.participantBehaviours !== undefined && !isRecord(payload.participantBehaviours)) ||
+    (payload.participantBehaviourEvidenceTurns !== undefined && !isRecord(payload.participantBehaviourEvidenceTurns)) ||
+    (payload.participantReactions !== undefined && !isRecord(payload.participantReactions)) ||
+    (payload.participantReactionEvidenceTurns !== undefined && !isRecord(payload.participantReactionEvidenceTurns)) ||
     (payload.participantResponses !== undefined && !isRecord(payload.participantResponses)) ||
     (payload.stoppingFactors !== undefined && !isRecord(payload.stoppingFactors)) ||
     (payload.criticalFailureObserved !== undefined &&
@@ -162,6 +180,8 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     (payload.taskStatus !== undefined && !validTaskStatus(payload.taskStatus)) ||
     (payload.episodeEnding !== undefined && !validEpisodeEnding(payload.episodeEnding)) ||
     (payload.genderContextHandling !== undefined && !validGenderContext(payload.genderContextHandling)) ||
+    (payload.participantBehaviourOther !== undefined && typeof payload.participantBehaviourOther !== "string") ||
+    (payload.participantReactionOther !== undefined && typeof payload.participantReactionOther !== "string") ||
     (payload.participantResponseOther !== undefined && typeof payload.participantResponseOther !== "string") ||
     (payload.stoppingFactorsEvidenceTurns !== undefined && typeof payload.stoppingFactorsEvidenceTurns !== "string") ||
     (payload.stoppingFactorsExplanation !== undefined && typeof payload.stoppingFactorsExplanation !== "string") ||
@@ -180,7 +200,11 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
   const flagSource = (payload.criticalFlags ?? {}) as Record<string, unknown>;
   const criticalEvidenceSource = (payload.criticalEvidence ?? {}) as Record<string, unknown>;
   const criticalEvidenceTurnsSource = (payload.criticalEvidenceTurns ?? {}) as Record<string, unknown>;
-  const participantResponseSource = (payload.participantResponses ?? {}) as Record<string, unknown>;
+  const participantBehaviourSource = (payload.participantBehaviours ?? {}) as Record<string, unknown>;
+  const participantBehaviourEvidenceTurnsSource = (payload.participantBehaviourEvidenceTurns ?? {}) as Record<string, unknown>;
+  const participantReactionSource = (payload.participantReactions ?? {}) as Record<string, unknown>;
+  const participantReactionEvidenceTurnsSource = (payload.participantReactionEvidenceTurns ?? {}) as Record<string, unknown>;
+  const legacyParticipantResponseSource = (payload.participantResponses ?? {}) as Record<string, unknown>;
   const stoppingFactorSource = (payload.stoppingFactors ?? {}) as Record<string, unknown>;
 
   const scores = keyedRecord(DIMENSION_KEYS, () => null as DimensionScore);
@@ -211,15 +235,72 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     criticalEvidenceTurns[key] = evidenceTurns.trim();
   }
 
-  const participantResponses = keyedRecord(PARTICIPANT_RESPONSE_KEYS, () => false);
-  for (const key of PARTICIPANT_RESPONSE_KEYS) {
-    const value = participantResponseSource[key] ?? false;
-    if (typeof value !== "boolean") return null;
-    participantResponses[key] = value;
+  const participantBehaviours = keyedRecord(PARTICIPANT_BEHAVIOUR_KEYS, () => false);
+  const participantBehaviourEvidenceTurns = keyedRecord(PARTICIPANT_BEHAVIOUR_KEYS, () => "");
+  for (const key of PARTICIPANT_BEHAVIOUR_KEYS) {
+    const value = participantBehaviourSource[key] ?? false;
+    const turns = participantBehaviourEvidenceTurnsSource[key] ?? "";
+    if (typeof value !== "boolean" || typeof turns !== "string") return null;
+    participantBehaviours[key] = value;
+    participantBehaviourEvidenceTurns[key] = value ? turns.trim() : "";
   }
-  if (participantResponses.noClearResponse || participantResponses.cannotDetermine) {
-    const selectedExclusive = participantResponses.cannotDetermine ? "cannotDetermine" : "noClearResponse";
-    for (const key of PARTICIPANT_RESPONSE_KEYS) participantResponses[key] = key === selectedExclusive;
+
+  const participantReactions = keyedRecord(PARTICIPANT_REACTION_KEYS, () => false);
+  const participantReactionEvidenceTurns = keyedRecord(PARTICIPANT_REACTION_KEYS, () => "");
+  for (const key of PARTICIPANT_REACTION_KEYS) {
+    const value = participantReactionSource[key] ?? false;
+    const turns = participantReactionEvidenceTurnsSource[key] ?? "";
+    if (typeof value !== "boolean" || typeof turns !== "string") return null;
+    participantReactions[key] = value;
+    participantReactionEvidenceTurns[key] = value ? turns.trim() : "";
+  }
+
+  // A browser tab opened before this release may still submit the combined v11
+  // participant-response object. Preserve its meaning until every tab refreshes.
+  if (payload.participantBehaviours === undefined && payload.participantResponses !== undefined) {
+    for (const key of [
+      "providedRequestedInformation",
+      "attemptedRequestedAction",
+      "usedOrRespondedToOutput",
+      "askedFollowUpQuestion",
+      "correctedOrDisagreed",
+    ] as const) {
+      if (legacyParticipantResponseSource[key] === true) participantBehaviours[key] = true;
+    }
+    if (legacyParticipantResponseSource.otherObservableResponse === true) {
+      participantBehaviours.otherObservableBehaviour = true;
+    }
+    if (legacyParticipantResponseSource.noClearResponse === true) {
+      participantBehaviours.noClearBehaviouralResponse = true;
+    }
+    if (legacyParticipantResponseSource.cannotDetermine === true) {
+      participantBehaviours.cannotDetermine = true;
+    }
+    if (legacyParticipantResponseSource.expressedSatisfaction === true) {
+      participantReactions.expressedSatisfaction = true;
+    }
+    if (legacyParticipantResponseSource.expressedConfusionOrFrustration === true) {
+      participantReactions.otherExpressedReaction = true;
+    }
+  }
+
+  if (participantBehaviours.noClearBehaviouralResponse || participantBehaviours.cannotDetermine) {
+    const selectedExclusive = participantBehaviours.cannotDetermine
+      ? "cannotDetermine"
+      : "noClearBehaviouralResponse";
+    for (const key of PARTICIPANT_BEHAVIOUR_KEYS) {
+      participantBehaviours[key] = key === selectedExclusive;
+      participantBehaviourEvidenceTurns[key] = "";
+    }
+  }
+  if (participantReactions.noExplicitReaction || participantReactions.cannotDetermine) {
+    const selectedExclusive = participantReactions.cannotDetermine
+      ? "cannotDetermine"
+      : "noExplicitReaction";
+    for (const key of PARTICIPANT_REACTION_KEYS) {
+      participantReactions[key] = key === selectedExclusive;
+      participantReactionEvidenceTurns[key] = "";
+    }
   }
 
   const stoppingFactors = keyedRecord(STOPPING_FACTOR_KEYS, () => false);
@@ -279,9 +360,19 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
     criticalEvidenceTurns,
     criticalFailureObserved,
     taskStatus: payload.taskStatus ?? "",
-    participantResponses,
-    participantResponseOther: participantResponses.otherObservableResponse
-      ? payload.participantResponseOther?.trim() ?? ""
+    participantBehaviours,
+    participantBehaviourEvidenceTurns,
+    participantBehaviourOther: participantBehaviours.otherObservableBehaviour
+      ? (payload.participantBehaviourOther ?? payload.participantResponseOther)?.trim() ?? ""
+      : "",
+    participantReactions,
+    participantReactionEvidenceTurns,
+    participantReactionOther: participantReactions.otherExpressedReaction
+      ? payload.participantReactionOther?.trim() || (
+          legacyParticipantResponseSource.expressedConfusionOrFrustration === true
+            ? "Legacy coding: expressed confusion or frustration (not separable)."
+            : ""
+        )
       : "",
     episodeEnding: payload.episodeEnding ?? "",
     stoppingFactors: stoppingFactorsApply(payload.taskStatus ?? "", payload.episodeEnding ?? "")
@@ -316,11 +407,17 @@ function completionError(annotation: NormalizedAnnotation): string | null {
   if (!annotation.taskStatus) {
     return "Select the task status.";
   }
-  if (!PARTICIPANT_RESPONSE_KEYS.some((key) => annotation.participantResponses[key])) {
-    return "Select at least one observable participant response.";
+  if (!PARTICIPANT_BEHAVIOUR_KEYS.some((key) => annotation.participantBehaviours[key])) {
+    return "Select at least one observable participant behaviour.";
   }
-  if (annotation.participantResponses.otherObservableResponse && !annotation.participantResponseOther) {
-    return "Describe the other observable participant response.";
+  if (annotation.participantBehaviours.otherObservableBehaviour && !annotation.participantBehaviourOther) {
+    return "Describe the other observable participant behaviour.";
+  }
+  if (!PARTICIPANT_REACTION_KEYS.some((key) => annotation.participantReactions[key])) {
+    return "Select at least one explicitly expressed participant reaction.";
+  }
+  if (annotation.participantReactions.otherExpressedReaction && !annotation.participantReactionOther) {
+    return "Describe the other expressed participant reaction.";
   }
   if (!annotation.episodeEnding) {
     return "Select how the available module episode ended.";
@@ -359,6 +456,36 @@ function completionError(annotation: NormalizedAnnotation): string | null {
     return "Select how gender-related context was handled.";
   }
   return null;
+}
+
+/**
+ * Project the v12 participant fields into the former combined object.
+ *
+ * Keeping this compatibility value populated supports older exports and any
+ * browser tab that remains open during deployment. New analysis uses the
+ * separate behaviour and reaction columns below.
+ */
+function legacyParticipantResponses(annotation: NormalizedAnnotation): Record<string, boolean> {
+  return {
+    providedRequestedInformation: annotation.participantBehaviours.providedRequestedInformation,
+    attemptedRequestedAction: annotation.participantBehaviours.attemptedRequestedAction,
+    usedOrRespondedToOutput: annotation.participantBehaviours.usedOrRespondedToOutput,
+    askedFollowUpQuestion: annotation.participantBehaviours.askedFollowUpQuestion,
+    correctedOrDisagreed: annotation.participantBehaviours.correctedOrDisagreed,
+    expressedSatisfaction: annotation.participantReactions.expressedSatisfaction,
+    expressedConfusionOrFrustration:
+      annotation.participantReactions.expressedConfusion ||
+      annotation.participantReactions.expressedFrustration,
+    changedModule: false,
+    noFurtherReply: false,
+    noClearResponse: annotation.participantBehaviours.noClearBehaviouralResponse,
+    cannotDetermine:
+      annotation.participantBehaviours.cannotDetermine ||
+      annotation.participantReactions.cannotDetermine,
+    otherObservableResponse:
+      annotation.participantBehaviours.otherObservableBehaviour ||
+      annotation.participantReactions.otherExpressedReaction,
+  };
 }
 
 export async function POST(request: Request) {
@@ -429,6 +556,8 @@ export async function POST(request: Request) {
           task_status AS "taskStatus",
           task_incomplete_reason AS "taskIncompleteReason",
           participant_responses_json AS "participantResponsesJson",
+          participant_behaviours_json AS "participantBehavioursJson",
+          participant_reactions_json AS "participantReactionsJson",
           module_episode_ending AS "episodeEnding",
           stopping_factors_json AS "stoppingFactorsJson",
           gender_context_handling AS "genderContextHandling",
@@ -503,11 +632,15 @@ export async function POST(request: Request) {
         justifications_json, critical_failure_observed, critical_flags_json,
         critical_evidence_json, critical_evidence_turns_json,
         task_status, task_incomplete_reason,
-        participant_responses_json, participant_response_other, module_episode_ending,
+        participant_responses_json, participant_response_other,
+        participant_behaviours_json, participant_behaviour_evidence_turns_json,
+        participant_behaviour_other, participant_reactions_json,
+        participant_reaction_evidence_turns_json, participant_reaction_other,
+        module_episode_ending,
         stopping_factors_json, stopping_factors_evidence_turns, stopping_factors_explanation,
         gender_context_handling, most_useful_thing, suggested_improvement,
         skip_reason, comments, rubric_version, status, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(episode_id, rater_id) DO UPDATE SET
         rater_email = excluded.rater_email,
         review_layer = excluded.review_layer,
@@ -523,6 +656,12 @@ export async function POST(request: Request) {
         task_incomplete_reason = excluded.task_incomplete_reason,
         participant_responses_json = excluded.participant_responses_json,
         participant_response_other = excluded.participant_response_other,
+        participant_behaviours_json = excluded.participant_behaviours_json,
+        participant_behaviour_evidence_turns_json = excluded.participant_behaviour_evidence_turns_json,
+        participant_behaviour_other = excluded.participant_behaviour_other,
+        participant_reactions_json = excluded.participant_reactions_json,
+        participant_reaction_evidence_turns_json = excluded.participant_reaction_evidence_turns_json,
+        participant_reaction_other = excluded.participant_reaction_other,
         module_episode_ending = excluded.module_episode_ending,
         stopping_factors_json = excluded.stopping_factors_json,
         stopping_factors_evidence_turns = excluded.stopping_factors_evidence_turns,
@@ -551,8 +690,14 @@ export async function POST(request: Request) {
       JSON.stringify(annotation.criticalEvidenceTurns),
       annotation.taskStatus,
       "",
-      JSON.stringify(annotation.participantResponses),
-      annotation.participantResponseOther,
+      JSON.stringify(legacyParticipantResponses(annotation)),
+      annotation.participantBehaviourOther || annotation.participantReactionOther,
+      JSON.stringify(annotation.participantBehaviours),
+      JSON.stringify(annotation.participantBehaviourEvidenceTurns),
+      annotation.participantBehaviourOther,
+      JSON.stringify(annotation.participantReactions),
+      JSON.stringify(annotation.participantReactionEvidenceTurns),
+      annotation.participantReactionOther,
       annotation.episodeEnding,
       JSON.stringify(annotation.stoppingFactors),
       annotation.stoppingFactorsEvidenceTurns,

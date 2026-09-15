@@ -1,7 +1,8 @@
 import { studentStatusLabel, treatmentLabel } from "@/lib/episode-dimensions";
 import {
   CRITICAL_FLAGS,
-  PARTICIPANT_RESPONSES,
+  PARTICIPANT_BEHAVIOURS,
+  PARTICIPANT_REACTIONS,
   RUBRIC_DIMENSIONS,
   STOPPING_FACTORS,
 } from "@/lib/rubric";
@@ -36,6 +37,12 @@ export type ExportAnnotationRow = {
   taskIncompleteReason: string;
   participantResponsesJson: string;
   participantResponseOther: string;
+  participantBehavioursJson: string;
+  participantBehaviourEvidenceTurnsJson: string;
+  participantBehaviourOther: string;
+  participantReactionsJson: string;
+  participantReactionEvidenceTurnsJson: string;
+  participantReactionOther: string;
   episodeEnding: string;
   stoppingFactorsJson: string;
   stoppingFactorsEvidenceTurns: string;
@@ -112,8 +119,16 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     "annotation_status",
     "task_status",
     "legacy_task_incomplete_reason",
-    ...PARTICIPANT_RESPONSES.map((response) => `participant_response_${response.key}`),
-    "participant_response_other",
+    ...PARTICIPANT_BEHAVIOURS.flatMap((behaviour) => [
+      `participant_behaviour_${behaviour.key}`,
+      `participant_behaviour_${behaviour.key}_message_turns`,
+    ]),
+    "participant_behaviour_other",
+    ...PARTICIPANT_REACTIONS.flatMap((reaction) => [
+      `participant_reaction_${reaction.key}`,
+      `participant_reaction_${reaction.key}_message_turns`,
+    ]),
+    "participant_reaction_other",
     "module_episode_ending",
     ...STOPPING_FACTORS.map((factor) => `stopping_factor_${factor.key}`),
     "stopping_factors_evidence_turns",
@@ -146,7 +161,43 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
     const criticalFlags = keyedValues(row.criticalFlagsJson);
     const criticalEvidence = keyedValues(row.criticalEvidenceJson);
     const criticalEvidenceTurns = keyedValues(row.criticalEvidenceTurnsJson);
-    const participantResponses = keyedValues(row.participantResponsesJson);
+    const participantBehaviours = keyedValues(row.participantBehavioursJson);
+    const participantBehaviourEvidenceTurns = keyedValues(row.participantBehaviourEvidenceTurnsJson);
+    const participantReactions = keyedValues(row.participantReactionsJson);
+    const participantReactionEvidenceTurns = keyedValues(row.participantReactionEvidenceTurnsJson);
+    const legacyParticipantResponses = keyedValues(row.participantResponsesJson);
+    let participantBehaviourOther = row.participantBehaviourOther;
+    let participantReactionOther = row.participantReactionOther;
+
+    // Make pre-v12 ratings legible in current exports without rewriting their
+    // original database row. The former combined confusion/frustration option
+    // is retained explicitly as a legacy value rather than guessed apart.
+    if (
+      !Object.values(participantBehaviours).some((value) => value === true) &&
+      !Object.values(participantReactions).some((value) => value === true)
+    ) {
+      for (const key of [
+        "providedRequestedInformation",
+        "attemptedRequestedAction",
+        "usedOrRespondedToOutput",
+        "askedFollowUpQuestion",
+        "correctedOrDisagreed",
+      ]) participantBehaviours[key] = legacyParticipantResponses[key] === true;
+      participantBehaviours.otherObservableBehaviour = legacyParticipantResponses.otherObservableResponse === true;
+      participantBehaviours.noClearBehaviouralResponse = legacyParticipantResponses.noClearResponse === true;
+      participantBehaviours.cannotDetermine = legacyParticipantResponses.cannotDetermine === true;
+      participantReactions.expressedSatisfaction = legacyParticipantResponses.expressedSatisfaction === true;
+      if (legacyParticipantResponses.expressedConfusionOrFrustration === true) {
+        participantReactions.otherExpressedReaction = true;
+        participantReactionOther = "Legacy coding: expressed confusion or frustration (not separable).";
+      }
+      if (legacyParticipantResponses.otherObservableResponse === true && !participantBehaviourOther) {
+        participantBehaviourOther = row.participantResponseOther;
+      }
+      if (!Object.values(participantReactions).some((value) => value === true)) {
+        participantReactions.noExplicitReaction = true;
+      }
+    }
     const stoppingFactors = keyedValues(row.stoppingFactorsJson);
 
     return [
@@ -177,8 +228,16 @@ export function annotationExportCsv(rows: ExportAnnotationRow[]): string {
       row.status,
       row.taskStatus,
       row.taskIncompleteReason,
-      ...PARTICIPANT_RESPONSES.map((response) => participantResponses[response.key]),
-      row.participantResponseOther,
+      ...PARTICIPANT_BEHAVIOURS.flatMap((behaviour) => [
+        participantBehaviours[behaviour.key],
+        participantBehaviourEvidenceTurns[behaviour.key],
+      ]),
+      participantBehaviourOther,
+      ...PARTICIPANT_REACTIONS.flatMap((reaction) => [
+        participantReactions[reaction.key],
+        participantReactionEvidenceTurns[reaction.key],
+      ]),
+      participantReactionOther,
       row.episodeEnding,
       ...STOPPING_FACTORS.map((factor) => stoppingFactors[factor.key]),
       row.stoppingFactorsEvidenceTurns,

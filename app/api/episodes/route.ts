@@ -8,7 +8,8 @@ import { resolveEpisodeLanguage } from "@/lib/language";
 import {
   CRITICAL_FLAG_KEYS,
   DIMENSION_KEYS,
-  PARTICIPANT_RESPONSE_KEYS,
+  PARTICIPANT_BEHAVIOUR_KEYS,
+  PARTICIPANT_REACTION_KEYS,
   STOPPING_FACTOR_KEYS,
   CriticalFailureObserved,
   CriticalFlagValue,
@@ -139,6 +140,12 @@ export async function GET(request: Request) {
         current.task_incomplete_reason AS "taskIncompleteReason",
         current.participant_responses_json AS "participantResponsesJson",
         current.participant_response_other AS "participantResponseOther",
+        current.participant_behaviours_json AS "participantBehavioursJson",
+        current.participant_behaviour_evidence_turns_json AS "participantBehaviourEvidenceTurnsJson",
+        current.participant_behaviour_other AS "participantBehaviourOther",
+        current.participant_reactions_json AS "participantReactionsJson",
+        current.participant_reaction_evidence_turns_json AS "participantReactionEvidenceTurnsJson",
+        current.participant_reaction_other AS "participantReactionOther",
         current.module_episode_ending AS "episodeEnding",
         current.stopping_factors_json AS "stoppingFactorsJson",
         current.stopping_factors_evidence_turns AS "stoppingFactorsEvidenceTurns",
@@ -166,6 +173,8 @@ export async function GET(request: Request) {
               OR COUNT(DISTINCT primary_rating.task_status) > 1
               OR COUNT(DISTINCT primary_rating.task_incomplete_reason) > 1
               OR COUNT(DISTINCT primary_rating.participant_responses_json) > 1
+              OR COUNT(DISTINCT primary_rating.participant_behaviours_json) > 1
+              OR COUNT(DISTINCT primary_rating.participant_reactions_json) > 1
               OR COUNT(DISTINCT primary_rating.module_episode_ending) > 1
               OR COUNT(DISTINCT primary_rating.stopping_factors_json) > 1
               OR COUNT(DISTINCT primary_rating.gender_context_handling) > 1
@@ -252,6 +261,76 @@ export async function GET(request: Request) {
             )
             ? "no"
             : "";
+    const participantBehaviours = parseKeyedJson<boolean>(
+      episode.participantBehavioursJson,
+      PARTICIPANT_BEHAVIOUR_KEYS,
+      () => false,
+    );
+    const participantReactions = parseKeyedJson<boolean>(
+      episode.participantReactionsJson,
+      PARTICIPANT_REACTION_KEYS,
+      () => false,
+    );
+    let participantBehaviourOther = typeof episode.participantBehaviourOther === "string"
+      ? episode.participantBehaviourOther
+      : "";
+    let participantReactionOther = typeof episode.participantReactionOther === "string"
+      ? episode.participantReactionOther
+      : "";
+
+    // Ratings saved before v12 used one combined question. Translate those
+    // values only when the new fields are still blank, preserving the older
+    // judgment without showing removed ending categories in Section B.
+    if (
+      !PARTICIPANT_BEHAVIOUR_KEYS.some((key) => participantBehaviours[key]) &&
+      !PARTICIPANT_REACTION_KEYS.some((key) => participantReactions[key])
+    ) {
+      const legacy = parseKeyedJson<boolean>(
+        episode.participantResponsesJson,
+        [
+          "providedRequestedInformation",
+          "attemptedRequestedAction",
+          "usedOrRespondedToOutput",
+          "askedFollowUpQuestion",
+          "correctedOrDisagreed",
+          "expressedSatisfaction",
+          "expressedConfusionOrFrustration",
+          "changedModule",
+          "noFurtherReply",
+          "noClearResponse",
+          "cannotDetermine",
+          "otherObservableResponse",
+        ] as const,
+        () => false,
+      );
+      for (const key of [
+        "providedRequestedInformation",
+        "attemptedRequestedAction",
+        "usedOrRespondedToOutput",
+        "askedFollowUpQuestion",
+        "correctedOrDisagreed",
+      ] as const) participantBehaviours[key] = legacy[key];
+      participantBehaviours.otherObservableBehaviour = legacy.otherObservableResponse;
+      participantBehaviours.noClearBehaviouralResponse = legacy.noClearResponse;
+      participantBehaviours.cannotDetermine = legacy.cannotDetermine;
+      participantReactions.expressedSatisfaction = legacy.expressedSatisfaction;
+      if (legacy.expressedConfusionOrFrustration) {
+        participantReactions.otherExpressedReaction = true;
+        participantReactionOther = "Legacy coding: expressed confusion or frustration (not separable).";
+      }
+      if (
+        (legacy.changedModule || legacy.noFurtherReply) &&
+        !PARTICIPANT_BEHAVIOUR_KEYS.some((key) => participantBehaviours[key])
+      ) participantBehaviours.noClearBehaviouralResponse = true;
+      if (legacy.otherObservableResponse && !participantBehaviourOther) {
+        participantBehaviourOther = typeof episode.participantResponseOther === "string"
+          ? episode.participantResponseOther
+          : "Legacy participant response (not further specified).";
+      }
+      if (!PARTICIPANT_REACTION_KEYS.some((key) => participantReactions[key])) {
+        participantReactions.noExplicitReaction = true;
+      }
+    }
     return {
       ...episode,
       // Mismatch alerts support judge adjudication without disclosing either
@@ -280,8 +359,12 @@ export async function GET(request: Request) {
           : episode.taskStatus === "not_completed"
             ? "in_progress_no_output"
             : typeof episode.taskStatus === "string" ? episode.taskStatus : "",
-      participantResponses: parseKeyedJson<boolean>(episode.participantResponsesJson, PARTICIPANT_RESPONSE_KEYS, () => false),
-      participantResponseOther: typeof episode.participantResponseOther === "string" ? episode.participantResponseOther : "",
+      participantBehaviours,
+      participantBehaviourEvidenceTurns: parseKeyedJson<string>(episode.participantBehaviourEvidenceTurnsJson, PARTICIPANT_BEHAVIOUR_KEYS, () => ""),
+      participantBehaviourOther,
+      participantReactions,
+      participantReactionEvidenceTurns: parseKeyedJson<string>(episode.participantReactionEvidenceTurnsJson, PARTICIPANT_REACTION_KEYS, () => ""),
+      participantReactionOther,
       episodeEnding: typeof episode.episodeEnding === "string" ? episode.episodeEnding : "",
       stoppingFactors: parseKeyedJson<boolean>(episode.stoppingFactorsJson, STOPPING_FACTOR_KEYS, () => false),
       stoppingFactorsEvidenceTurns: typeof episode.stoppingFactorsEvidenceTurns === "string" ? episode.stoppingFactorsEvidenceTurns : "",
