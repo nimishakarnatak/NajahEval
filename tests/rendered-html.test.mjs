@@ -114,7 +114,7 @@ test("bundles and automatically seeds the 300-episode final dataset", async () =
   assert.equal(
     (
       normalizedDatasetCsv.match(
-        /^najah-completion-activity-v3-prior-context-explicit,\d+,N2E\d+,/gm,
+        /^najah-completion-activity-v4-full-conversation-context,\d+,N2E\d+,/gm,
       ) ?? []
     ).length,
     300,
@@ -124,6 +124,7 @@ test("bundles and automatically seeds the 300-episode final dataset", async () =
     /^dataset_version,rater_item_order,episode_id,student_status,participant_gender,language,module,treatment,/,
   );
   assert.match(normalizedDatasetCsv.split("\n", 1)[0], /activity_group/);
+  assert.match(normalizedDatasetCsv.split("\n", 1)[0], /subsequent_context/);
   assert.match(bundledDataset, /BUNDLED_EPISODE_COUNT/);
   assert.match(bundledDataset, /ON CONFLICT\(episode_id\) DO UPDATE/);
   assert.match(bundledDataset, /validateBalancedActivityCohorts/);
@@ -190,6 +191,24 @@ test("separates flattened transcripts into legible participant and Najah turns",
   assert.match(styles, /\.transcript \{[^}]*gap: 17px/);
 });
 
+test("shows the complete participant history as three collapsible sections", async () => {
+  const [component, bundledDataset, episodesRoute, styles] = await Promise.all([
+    readFile(componentPath, "utf8"),
+    readFile(bundledDatasetPath, "utf8"),
+    readFile(episodesRoutePath, "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(component, /Relevant prior context/);
+  assert.match(component, /Complete module episode to rate/);
+  assert.match(component, /Subsequent context/);
+  assert.match(component, /Only this middle section should be rated/);
+  assert.match(component, /<details className="conversation-section context-card">/);
+  assert.match(component, /<details className="conversation-section focal-episode-card" open>/);
+  assert.match(bundledDataset, /subsequent_context/);
+  assert.match(episodesRoute, /e\.subsequent_context AS "subsequentContext"/);
+  assert.match(styles, /\.conversation-section summary::marker/);
+});
+
 test("offers a browser-local English translation toggle without replacing originals", async () => {
   const [component, styles] = await Promise.all([
     readFile(componentPath, "utf8"),
@@ -201,8 +220,10 @@ test("offers a browser-local English translation toggle without replacing origin
   assert.match(component, /targetLanguage: "en"/);
   assert.match(component, /setTranscriptView\("original"\)/);
   assert.match(component, /current\.priorContext/);
+  assert.match(component, /current\.subsequentContext/);
   assert.match(component, /priorContextOrExplanation/);
   assert.match(component, /translatedPriorContext/);
+  assert.match(component, /translatedSubsequentContext/);
   assert.match(component, /Promise\.allSettled/);
   assert.match(component, /Translation unavailable — original shown/);
   assert.match(component, /Machine translation for reading support/);

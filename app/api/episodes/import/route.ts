@@ -1,7 +1,10 @@
 import { ensureNajahSchema, getDatabase } from "@/db";
 import { normalizeStudentStatus, normalizeTreatment } from "@/lib/episode-dimensions";
 import { resolveEpisodeLanguage } from "@/lib/language";
-import { priorContextOrExplanation } from "@/lib/prior-context";
+import {
+  priorContextOrExplanation,
+  subsequentContextOrExplanation,
+} from "@/lib/prior-context";
 import { getRaterIdentity } from "@/lib/server-auth";
 
 type ImportEpisode = {
@@ -14,6 +17,7 @@ type ImportEpisode = {
   moduleObjective?: string;
   priorContext?: string;
   transcript?: string;
+  subsequentContext?: string;
   privacyReviewStatus?: string;
   languageReviewStatus?: string;
   releaseEligible?: boolean;
@@ -63,6 +67,7 @@ export async function POST(request: Request) {
       moduleObjective: row.moduleObjective?.trim() || "",
       priorContext: priorContextOrExplanation(row.priorContext),
       transcript: row.transcript.trim(),
+      subsequentContext: subsequentContextOrExplanation(row.subsequentContext),
       privacyReviewStatus: row.privacyReviewStatus || "not_reviewed",
       languageReviewStatus: row.languageReviewStatus || "not_required",
       releaseEligible: row.releaseEligible === true,
@@ -80,9 +85,9 @@ export async function POST(request: Request) {
             INSERT INTO episodes (
               episode_id, student_status, language, module, treatment,
               module_objective, prior_context,
-              transcript, privacy_review_status, language_review_status,
+              transcript, subsequent_context, privacy_review_status, language_review_status,
               import_batch, imported_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(episode_id) DO UPDATE SET
               student_status = excluded.student_status,
               language = excluded.language,
@@ -91,6 +96,7 @@ export async function POST(request: Request) {
               module_objective = excluded.module_objective,
               prior_context = excluded.prior_context,
               transcript = excluded.transcript,
+              subsequent_context = excluded.subsequent_context,
               privacy_review_status = excluded.privacy_review_status,
               language_review_status = excluded.language_review_status,
               import_batch = excluded.import_batch,
@@ -106,6 +112,7 @@ export async function POST(request: Request) {
             episode.moduleObjective,
             episode.priorContext,
             episode.transcript,
+            episode.subsequentContext,
             episode.privacyReviewStatus,
             episode.languageReviewStatus,
             payload.batchName?.trim() || "manual-import",

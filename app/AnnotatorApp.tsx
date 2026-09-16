@@ -40,7 +40,12 @@ import {
 import {
   REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
 } from "@/lib/rating-policy";
-import { priorContextOrExplanation } from "@/lib/prior-context";
+import {
+  NO_PRIOR_CONTEXT_MESSAGE,
+  NO_SUBSEQUENT_CONTEXT_MESSAGE,
+  priorContextOrExplanation,
+  subsequentContextOrExplanation,
+} from "@/lib/prior-context";
 import {
   assignmentCohortLabel,
   isAssignedCohort,
@@ -86,6 +91,7 @@ type Episode = AnnotationDraft & {
   moduleObjective: string;
   priorContext: string;
   transcript: string;
+  subsequentContext: string;
   languageReviewStatus: string;
   primaryRatingCount: number;
   primaryMismatch: boolean;
@@ -116,6 +122,7 @@ type TranscriptTurn = {
 type EpisodeTranslation = {
   transcriptTurns: TranscriptTurn[];
   priorContext: string;
+  subsequentContext: string;
   unavailableCount: number;
 };
 type SubmissionProblem = { message: string; targetId: string };
@@ -412,6 +419,47 @@ function translatedTranscriptText(original: string, turns: TranscriptTurn[]): st
     .join("\n");
 }
 
+/** Render conversation turns consistently in the prior, focal, and subsequent sections. */
+function ConversationTurns({
+  turns,
+  direction,
+  label,
+  compact = false,
+  translated = false,
+}: {
+  turns: TranscriptTurn[];
+  direction: "ltr" | "rtl";
+  label: string;
+  compact?: boolean;
+  translated?: boolean;
+}) {
+  return (
+    <section
+      className={`transcript${compact ? " context-transcript" : ""}`}
+      aria-label={label}
+      dir={direction}
+    >
+      {turns.map((turn, index) => (
+        <div
+          key={`${turn.turn}-${index}`}
+          className={`turn ${turn.speaker === "USER" ? "user-turn" : "najah-turn"}`}
+        >
+          <div className="speaker-row">
+            <span className="speaker">{turn.speaker === "USER" ? "Participant" : "Najah"}</span>
+            <span>Turn {turn.turn}</span>
+          </div>
+          <p>{turn.text}</p>
+          {translated && turn.translationState === "unavailable" && (
+            <span className="turn-translation-status">
+              Translation unavailable — original shown
+            </span>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 /** Keep long turns within practical browser-translation input sizes. */
 function translationChunks(text: string, maximumLength = 3200): string[] {
   if (text.length <= maximumLength) return [text];
@@ -607,7 +655,7 @@ function ParticipantBehaviourCard({
               const selected = behaviours[option.key];
               return (
                 <div className={`participant-option-card${selected ? " selected" : ""}`} key={option.key}>
-                  <label className="critical-checkbox-row">
+                  <label className="critical-checkbox-row" aria-label={option.label}>
                     <input
                       type="checkbox"
                       checked={selected}
@@ -662,7 +710,7 @@ function ParticipantReactionCard({
           const selected = reactions[option.key];
           return (
             <div className={`participant-option-card${selected ? " selected" : ""}`} key={option.key}>
-              <label className="critical-checkbox-row">
+              <label className="critical-checkbox-row" aria-label={option.label}>
                 <input
                   type="checkbox"
                   checked={selected}
@@ -708,7 +756,11 @@ function EpisodeEndingCard({
       <p>Select one primary ending based only on the available record.</p>
       <div className="episode-end-options">
         {EPISODE_ENDINGS.map((option) => (
-          <label key={option.value} className={value === option.value ? "selected" : ""}>
+          <label
+            key={option.value}
+            className={value === option.value ? "selected" : ""}
+            aria-label={option.label}
+          >
             <input
               type="radio"
               name="episode-ending"
@@ -741,7 +793,13 @@ function GenderContextCard({
       <div className="episode-end-options">
         {GENDER_CONTEXT_OPTIONS.map((option) => (
           <label key={option.value} className={value === option.value ? "selected" : ""}>
-            <input type="radio" name="gender-context" checked={value === option.value} onChange={() => onChange(option.value)} />
+            <input
+              type="radio"
+              name="gender-context"
+              aria-label={option.label}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+            />
             <span className="episode-option-copy"><strong>{option.label}</strong></span>
           </label>
         ))}
@@ -922,6 +980,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const [translationProgress, setTranslationProgress] = useState(0);
   const [translationMessage, setTranslationMessage] = useState("");
   const [translatedPriorContext, setTranslatedPriorContext] = useState("");
+  const [translatedSubsequentContext, setTranslatedSubsequentContext] = useState("");
   const [translationUnavailableCount, setTranslationUnavailableCount] = useState(0);
   const translationCache = useRef(new Map<string, EpisodeTranslation>());
   const translationRequest = useRef(0);
@@ -995,6 +1054,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     const cached = current ? translationCache.current.get(current.episodeId) : undefined;
     setTranslatedTurns(cached?.transcriptTurns ?? []);
     setTranslatedPriorContext(cached?.priorContext ?? "");
+    setTranslatedSubsequentContext(cached?.subsequentContext ?? "");
     setTranslationUnavailableCount(cached?.unavailableCount ?? 0);
     setTranslationStatus(cached ? "ready" : "idle");
   }, [current]);
@@ -1606,7 +1666,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     if (!current) return;
     if (
       translationStatus === "ready" &&
-      (translatedTurns.length || translatedPriorContext) &&
+      (translatedTurns.length || translatedPriorContext || translatedSubsequentContext) &&
       translationUnavailableCount === 0
     ) {
       setTranscriptView("english");
@@ -1616,6 +1676,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     const sourceLanguages = episodeTranslationLanguages(current.language, [
       current.transcript,
       current.priorContext,
+      current.subsequentContext,
     ]);
     if (!sourceLanguages.length) {
       // English-only episodes still support the same toggle so raters do not
@@ -1626,11 +1687,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
           translationState: "already_english",
         })),
         priorContext: current.priorContext,
+        subsequentContext: current.subsequentContext,
         unavailableCount: 0,
       };
       translationCache.current.set(current.episodeId, englishOnly);
       setTranslatedTurns(englishOnly.transcriptTurns);
       setTranslatedPriorContext(englishOnly.priorContext);
+      setTranslatedSubsequentContext(englishOnly.subsequentContext);
       setTranslationUnavailableCount(0);
       setTranslationStatus("ready");
       setTranslationMessage("");
@@ -1697,7 +1760,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
       const originalTurns = transcriptTurns(current.transcript);
       const originalPriorTurns = transcriptTurns(current.priorContext);
-      const totalUnits = originalTurns.length + originalPriorTurns.length;
+      const originalSubsequentTurns = transcriptTurns(current.subsequentContext);
+      const totalUnits =
+        originalTurns.length + originalPriorTurns.length + originalSubsequentTurns.length;
       let completedUnits = 0;
       let unavailableCount = 0;
       setTranslationStatus("translating");
@@ -1746,16 +1811,22 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
       const translatedPriorTurns = await translateTurnSet(originalPriorTurns);
       const translated = await translateTurnSet(originalTurns);
+      const translatedSubsequentTurns = await translateTurnSet(originalSubsequentTurns);
 
       if (translationRequest.current !== requestId) return;
       const result: EpisodeTranslation = {
         transcriptTurns: translated,
         priorContext: translatedTranscriptText(current.priorContext, translatedPriorTurns),
+        subsequentContext: translatedTranscriptText(
+          current.subsequentContext,
+          translatedSubsequentTurns,
+        ),
         unavailableCount,
       };
       translationCache.current.set(current.episodeId, result);
       setTranslatedTurns(translated);
       setTranslatedPriorContext(result.priorContext);
+      setTranslatedSubsequentContext(result.subsequentContext);
       setTranslationUnavailableCount(unavailableCount);
       setTranslationStatus("ready");
       setTranslationProgress(100);
@@ -1966,6 +2037,20 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const currentIndex = filteredEpisodes.findIndex((episode) => episode.episodeId === selectedId);
   const direction = current?.language === "ar" ? "rtl" : "ltr";
   const turns = transcriptTurns(current?.transcript || "");
+  const priorContext = priorContextOrExplanation(current?.priorContext);
+  const subsequentContext = subsequentContextOrExplanation(current?.subsequentContext);
+  const displayedPriorContext =
+    transcriptView === "english" && translationStatus === "ready"
+      ? translatedPriorContext || priorContext
+      : priorContext;
+  const displayedSubsequentContext =
+    transcriptView === "english" && translationStatus === "ready"
+      ? translatedSubsequentContext || subsequentContext
+      : subsequentContext;
+  const displayedTurns = transcriptView === "english" ? translatedTurns : turns;
+  const displayedPriorTurns = transcriptTurns(displayedPriorContext);
+  const displayedSubsequentTurns = transcriptTurns(displayedSubsequentContext);
+  const conversationDirection = transcriptView === "english" ? "ltr" : direction;
 
   return (
     <div className="app-shell">
@@ -2436,7 +2521,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                 <section className="translation-toolbar" aria-label="Conversation language view">
                   <div>
                     <strong>Conversation view</strong>
-                    <span>Translate the transcript and relevant prior context while keeping the original available.</span>
+                    <span>Translate the complete prior context, rated module episode, and subsequent context while keeping the original available.</span>
                   </div>
                   <div className="translation-view-options" role="group" aria-label="Choose conversation language">
                     <button
@@ -2474,42 +2559,56 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   )}
                 </section>
 
-                <details className="context-card">
-                  <summary>Relevant prior context</summary>
-                  <p
-                    dir={transcriptView === "english" ? "ltr" : direction}
-                    aria-label={
-                      transcriptView === "english"
-                        ? "English translation of relevant prior context"
-                        : "Original relevant prior context"
-                    }
-                  >
-                    {transcriptView === "english" && translationStatus === "ready"
-                      ? translatedPriorContext || priorContextOrExplanation(current.priorContext)
-                      : priorContextOrExplanation(current.priorContext)}
-                  </p>
-                </details>
+                <div className="conversation-sequence" aria-label="Complete participant conversation">
+                  <details className="conversation-section context-card">
+                    <summary>
+                      <span>Relevant prior context</span>
+                      <small>All available conversation before the rated module episode</small>
+                    </summary>
+                    {priorContext === NO_PRIOR_CONTEXT_MESSAGE ? (
+                      <p className="context-empty-message">{priorContext}</p>
+                    ) : (
+                      <ConversationTurns
+                        turns={displayedPriorTurns}
+                        direction={conversationDirection}
+                        label={transcriptView === "english" ? "English translation of relevant prior context" : "Original relevant prior context"}
+                        compact
+                        translated={transcriptView === "english"}
+                      />
+                    )}
+                  </details>
 
-                <section
-                  className="transcript"
-                  aria-label={transcriptView === "english" ? "English translation of episode transcript" : "Original episode transcript"}
-                  dir={transcriptView === "english" ? "ltr" : direction}
-                >
-                  {(transcriptView === "english" ? translatedTurns : turns).map((turn, index) => (
-                    <div key={`${turn.turn}-${index}`} className={`turn ${turn.speaker === "USER" ? "user-turn" : "najah-turn"}`}>
-                      <div className="speaker-row">
-                        <span className="speaker">{turn.speaker === "USER" ? "Participant" : "Najah"}</span>
-                        <span>Turn {turn.turn}</span>
-                      </div>
-                      <p>{turn.text}</p>
-                      {transcriptView === "english" && turn.translationState === "unavailable" && (
-                        <span className="turn-translation-status">
-                          Translation unavailable — original shown
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </section>
+                  <details className="conversation-section focal-episode-card" open>
+                    <summary>
+                      <span>Complete module episode to rate</span>
+                      <small>Only this middle section should be rated</small>
+                    </summary>
+                    <ConversationTurns
+                      turns={displayedTurns}
+                      direction={conversationDirection}
+                      label={transcriptView === "english" ? "English translation of module episode to rate" : "Original module episode to rate"}
+                      translated={transcriptView === "english"}
+                    />
+                  </details>
+
+                  <details className="conversation-section context-card subsequent-context-card">
+                    <summary>
+                      <span>Subsequent context</span>
+                      <small>All available conversation after the rated module episode</small>
+                    </summary>
+                    {subsequentContext === NO_SUBSEQUENT_CONTEXT_MESSAGE ? (
+                      <p className="context-empty-message">{subsequentContext}</p>
+                    ) : (
+                      <ConversationTurns
+                        turns={displayedSubsequentTurns}
+                        direction={conversationDirection}
+                        label={transcriptView === "english" ? "English translation of subsequent context" : "Original subsequent context"}
+                        compact
+                        translated={transcriptView === "english"}
+                      />
+                    )}
+                  </details>
+                </div>
               </article>
 
               {!readOnly && (

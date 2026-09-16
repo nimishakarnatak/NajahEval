@@ -547,10 +547,23 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
 .translation-message { background: #fff4df; color: #775718; }
 .translation-note { background: #edf6f2; color: #42685e; }
 
-.context-card { margin: 18px 26px 0; border: 1px solid #eadbb9; border-radius: 11px; background: #fffaf0; }
-.context-card summary { cursor: pointer; padding: 11px 13px; color: #70501b; font-size: 11px; font-weight: 750; }
-.context-card p { margin: 0; padding: 0 13px 13px; color: #665c49; line-height: 1.65; white-space: pre-wrap; }
+.conversation-sequence { display: grid; gap: 14px; margin: 18px 26px 28px; }
+.conversation-section { overflow: hidden; border: 1px solid #d8e4e0; border-radius: 12px; background: #fff; }
+.conversation-section summary { cursor: pointer; padding: 12px 14px; color: #33423e; }
+.conversation-section summary::marker { color: var(--green); }
+.conversation-section summary span { display: block; font-size: 11px; font-weight: 800; }
+.conversation-section summary small { display: block; margin: 3px 0 0 17px; color: var(--muted); font-size: 8px; font-weight: 500; line-height: 1.45; }
+.conversation-section[open] summary { border-bottom: 1px solid rgba(92, 119, 111, .17); }
+.context-card { border-color: #eadbb9; background: #fffaf0; }
+.context-card summary { color: #70501b; }
+.subsequent-context-card { border-color: #cfdde8; background: #f7fbfe; }
+.subsequent-context-card summary { color: #34566f; }
+.focal-episode-card { border-color: #9bcbbb; box-shadow: 0 0 0 3px rgba(20, 122, 97, .06); }
+.focal-episode-card summary { color: var(--green-dark); background: #f5faf8; }
+.context-empty-message { margin: 0; padding: 14px; color: #665c49; font-size: 10px; line-height: 1.6; }
 .transcript { padding: 24px 26px 34px; display: grid; gap: 17px; }
+.conversation-section .transcript { padding: 20px 18px 24px; }
+.context-transcript { gap: 14px; }
 .turn { width: min(88%, 700px); }
 .user-turn { justify-self: start; }
 .najah-turn { justify-self: end; margin-bottom: 11px; }
@@ -1230,7 +1243,7 @@ input:focus, select:focus, textarea:focus { border-color: #69a895; box-shadow: 0
   .workspace { padding: 14px 10px 24px; }
   .episode-toolbar { align-items: flex-start; gap: 10px; }
   .conversation-panel > header, .transcript { padding-left: 17px; padding-right: 17px; }
-  .context-card { margin-left: 17px; margin-right: 17px; }
+  .conversation-sequence { margin-left: 17px; margin-right: 17px; }
   .translation-toolbar { grid-template-columns: 1fr; margin-left: 17px; margin-right: 17px; }
   .translation-view-options { width: 100%; }
   .conversation-panel h1 { font-size: 20px; }

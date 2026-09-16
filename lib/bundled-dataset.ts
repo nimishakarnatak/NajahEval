@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AppDatabase, DatabaseValue } from "@/db";
-import { priorContextOrExplanation } from "@/lib/prior-context";
+import {
+  priorContextOrExplanation,
+  subsequentContextOrExplanation,
+} from "@/lib/prior-context";
 
 const finalDatasetCsv = readFileSync(
   join(process.cwd(), "data", "najah_final_annotation_dataset.csv"),
@@ -30,6 +33,7 @@ type BundledEpisode = {
   moduleObjective: string;
   priorContext: string;
   transcript: string;
+  subsequentContext: string;
   privacyReviewStatus: string;
   languageReviewStatus: string;
 };
@@ -113,6 +117,7 @@ function readBundledDataset(csv: string): BundledDataset {
     "module_objective",
     "prior_context",
     "transcript",
+    "subsequent_context",
     "privacy_review_status",
     "language_review_status",
   ];
@@ -164,6 +169,7 @@ function readBundledDataset(csv: string): BundledDataset {
         moduleObjective: record.module_objective.trim(),
         priorContext: priorContextOrExplanation(record.prior_context),
         transcript: record.transcript.trim(),
+        subsequentContext: subsequentContextOrExplanation(record.subsequent_context),
         privacyReviewStatus: record.privacy_review_status.trim() || "not_reviewed",
         languageReviewStatus: record.language_review_status.trim() || "not_required",
       } satisfies BundledEpisode;
@@ -176,11 +182,14 @@ function readBundledDataset(csv: string): BundledDataset {
   if (
     episodes.some(
       (episode) =>
-        !episode.episodeId || !episode.transcript || !episode.priorContext,
+        !episode.episodeId ||
+        !episode.transcript ||
+        !episode.priorContext ||
+        !episode.subsequentContext,
     )
   ) {
     throw new Error(
-      "Every bundled Najah episode must have an ID, transcript, and prior-context statement.",
+      "Every bundled Najah episode must have an ID, transcript, prior-context statement, and subsequent-context statement.",
     );
   }
   const studyOrders = new Set(episodes.map((episode) => episode.studyOrder));
@@ -359,6 +368,7 @@ export async function ensureBundledDataset(db: AppDatabase): Promise<void> {
       episode.moduleObjective,
       episode.priorContext,
       episode.transcript,
+      episode.subsequentContext,
       episode.privacyReviewStatus,
       episode.languageReviewStatus,
       BUNDLED_DATASET_VERSION,
@@ -377,7 +387,7 @@ export async function ensureBundledDataset(db: AppDatabase): Promise<void> {
         participant_sampling_probability, focal_episode_selection_probability,
         combined_episode_inclusion_probability, activity_group_validation_status,
         language, module, treatment,
-        module_objective, prior_context, transcript,
+        module_objective, prior_context, transcript, subsequent_context,
         privacy_review_status, language_review_status,
         import_batch, imported_by
       ) VALUES ${rows.join(",\n")}
@@ -398,6 +408,7 @@ export async function ensureBundledDataset(db: AppDatabase): Promise<void> {
         module_objective = excluded.module_objective,
         prior_context = excluded.prior_context,
         transcript = excluded.transcript,
+        subsequent_context = excluded.subsequent_context,
         privacy_review_status = excluded.privacy_review_status,
         language_review_status = excluded.language_review_status,
         import_batch = excluded.import_batch,

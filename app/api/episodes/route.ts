@@ -119,6 +119,7 @@ export async function GET(request: Request) {
         e.module_objective AS "moduleObjective",
         e.prior_context AS "priorContext",
         e.transcript,
+        e.subsequent_context AS "subsequentContext",
         e.language_review_status AS "languageReviewStatus",
         COALESCE(primary_summary.primary_count, 0) AS "primaryRatingCount",
         COALESCE(primary_summary.primary_mismatch, FALSE) AS "primaryMismatch",
