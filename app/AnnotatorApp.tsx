@@ -387,6 +387,34 @@ function contextModuleChats(original: string, displayed: string): ContextModule[
   });
 }
 
+/** Number a set of displayed turns as part of one continuous conversation. */
+function continuouslyNumberTurns(
+  turns: TranscriptTurn[],
+  startAt: number,
+): { turns: TranscriptTurn[]; nextTurn: number } {
+  return {
+    turns: turns.map((turn, index) => ({
+      ...turn,
+      turn: String(startAt + index).padStart(3, "0"),
+    })),
+    nextTurn: startAt + turns.length,
+  };
+}
+
+/** Preserve module boundaries while continuing turn numbers between modules. */
+function continuouslyNumberContextModules(
+  modules: ContextModule[],
+  startAt: number,
+): { modules: ContextModule[]; nextTurn: number } {
+  let nextTurn = startAt;
+  const numberedModules = modules.map((module) => {
+    const numbered = continuouslyNumberTurns(module.turns, nextTurn);
+    nextTurn = numbered.nextTurn;
+    return { ...module, turns: numbered.turns };
+  });
+  return { modules: numberedModules, nextTurn };
+}
+
 /**
  * Return every non-English language pack needed across an episode.
  *
@@ -2142,6 +2170,22 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     subsequentContext,
     displayedSubsequentContext,
   );
+  const numberedIntroduction = continuouslyNumberContextModules(
+    displayedIntroductionModules,
+    1,
+  );
+  const numberedEarlierModules = continuouslyNumberContextModules(
+    displayedEarlierModules,
+    numberedIntroduction.nextTurn,
+  );
+  const numberedFocalEpisode = continuouslyNumberTurns(
+    displayedTurns,
+    numberedEarlierModules.nextTurn,
+  );
+  const numberedSubsequentModules = continuouslyNumberContextModules(
+    displayedSubsequentModules,
+    numberedFocalEpisode.nextTurn,
+  );
   const conversationDirection = transcriptView === "english" ? "ltr" : direction;
 
   return (
@@ -2659,7 +2703,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                         <small>First recorded participant/Najah exchange before the module episode to evaluate</small>
                       </summary>
                       <ContextModuleChats
-                        modules={displayedIntroductionModules}
+                        modules={numberedIntroduction.modules}
                         direction={conversationDirection}
                         label={transcriptView === "english" ? "English translation of the conversation introduction" : "Original conversation introduction"}
                         translated={transcriptView === "english"}
@@ -2680,7 +2724,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                       </p>
                     ) : (
                       <ContextModuleChats
-                        modules={displayedEarlierModules}
+                        modules={numberedEarlierModules.modules}
                         direction={conversationDirection}
                         label={transcriptView === "english" ? "English translation of prior module chats" : "Original prior module chats"}
                         translated={transcriptView === "english"}
@@ -2698,7 +2742,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                       </small>
                     </summary>
                     <ConversationTurns
-                      turns={displayedTurns}
+                      turns={numberedFocalEpisode.turns}
                       direction={conversationDirection}
                       label={transcriptView === "english" ? "English translation of module episode to rate" : "Original module episode to rate"}
                       translated={transcriptView === "english"}
@@ -2714,7 +2758,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                       <p className="context-empty-message">{subsequentContext}</p>
                     ) : (
                       <ContextModuleChats
-                        modules={displayedSubsequentModules}
+                        modules={numberedSubsequentModules.modules}
                         direction={conversationDirection}
                         label={transcriptView === "english" ? "English translation of subsequent module chats" : "Original subsequent module chats"}
                         translated={transcriptView === "english"}

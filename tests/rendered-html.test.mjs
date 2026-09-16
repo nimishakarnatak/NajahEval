@@ -206,6 +206,10 @@ test("shows neighbouring module chats around the module episode to evaluate", as
   assert.match(component, /Only this middle section should be rated/);
   assert.match(component, /This episode begins with the first recorded conversation message/);
   assert.match(component, /contextModuleChats/);
+  assert.match(component, /continuouslyNumberTurns/);
+  assert.match(component, /continuouslyNumberContextModules/);
+  assert.match(component, /numberedFocalEpisode\.turns/);
+  assert.match(component, /numberedSubsequentModules\.modules/);
   assert.match(component, /MODULE_CONTEXT/);
   assert.match(component, /<details className="conversation-section context-card">/);
   assert.match(component, /<details className="conversation-section focal-episode-card" open>/);
