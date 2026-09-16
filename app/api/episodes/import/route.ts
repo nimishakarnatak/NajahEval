@@ -1,6 +1,7 @@
 import { ensureNajahSchema, getDatabase } from "@/db";
 import { normalizeStudentStatus, normalizeTreatment } from "@/lib/episode-dimensions";
 import { resolveEpisodeLanguage } from "@/lib/language";
+import { priorContextOrExplanation } from "@/lib/prior-context";
 import { getRaterIdentity } from "@/lib/server-auth";
 
 type ImportEpisode = {
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
       module: row.module?.trim() || "unknown",
       treatment: normalizeTreatment(row.treatment),
       moduleObjective: row.moduleObjective?.trim() || "",
-      priorContext: row.priorContext?.trim() || "",
+      priorContext: priorContextOrExplanation(row.priorContext),
       transcript: row.transcript.trim(),
       privacyReviewStatus: row.privacyReviewStatus || "not_reviewed",
       languageReviewStatus: row.languageReviewStatus || "not_required",

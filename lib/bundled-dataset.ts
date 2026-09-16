@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AppDatabase, DatabaseValue } from "@/db";
+import { priorContextOrExplanation } from "@/lib/prior-context";
 
 const finalDatasetCsv = readFileSync(
   join(process.cwd(), "data", "najah_final_annotation_dataset.csv"),
@@ -161,7 +162,7 @@ function readBundledDataset(csv: string): BundledDataset {
         module: record.module.trim() || "unknown",
         treatment: record.treatment.trim() || "unknown",
         moduleObjective: record.module_objective.trim(),
-        priorContext: record.prior_context.trim(),
+        priorContext: priorContextOrExplanation(record.prior_context),
         transcript: record.transcript.trim(),
         privacyReviewStatus: record.privacy_review_status.trim() || "not_reviewed",
         languageReviewStatus: record.language_review_status.trim() || "not_required",
@@ -172,8 +173,15 @@ function readBundledDataset(csv: string): BundledDataset {
   if (episodes.length !== 300 || ids.size !== episodes.length) {
     throw new Error("The bundled Najah dataset must contain 300 unique episodes.");
   }
-  if (episodes.some((episode) => !episode.episodeId || !episode.transcript)) {
-    throw new Error("Every bundled Najah episode must have an ID and transcript.");
+  if (
+    episodes.some(
+      (episode) =>
+        !episode.episodeId || !episode.transcript || !episode.priorContext,
+    )
+  ) {
+    throw new Error(
+      "Every bundled Najah episode must have an ID, transcript, and prior-context statement.",
+    );
   }
   const studyOrders = new Set(episodes.map((episode) => episode.studyOrder));
   if (

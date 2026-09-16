@@ -114,7 +114,7 @@ test("bundles and automatically seeds the 300-episode final dataset", async () =
   assert.equal(
     (
       normalizedDatasetCsv.match(
-        /^najah-completion-activity-v2-turn-order-corrected,\d+,N2E\d+,/gm,
+        /^najah-completion-activity-v3-prior-context-explicit,\d+,N2E\d+,/gm,
       ) ?? []
     ).length,
     300,
@@ -201,6 +201,7 @@ test("offers a browser-local English translation toggle without replacing origin
   assert.match(component, /targetLanguage: "en"/);
   assert.match(component, /setTranscriptView\("original"\)/);
   assert.match(component, /current\.priorContext/);
+  assert.match(component, /priorContextOrExplanation/);
   assert.match(component, /translatedPriorContext/);
   assert.match(component, /Promise\.allSettled/);
   assert.match(component, /Translation unavailable — original shown/);

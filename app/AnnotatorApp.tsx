@@ -40,6 +40,7 @@ import {
 import {
   REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
 } from "@/lib/rating-policy";
+import { priorContextOrExplanation } from "@/lib/prior-context";
 import {
   assignmentCohortLabel,
   isAssignedCohort,
@@ -2473,23 +2474,21 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   )}
                 </section>
 
-                {current.priorContext && (
-                  <details className="context-card">
-                    <summary>Relevant prior context</summary>
-                    <p
-                      dir={transcriptView === "english" ? "ltr" : direction}
-                      aria-label={
-                        transcriptView === "english"
-                          ? "English translation of relevant prior context"
-                          : "Original relevant prior context"
-                      }
-                    >
-                      {transcriptView === "english" && translationStatus === "ready"
-                        ? translatedPriorContext || current.priorContext
-                        : current.priorContext}
-                    </p>
-                  </details>
-                )}
+                <details className="context-card">
+                  <summary>Relevant prior context</summary>
+                  <p
+                    dir={transcriptView === "english" ? "ltr" : direction}
+                    aria-label={
+                      transcriptView === "english"
+                        ? "English translation of relevant prior context"
+                        : "Original relevant prior context"
+                    }
+                  >
+                    {transcriptView === "english" && translationStatus === "ready"
+                      ? translatedPriorContext || priorContextOrExplanation(current.priorContext)
+                      : priorContextOrExplanation(current.priorContext)}
+                  </p>
+                </details>
 
                 <section
                   className="transcript"
