@@ -114,7 +114,7 @@ test("bundles and automatically seeds the 300-episode final dataset", async () =
   assert.equal(
     (
       normalizedDatasetCsv.match(
-        /^najah-completion-activity-v1-pending-review,\d+,N2E\d+,/gm,
+        /^najah-completion-activity-v2-turn-order-corrected,\d+,N2E\d+,/gm,
       ) ?? []
     ).length,
     300,
