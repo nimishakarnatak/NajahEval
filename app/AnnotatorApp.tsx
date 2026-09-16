@@ -2121,6 +2121,23 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       : subsequentContext;
   const displayedTurns = transcriptView === "english" ? translatedTurns : turns;
   const displayedPriorModules = contextModuleChats(priorContext, displayedPriorContext);
+  const explicitIntroductionIndex = displayedPriorModules.findIndex((module) =>
+    module.label.toLowerCase().startsWith("conversation introduction"),
+  );
+  const introductionModuleIndex =
+    explicitIntroductionIndex >= 0
+      ? explicitIntroductionIndex
+      : priorContext === NO_PRIOR_CONTEXT_MESSAGE
+        ? -1
+        : 0;
+  const displayedIntroductionModules =
+    introductionModuleIndex >= 0
+      ? [displayedPriorModules[introductionModuleIndex]]
+      : [];
+  const displayedEarlierModules = displayedPriorModules.filter(
+    (_, index) => index !== introductionModuleIndex,
+  );
+  const focalIncludesIntroduction = introductionModuleIndex < 0;
   const displayedSubsequentModules = contextModuleChats(
     subsequentContext,
     displayedSubsequentContext,
@@ -2635,16 +2652,35 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                 </section>
 
                 <div className="conversation-sequence" aria-label="Complete participant conversation">
+                  {displayedIntroductionModules.length > 0 && (
+                    <details className="conversation-section context-card introduction-context-card">
+                      <summary>
+                        <span>Conversation introduction</span>
+                        <small>First recorded participant/Najah exchange before the module episode to evaluate</small>
+                      </summary>
+                      <ContextModuleChats
+                        modules={displayedIntroductionModules}
+                        direction={conversationDirection}
+                        label={transcriptView === "english" ? "English translation of the conversation introduction" : "Original conversation introduction"}
+                        translated={transcriptView === "english"}
+                      />
+                    </details>
+                  )}
+
                   <details className="conversation-section context-card">
                     <summary>
                       <span>Prior module chat</span>
-                      <small>Earlier recorded module chat(s) before the module episode to evaluate</small>
+                      <small>Other recorded module chat(s) before the module episode to evaluate</small>
                     </summary>
-                    {priorContext === NO_PRIOR_CONTEXT_MESSAGE ? (
-                      <p className="context-empty-message">{priorContext}</p>
+                    {displayedEarlierModules.length === 0 ? (
+                      <p className="context-empty-message">
+                        {focalIncludesIntroduction
+                          ? "No earlier recorded module chat was available; the first recorded conversation message is included in the module episode below."
+                          : "No other earlier module chat was recorded between the conversation introduction and the module episode to evaluate."}
+                      </p>
                     ) : (
                       <ContextModuleChats
-                        modules={displayedPriorModules}
+                        modules={displayedEarlierModules}
                         direction={conversationDirection}
                         label={transcriptView === "english" ? "English translation of prior module chats" : "Original prior module chats"}
                         translated={transcriptView === "english"}
@@ -2655,7 +2691,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <details className="conversation-section focal-episode-card" open>
                     <summary>
                       <span>Module episode to evaluate</span>
-                      <small>Only this middle section should be rated</small>
+                      <small>
+                        {focalIncludesIntroduction
+                          ? "This episode begins with the first recorded conversation message; only this section should be rated"
+                          : "Only this middle section should be rated"}
+                      </small>
                     </summary>
                     <ConversationTurns
                       turns={displayedTurns}

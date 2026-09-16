@@ -114,7 +114,7 @@ test("bundles and automatically seeds the 300-episode final dataset", async () =
   assert.equal(
     (
       normalizedDatasetCsv.match(
-        /^najah-completion-activity-v5-module-aware-context,\d+,N2E\d+,/gm,
+        /^najah-completion-activity-v6-explicit-introduction,\d+,N2E\d+,/gm,
       ) ?? []
     ).length,
     300,
@@ -198,10 +198,13 @@ test("shows neighbouring module chats around the module episode to evaluate", as
     readFile(episodesRoutePath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
+  assert.match(component, /Conversation introduction/);
+  assert.match(component, /First recorded participant\/Najah exchange/);
   assert.match(component, /Prior module chat/);
   assert.match(component, /Module episode to evaluate/);
   assert.match(component, /Subsequent module chat/);
   assert.match(component, /Only this middle section should be rated/);
+  assert.match(component, /This episode begins with the first recorded conversation message/);
   assert.match(component, /contextModuleChats/);
   assert.match(component, /MODULE_CONTEXT/);
   assert.match(component, /<details className="conversation-section context-card">/);
