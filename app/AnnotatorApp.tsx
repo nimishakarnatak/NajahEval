@@ -119,6 +119,11 @@ type TranscriptTurn = {
   turn: string;
   translationState?: "translated" | "already_english" | "unavailable";
 };
+type ContextModule = {
+  label: string;
+  overview: string;
+  turns: TranscriptTurn[];
+};
 type EpisodeTranslation = {
   transcriptTurns: TranscriptTurn[];
   priorContext: string;
@@ -348,6 +353,40 @@ function transcriptTurns(transcript: string): TranscriptTurn[] {
   return turns;
 }
 
+/** Split prior or subsequent history into its source module chats. */
+function contextModuleChats(original: string, displayed: string): ContextModule[] {
+  const marker = /\[MODULE_CONTEXT\s+\d+\]\s+(.+?)(?=\s+\[MODULE_OVERVIEW\])/gi;
+  const matches = Array.from(original.matchAll(marker));
+  const displayedTurns = transcriptTurns(displayed);
+
+  if (!matches.length) {
+    return displayedTurns.length
+      ? [{ label: "Recorded conversation context", overview: "", turns: displayedTurns }]
+      : [];
+  }
+
+  let displayedTurnIndex = 0;
+  return matches.map((match, index) => {
+    const blockStart = match.index ?? 0;
+    const blockEnd = matches[index + 1]?.index ?? original.length;
+    const block = original.slice(blockStart, blockEnd);
+    const overview = block.match(
+      /\[MODULE_OVERVIEW\]\s+(.+?)(?=\s+\[TURN\s+\d+\])/i,
+    )?.[1]?.trim() ?? "";
+    const originalTurns = transcriptTurns(block);
+    const turns = displayedTurns.slice(
+      displayedTurnIndex,
+      displayedTurnIndex + originalTurns.length,
+    );
+    displayedTurnIndex += originalTurns.length;
+    return {
+      label: match[1].trim(),
+      overview,
+      turns,
+    };
+  });
+}
+
 /**
  * Return every non-English language pack needed across an episode.
  *
@@ -457,6 +496,39 @@ function ConversationTurns({
         </div>
       ))}
     </section>
+  );
+}
+
+/** Render each neighbouring module as a clearly labelled chat. */
+function ContextModuleChats({
+  modules,
+  direction,
+  label,
+  translated = false,
+}: {
+  modules: ContextModule[];
+  direction: "ltr" | "rtl";
+  label: string;
+  translated?: boolean;
+}) {
+  return (
+    <div className="context-module-list" aria-label={label}>
+      {modules.map((module, index) => (
+        <section className="context-module-chat" key={`${module.label}-${index}`}>
+          <header>
+            <strong>{module.label}</strong>
+            {module.overview && <span>{module.overview}</span>}
+          </header>
+          <ConversationTurns
+            turns={module.turns}
+            direction={direction}
+            label={`${module.label} chat`}
+            compact
+            translated={translated}
+          />
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -2048,8 +2120,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       ? translatedSubsequentContext || subsequentContext
       : subsequentContext;
   const displayedTurns = transcriptView === "english" ? translatedTurns : turns;
-  const displayedPriorTurns = transcriptTurns(displayedPriorContext);
-  const displayedSubsequentTurns = transcriptTurns(displayedSubsequentContext);
+  const displayedPriorModules = contextModuleChats(priorContext, displayedPriorContext);
+  const displayedSubsequentModules = contextModuleChats(
+    subsequentContext,
+    displayedSubsequentContext,
+  );
   const conversationDirection = transcriptView === "english" ? "ltr" : direction;
 
   return (
@@ -2562,17 +2637,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                 <div className="conversation-sequence" aria-label="Complete participant conversation">
                   <details className="conversation-section context-card">
                     <summary>
-                      <span>Relevant prior context</span>
-                      <small>All available conversation before the rated module episode</small>
+                      <span>Prior module chat</span>
+                      <small>Earlier recorded module chat(s) before the module episode to evaluate</small>
                     </summary>
                     {priorContext === NO_PRIOR_CONTEXT_MESSAGE ? (
                       <p className="context-empty-message">{priorContext}</p>
                     ) : (
-                      <ConversationTurns
-                        turns={displayedPriorTurns}
+                      <ContextModuleChats
+                        modules={displayedPriorModules}
                         direction={conversationDirection}
-                        label={transcriptView === "english" ? "English translation of relevant prior context" : "Original relevant prior context"}
-                        compact
+                        label={transcriptView === "english" ? "English translation of prior module chats" : "Original prior module chats"}
                         translated={transcriptView === "english"}
                       />
                     )}
@@ -2580,7 +2654,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
                   <details className="conversation-section focal-episode-card" open>
                     <summary>
-                      <span>Complete module episode to rate</span>
+                      <span>Module episode to evaluate</span>
                       <small>Only this middle section should be rated</small>
                     </summary>
                     <ConversationTurns
@@ -2593,17 +2667,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
 
                   <details className="conversation-section context-card subsequent-context-card">
                     <summary>
-                      <span>Subsequent context</span>
-                      <small>All available conversation after the rated module episode</small>
+                      <span>Subsequent module chat</span>
+                      <small>Later recorded module chat(s) after the module episode to evaluate</small>
                     </summary>
                     {subsequentContext === NO_SUBSEQUENT_CONTEXT_MESSAGE ? (
                       <p className="context-empty-message">{subsequentContext}</p>
                     ) : (
-                      <ConversationTurns
-                        turns={displayedSubsequentTurns}
+                      <ContextModuleChats
+                        modules={displayedSubsequentModules}
                         direction={conversationDirection}
-                        label={transcriptView === "english" ? "English translation of subsequent context" : "Original subsequent context"}
-                        compact
+                        label={transcriptView === "english" ? "English translation of subsequent module chats" : "Original subsequent module chats"}
                         translated={transcriptView === "english"}
                       />
                     )}

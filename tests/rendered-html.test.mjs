@@ -114,7 +114,7 @@ test("bundles and automatically seeds the 300-episode final dataset", async () =
   assert.equal(
     (
       normalizedDatasetCsv.match(
-        /^najah-completion-activity-v4-full-conversation-context,\d+,N2E\d+,/gm,
+        /^najah-completion-activity-v5-module-aware-context,\d+,N2E\d+,/gm,
       ) ?? []
     ).length,
     300,
@@ -191,22 +191,25 @@ test("separates flattened transcripts into legible participant and Najah turns",
   assert.match(styles, /\.transcript \{[^}]*gap: 17px/);
 });
 
-test("shows the complete participant history as three collapsible sections", async () => {
+test("shows neighbouring module chats around the module episode to evaluate", async () => {
   const [component, bundledDataset, episodesRoute, styles] = await Promise.all([
     readFile(componentPath, "utf8"),
     readFile(bundledDatasetPath, "utf8"),
     readFile(episodesRoutePath, "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(component, /Relevant prior context/);
-  assert.match(component, /Complete module episode to rate/);
-  assert.match(component, /Subsequent context/);
+  assert.match(component, /Prior module chat/);
+  assert.match(component, /Module episode to evaluate/);
+  assert.match(component, /Subsequent module chat/);
   assert.match(component, /Only this middle section should be rated/);
+  assert.match(component, /contextModuleChats/);
+  assert.match(component, /MODULE_CONTEXT/);
   assert.match(component, /<details className="conversation-section context-card">/);
   assert.match(component, /<details className="conversation-section focal-episode-card" open>/);
   assert.match(bundledDataset, /subsequent_context/);
   assert.match(episodesRoute, /e\.subsequent_context AS "subsequentContext"/);
   assert.match(styles, /\.conversation-section summary::marker/);
+  assert.match(styles, /\.context-module-chat/);
 });
 
 test("offers a browser-local English translation toggle without replacing originals", async () => {
