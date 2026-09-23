@@ -53,7 +53,7 @@ test("enforces assignment visibility, flexible primary membership, and separate 
   assert.match(schema, /review_layer TEXT NOT NULL DEFAULT 'legacy'/);
 });
 
-test("routes serious mismatches and notifies judges without revealing primary scores", async () => {
+test("routes serious mismatches and highlights disputed fields without revealing primary answers", async () => {
   const [episodes, app, mismatch] = await Promise.all([
     readFile(projectFile("app/api/episodes/route.ts"), "utf8"),
     readFile(projectFile("app/AnnotatorApp.tsx"), "utf8"),
@@ -66,6 +66,8 @@ test("routes serious mismatches and notifies judges without revealing primary sc
   assert.match(episodes, /COUNT\(DISTINCT primary_rating\.critical_flags_json\) > 1/);
   assert.match(episodes, /reviewLayer === "judge"/);
   assert.match(episodes, /primary_serious_mismatch/);
+  assert.match(episodes, /primary_score_mismatch_keys_json/);
+  assert.match(episodes, /primaryMismatchDetails/);
   assert.match(mismatch, /values\.has\(1\) && values\.has\(3\)/);
   assert.match(mismatch, /values\.has\("na"\)/);
   assert.match(app, /Mismatch reviews/);
@@ -75,7 +77,13 @@ test("routes serious mismatches and notifies judges without revealing primary sc
   assert.match(app, /judgeRandomNotStarted/);
   assert.match(app, /judgeRandomCompleted/);
   assert.match(app, /Serious primary-rating mismatch—judge review required/);
-  assert.match(app, /individual scores remain hidden/i);
+  assert.match(app, /Primary raters disagreed here/);
+  assert.match(app, /Questions with primary-rater disagreement/);
+  assert.match(app, /Select a question to jump to it/);
+  assert.match(app, /mismatchReviewItems/);
+  assert.match(app, /hasPrimaryMismatch/);
+  assert.match(app, /highlightedMismatch/);
+  assert.match(app, /primary answers remain hidden/i);
 });
 
 test("keeps unassigned accounts out of study queues until an admin assigns them", async () => {
