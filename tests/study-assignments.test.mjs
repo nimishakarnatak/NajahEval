@@ -54,8 +54,9 @@ test("enforces assignment visibility, flexible primary membership, and separate 
 });
 
 test("routes serious mismatches and highlights disputed fields without revealing primary answers", async () => {
-  const [episodes, app, mismatch] = await Promise.all([
+  const [episodes, annotations, app, mismatch] = await Promise.all([
     readFile(projectFile("app/api/episodes/route.ts"), "utf8"),
+    readFile(projectFile("app/api/annotations/route.ts"), "utf8"),
     readFile(projectFile("app/AnnotatorApp.tsx"), "utf8"),
     readFile(projectFile("lib/rating-mismatch.ts"), "utf8"),
   ]);
@@ -84,6 +85,12 @@ test("routes serious mismatches and highlights disputed fields without revealing
   assert.match(app, /hasPrimaryMismatch/);
   assert.match(app, /highlightedMismatch/);
   assert.match(app, /primary answers remain hidden/i);
+  assert.match(app, /Complete only the orange-highlighted questions/);
+  assert.match(app, /isAdditionalMismatchReview \? highlightedMismatch : null/);
+  assert.match(annotations, /isAdditionalMismatchReview \? primaryMismatchSummary\.details : null/);
+  assert.match(annotations, /episode\.judgeBaseAssignment !== rater\.assignmentCohort/);
+  assert.match(mismatch, /details: PrimaryMismatchDetails/);
+  assert.match(mismatch, /scoreKeys: scoreMismatchKeys/);
 });
 
 test("keeps unassigned accounts out of study queues until an admin assigns them", async () => {

@@ -253,7 +253,7 @@ test("uses consistent, accessible button motion and immediate loading feedback",
   assert.match(styles, /button:focus-visible/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(component, /activeSaveAction === "draft" \? "Saving…"/);
-  assert.match(component, /activeSaveAction === "complete" \? "Submitting…"/);
+  assert.match(component, /activeSaveAction === "complete"[\s\S]*?\? "Submitting…"/);
   assert.match(component, /aria-busy=\{navigationDirection === 1\}/);
 });
 
