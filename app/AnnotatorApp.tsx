@@ -96,6 +96,15 @@ type Episode = AnnotationDraft & {
   primaryRatingCount: number;
   primaryMismatch: boolean;
   primarySeriousMismatch: boolean;
+  primaryMismatchDetails: {
+    scoreKeys: DimensionKey[];
+    taskStatus: boolean;
+    participantBehaviour: boolean;
+    participantReaction: boolean;
+    episodeEnding: boolean;
+    genderContext: boolean;
+    criticalFailure: boolean;
+  };
   completedRaterCount: number;
   annotationStatus: "draft" | "complete" | null;
   annotationUpdatedAt: string | null;
@@ -589,6 +598,7 @@ function ScoreCard({
   score,
   evidenceTurns,
   justification,
+  hasPrimaryMismatch,
   onScoreChange,
   onEvidenceChange,
   onJustificationChange,
@@ -597,6 +607,7 @@ function ScoreCard({
   score: DimensionScore;
   evidenceTurns: string;
   justification: string;
+  hasPrimaryMismatch?: boolean;
   onScoreChange: (score: DimensionScore) => void;
   onEvidenceChange: (value: string) => void;
   onJustificationChange: (value: string) => void;
@@ -604,10 +615,16 @@ function ScoreCard({
   const isNotApplicable = score === "na";
   const hasSelectedScore = score !== null;
   return (
-    <section className="score-card" id={`rating-${dimension.key}`}>
+    <section
+      className={`score-card${hasPrimaryMismatch ? " primary-mismatch-highlight" : ""}`}
+      id={`rating-${dimension.key}`}
+    >
       <div className="dimension-heading">
         <h4>{dimension.label}</h4>
-        <span>{score === null ? "Not scored" : score === "na" ? "N/A selected" : `Score ${score}`}</span>
+        <div className="dimension-status">
+          {hasPrimaryMismatch && <MismatchMarker />}
+          <span>{score === null ? "Not scored" : score === "na" ? "N/A selected" : `Score ${score}`}</span>
+        </div>
       </div>
       {dimension.question && <p className="dimension-question">{dimension.question}</p>}
 
@@ -682,6 +699,15 @@ function ScoreCard({
         </label>
       )}
     </section>
+  );
+}
+
+/** Non-directional alert that identifies a disputed field without revealing either score. */
+function MismatchMarker() {
+  return (
+    <span className="field-mismatch-marker" title="The two primary raters selected different answers for this field.">
+      Primary raters disagreed here
+    </span>
   );
 }
 
@@ -2135,6 +2161,35 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
             ? "In progress"
             : "Not yet started";
   const currentIndex = filteredEpisodes.findIndex((episode) => episode.episodeId === selectedId);
+  const highlightedMismatch =
+    reviewLayer === "judge" && current?.primaryMismatch
+      ? current.primaryMismatchDetails
+      : null;
+  const mismatchReviewItems: { targetId: string; label: string }[] = [];
+  if (highlightedMismatch) {
+    for (const key of highlightedMismatch.scoreKeys) {
+      const dimension = RUBRIC_DIMENSIONS.find((candidate) => candidate.key === key);
+      if (dimension) mismatchReviewItems.push({ targetId: `rating-${key}`, label: dimension.label });
+    }
+    if (highlightedMismatch.criticalFailure) {
+      mismatchReviewItems.push({ targetId: "rating-critical-failure", label: "Critical-failure screening" });
+    }
+    if (highlightedMismatch.genderContext) {
+      mismatchReviewItems.push({ targetId: "rating-gender-context", label: "Gender-related context" });
+    }
+    if (highlightedMismatch.participantBehaviour) {
+      mismatchReviewItems.push({ targetId: "rating-participant-behaviour", label: "Observable participant behaviour" });
+    }
+    if (highlightedMismatch.participantReaction) {
+      mismatchReviewItems.push({ targetId: "rating-participant-reaction", label: "Expressed participant reaction" });
+    }
+    if (highlightedMismatch.taskStatus) {
+      mismatchReviewItems.push({ targetId: "rating-task-status", label: "Task outcome" });
+    }
+    if (highlightedMismatch.episodeEnding) {
+      mismatchReviewItems.push({ targetId: "rating-episode-ending", label: "Episode ending" });
+    }
+  }
   const direction = current?.language === "ar" ? "rtl" : "ltr";
   const turns = transcriptTurns(current?.transcript || "");
   const priorContext = priorContextOrExplanation(current?.priorContext);
@@ -2640,14 +2695,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                       {current.primarySeriousMismatch ? (
                         <span>
                           The primary ratings differ on a major score contrast, task-status
-                          judgment, or critical-failure judgment. Their individual scores
-                          remain hidden so you can make an independent assessment.
+                          judgment, or critical-failure judgment. Fields with disagreement
+                          are highlighted in the rubric below. The primary answers remain
+                          hidden so you can make an independent assessment.
                         </span>
                       ) : (
                         <span>
                           Both primary ratings are complete and differ on at least one
-                          judgment. Their individual scores remain hidden so you can make
-                          an independent assessment.
+                          judgment. Fields with disagreement are highlighted in the rubric
+                          below. The primary answers remain hidden so you can make an
+                          independent assessment.
                         </span>
                       )}
                     </div>
@@ -2781,6 +2838,24 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   A score of 1, 2, 3, or N/A is required for every dimension. Evidence turn numbers are optional for routine scores. Evidence and a short explanation are required for selected critical failures; a reason is required when skipping. Use N/A only when the dimension genuinely cannot be assessed.
                 </p>
 
+                {mismatchReviewItems.length > 0 && (
+                  <nav className="mismatch-review-navigator" aria-label="Questions with primary-rater disagreement">
+                    <div>
+                      <strong>
+                        {mismatchReviewItems.length} {mismatchReviewItems.length === 1 ? "question has" : "questions have"} primary-rater disagreement
+                      </strong>
+                      <span>Select a question to jump to it. The primary answers remain hidden.</span>
+                    </div>
+                    <div className="mismatch-review-links">
+                      {mismatchReviewItems.map((item) => (
+                        <a href={`#${item.targetId}`} key={item.targetId}>
+                          {item.label}<span aria-hidden="true">↓</span>
+                        </a>
+                      ))}
+                    </div>
+                  </nav>
+                )}
+
                 <section className="evaluation-partition najah-performance-partition" aria-labelledby="najah-performance-heading">
                   <header className="evaluation-partition-header">
                     <span className="evaluation-partition-letter" aria-hidden="true">A</span>
@@ -2808,6 +2883,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                           score={draft.scores[dimension.key]}
                           evidenceTurns={draft.evidenceTurns[dimension.key]}
                           justification={draft.justifications[dimension.key]}
+                          hasPrimaryMismatch={highlightedMismatch?.scoreKeys.includes(dimension.key) ?? false}
                           onScoreChange={(score) => updateScore(dimension.key, score)}
                           onEvidenceChange={(value) => updateEvidenceTurns(dimension.key, value)}
                           onJustificationChange={(value) => updateJustification(dimension.key, value)}
@@ -2816,9 +2892,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     </section>
                   ))}
 
-                  <section className="rubric-section critical-section">
+                  <section id="rating-critical-failure" className={`rubric-section critical-section${highlightedMismatch?.criticalFailure ? " primary-mismatch-section" : ""}`}>
                     <div className="rubric-section-heading">
                       <p className="eyebrow">A.3 Critical-failure screening</p>
+                      {highlightedMismatch?.criticalFailure && <MismatchMarker />}
                       <span>Screen once, then identify every applicable failure only when the answer is Yes.</span>
                     </div>
                     <CriticalFailureCard
@@ -2833,9 +2910,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     />
                   </section>
 
-                  <section className="rubric-section gender-context-section">
+                  <section id="rating-gender-context" className={`rubric-section gender-context-section${highlightedMismatch?.genderContext ? " primary-mismatch-section" : ""}`}>
                     <div className="rubric-section-heading">
                       <p className="eyebrow">A.4 Gender-related context</p>
+                      {highlightedMismatch?.genderContext && <MismatchMarker />}
                       <span>Record whether gender context arose and how Najah handled it.</span>
                     </div>
                     <GenderContextCard
@@ -2870,9 +2948,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     </div>
                   </header>
 
-                  <section className="rubric-section participant-response-section">
+                  <section id="rating-participant-behaviour" className={`rubric-section participant-response-section${highlightedMismatch?.participantBehaviour ? " primary-mismatch-section" : ""}`}>
                     <div className="rubric-section-heading">
                       <p className="eyebrow">B.1 Observable participant behaviour</p>
+                      {highlightedMismatch?.participantBehaviour && <MismatchMarker />}
                       <span>Record every behaviour observed at least once; optional turn references help locate the supporting message.</span>
                     </div>
                     <ParticipantBehaviourCard
@@ -2883,9 +2962,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     />
                   </section>
 
-                  <section className="rubric-section participant-response-section">
+                  <section id="rating-participant-reaction" className={`rubric-section participant-response-section${highlightedMismatch?.participantReaction ? " primary-mismatch-section" : ""}`}>
                     <div className="rubric-section-heading">
                       <p className="eyebrow">B.2 Explicitly expressed participant reaction</p>
+                      {highlightedMismatch?.participantReaction && <MismatchMarker />}
                       <span>Record reactions that the participant expressed directly; optional turn references help locate the supporting message.</span>
                     </div>
                     <ParticipantReactionCard
@@ -2907,9 +2987,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     </div>
                   </header>
 
-                  <section className="rubric-section episode-ending-section">
+                  <section id="rating-task-status" className={`rubric-section episode-ending-section${highlightedMismatch?.taskStatus ? " primary-mismatch-section" : ""}`}>
                     <div className="rubric-section-heading">
                       <p className="eyebrow">C.1 Task outcome</p>
+                      {highlightedMismatch?.taskStatus && <MismatchMarker />}
                     </div>
                     <TaskStatusCard
                       status={draft.taskStatus}
@@ -2917,9 +2998,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     />
                   </section>
 
-                  <section className="rubric-section episode-ending-section">
+                  <section id="rating-episode-ending" className={`rubric-section episode-ending-section${highlightedMismatch?.episodeEnding ? " primary-mismatch-section" : ""}`}>
                     <div className="rubric-section-heading">
                       <p className="eyebrow">C.2 Episode ending</p>
+                      {highlightedMismatch?.episodeEnding && <MismatchMarker />}
                     </div>
                     <EpisodeEndingCard value={draft.episodeEnding} onChange={updateEpisodeEnding} />
                   </section>
