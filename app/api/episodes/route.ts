@@ -124,6 +124,13 @@ export async function GET(request: Request) {
         COALESCE(primary_summary.primary_count, 0) AS "primaryRatingCount",
         COALESCE(primary_summary.primary_mismatch, FALSE) AS "primaryMismatch",
         COALESCE(primary_summary.primary_serious_mismatch, FALSE) AS "primarySeriousMismatch",
+        COALESCE(primary_summary.primary_score_mismatch_keys_json, '[]') AS "primaryScoreMismatchKeysJson",
+        COALESCE(primary_summary.primary_task_status_mismatch, FALSE) AS "primaryTaskStatusMismatch",
+        COALESCE(primary_summary.primary_participant_behaviour_mismatch, FALSE) AS "primaryParticipantBehaviourMismatch",
+        COALESCE(primary_summary.primary_participant_reaction_mismatch, FALSE) AS "primaryParticipantReactionMismatch",
+        COALESCE(primary_summary.primary_episode_ending_mismatch, FALSE) AS "primaryEpisodeEndingMismatch",
+        COALESCE(primary_summary.primary_gender_context_mismatch, FALSE) AS "primaryGenderContextMismatch",
+        COALESCE(primary_summary.primary_critical_failure_mismatch, FALSE) AS "primaryCriticalFailureMismatch",
         (
           SELECT COUNT(*) FROM rubric_annotations completed
           WHERE completed.episode_id = e.episode_id
@@ -219,7 +226,58 @@ export async function GET(request: Request) {
                    OR (score_gap.has_na AND score_gap.has_substantive)
               )
             )
-          ) AS primary_serious_mismatch
+          ) AS primary_serious_mismatch,
+          COALESCE((
+            SELECT jsonb_agg(score_difference.key ORDER BY score_difference.key)::text
+            FROM (
+              SELECT score_entry.key
+              FROM rubric_annotations primary_score
+              CROSS JOIN LATERAL jsonb_each_text(
+                COALESCE(NULLIF(primary_score.scores_json, ''), '{}')::jsonb
+              ) score_entry
+              WHERE primary_score.episode_id = e.episode_id
+                AND primary_score.status = 'complete'
+                AND primary_score.review_layer = 'primary'
+                AND primary_score.assignment_cohort = CASE
+                  WHEN e.study_order BETWEEN 1 AND 100 THEN 'group_a'
+                  WHEN e.study_order BETWEEN 101 AND 200 THEN 'group_b'
+                  WHEN e.study_order BETWEEN 201 AND 300 THEN 'group_c'
+                  ELSE ''
+                END
+              GROUP BY score_entry.key
+              HAVING COUNT(DISTINCT score_entry.value) > 1
+            ) score_difference
+          ), '[]') AS primary_score_mismatch_keys_json,
+          (
+            COUNT(*) >= 2
+            AND (
+              COUNT(DISTINCT primary_rating.task_status) > 1
+              OR COUNT(DISTINCT primary_rating.task_incomplete_reason) > 1
+            )
+          ) AS primary_task_status_mismatch,
+          (
+            COUNT(*) >= 2
+            AND COUNT(DISTINCT primary_rating.participant_behaviours_json) > 1
+          ) AS primary_participant_behaviour_mismatch,
+          (
+            COUNT(*) >= 2
+            AND COUNT(DISTINCT primary_rating.participant_reactions_json) > 1
+          ) AS primary_participant_reaction_mismatch,
+          (
+            COUNT(*) >= 2
+            AND COUNT(DISTINCT primary_rating.module_episode_ending) > 1
+          ) AS primary_episode_ending_mismatch,
+          (
+            COUNT(*) >= 2
+            AND COUNT(DISTINCT primary_rating.gender_context_handling) > 1
+          ) AS primary_gender_context_mismatch,
+          (
+            COUNT(*) >= 2
+            AND (
+              COUNT(DISTINCT primary_rating.critical_failure_observed) > 1
+              OR COUNT(DISTINCT primary_rating.critical_flags_json) > 1
+            )
+          ) AS primary_critical_failure_mismatch
         FROM rubric_annotations primary_rating
         WHERE primary_rating.episode_id = e.episode_id
           AND primary_rating.status = 'complete'
@@ -277,6 +335,20 @@ export async function GET(request: Request) {
     let participantReactionOther = typeof episode.participantReactionOther === "string"
       ? episode.participantReactionOther
       : "";
+    const mismatchVisible = reviewLayer === "judge" || rater.role === "admin";
+    let primaryScoreMismatchKeys: string[] = [];
+    if (mismatchVisible && typeof episode.primaryScoreMismatchKeysJson === "string") {
+      try {
+        const parsed = JSON.parse(episode.primaryScoreMismatchKeysJson) as unknown;
+        if (Array.isArray(parsed)) {
+          primaryScoreMismatchKeys = parsed.filter(
+            (key): key is string => typeof key === "string" && DIMENSION_KEYS.includes(key as (typeof DIMENSION_KEYS)[number]),
+          );
+        }
+      } catch {
+        primaryScoreMismatchKeys = [];
+      }
+    }
 
     // Ratings saved before v12 used one combined question. Translate those
     // values only when the new fields are still blank, preserving the older
@@ -345,6 +417,18 @@ export async function GET(request: Request) {
       primarySeriousMismatch:
         (reviewLayer === "judge" || rater.role === "admin") &&
         episode.primarySeriousMismatch === true,
+      primaryMismatchDetails: {
+        scoreKeys: primaryScoreMismatchKeys,
+        taskStatus: mismatchVisible && episode.primaryTaskStatusMismatch === true,
+        participantBehaviour:
+          mismatchVisible && episode.primaryParticipantBehaviourMismatch === true,
+        participantReaction:
+          mismatchVisible && episode.primaryParticipantReactionMismatch === true,
+        episodeEnding: mismatchVisible && episode.primaryEpisodeEndingMismatch === true,
+        genderContext: mismatchVisible && episode.primaryGenderContextMismatch === true,
+        criticalFailure:
+          mismatchVisible && episode.primaryCriticalFailureMismatch === true,
+      },
       scores: parseKeyedJson<DimensionScore>(episode.scoresJson, DIMENSION_KEYS, () => null),
       evidenceTurns: parseKeyedJson<string>(episode.evidenceTurnsJson, DIMENSION_KEYS, () => ""),
       justifications: parseKeyedJson<string>(episode.justificationsJson, DIMENSION_KEYS, () => ""),
