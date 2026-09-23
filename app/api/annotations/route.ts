@@ -43,6 +43,7 @@ import {
 import {
   summarizePrimaryMismatch,
   type ComparablePrimaryRating,
+  type PrimaryMismatchDetails,
 } from "@/lib/rating-mismatch";
 
 type AnnotationPayload = {
@@ -380,38 +381,65 @@ function normalizePayload(payload: AnnotationPayload): NormalizedAnnotation | nu
 
 /**
  * Applies the submission-only requirements. Drafts may be incomplete, while a
- * completed rating must contain every judgment. Written explanations are
- * required only for selected critical failures; skip reasons are validated
- * separately when the rater uses the skip action.
+ * completed rating must contain every judgment. Additional judge reviews that
+ * exist only because of a mismatch require the disputed judgments instead.
+ * Written explanations are required only for selected critical failures; skip
+ * reasons are validated separately when the rater uses the skip action.
  */
-function completionError(annotation: NormalizedAnnotation): string | null {
-  for (const dimension of RUBRIC_DIMENSIONS) {
+function completionError(
+  annotation: NormalizedAnnotation,
+  requiredMismatchDetails: PrimaryMismatchDetails | null = null,
+): string | null {
+  const requiredScoreKeys = requiredMismatchDetails?.scoreKeys ?? DIMENSION_KEYS;
+  for (const dimension of RUBRIC_DIMENSIONS.filter((candidate) =>
+    requiredScoreKeys.includes(candidate.key)
+  )) {
     const score = annotation.scores[dimension.key];
     if (score === null) return `Select a score or N/A for ${dimension.label}.`;
   }
 
-  if (!annotation.taskStatus) {
+  if ((!requiredMismatchDetails || requiredMismatchDetails.taskStatus) && !annotation.taskStatus) {
     return "Select the task status.";
   }
-  if (!PARTICIPANT_BEHAVIOUR_KEYS.some((key) => annotation.participantBehaviours[key])) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.participantBehaviour) &&
+    !PARTICIPANT_BEHAVIOUR_KEYS.some((key) => annotation.participantBehaviours[key])
+  ) {
     return "Select at least one observable participant behaviour.";
   }
-  if (annotation.participantBehaviours.otherObservableBehaviour && !annotation.participantBehaviourOther) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.participantBehaviour) &&
+    annotation.participantBehaviours.otherObservableBehaviour &&
+    !annotation.participantBehaviourOther
+  ) {
     return "Describe the other observable participant behaviour.";
   }
-  if (!PARTICIPANT_REACTION_KEYS.some((key) => annotation.participantReactions[key])) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.participantReaction) &&
+    !PARTICIPANT_REACTION_KEYS.some((key) => annotation.participantReactions[key])
+  ) {
     return "Select at least one explicitly expressed participant reaction.";
   }
-  if (annotation.participantReactions.otherExpressedReaction && !annotation.participantReactionOther) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.participantReaction) &&
+    annotation.participantReactions.otherExpressedReaction &&
+    !annotation.participantReactionOther
+  ) {
     return "Describe the other expressed participant reaction.";
   }
-  if (!annotation.episodeEnding) {
+  if ((!requiredMismatchDetails || requiredMismatchDetails.episodeEnding) && !annotation.episodeEnding) {
     return "Select how the available module episode ended.";
   }
-  if (!annotation.criticalFailureObserved) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.criticalFailure) &&
+    !annotation.criticalFailureObserved
+  ) {
     return "Select whether any critical failure was observed.";
   }
-  if (annotation.criticalFailureObserved === "yes") {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.criticalFailure) &&
+    annotation.criticalFailureObserved === "yes"
+  ) {
     const selectedFlags = CRITICAL_FLAGS.filter(
       (flag) => annotation.criticalFlags[flag.key] === "yes",
     );
@@ -427,10 +455,26 @@ function completionError(annotation: NormalizedAnnotation): string | null {
       }
     }
   }
-  if (!annotation.genderContextHandling) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.genderContext) &&
+    !annotation.genderContextHandling
+  ) {
     return "Select how gender-related context was handled.";
   }
   return null;
+}
+
+/** True when a field-level mismatch summary contains at least one review target. */
+function hasMismatchReviewFields(details: PrimaryMismatchDetails): boolean {
+  return (
+    details.scoreKeys.length > 0 ||
+    details.taskStatus ||
+    details.participantBehaviour ||
+    details.participantReaction ||
+    details.episodeEnding ||
+    details.genderContext ||
+    details.criticalFailure
+  );
 }
 
 /**
@@ -495,11 +539,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (status === "complete") {
-    const error = completionError(annotation);
-    if (error) return Response.json({ error }, { status: 400 });
-  }
-
   const db = getDatabase();
   await ensureNajahSchema(db);
   await ensureBundledDataset(db);
@@ -522,7 +561,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Episode not found." }, { status: 404 });
   }
 
-  let hasSeriousMismatch = false;
+  let primaryMismatchSummary = summarizePrimaryMismatch([]);
   if (isJudgeCohort(rater.assignmentCohort)) {
     const primaryRatings = await db
       .prepare(`
@@ -547,10 +586,15 @@ export async function POST(request: Request) {
       `)
       .bind(episodeId, primaryCohortForOrder(Number(episode.studyOrder)))
       .all<ComparablePrimaryRating>();
-    hasSeriousMismatch = summarizePrimaryMismatch(
-      primaryRatings.results,
-    ).seriousMismatch;
+    primaryMismatchSummary = summarizePrimaryMismatch(primaryRatings.results);
   }
+
+  const reviewLayer = reviewLayerForAccount(rater.role, rater.assignmentCohort);
+  const isAdditionalMismatchReview =
+    reviewLayer === "judge" &&
+    primaryMismatchSummary.mismatch &&
+    episode.judgeBaseAssignment !== rater.assignmentCohort &&
+    hasMismatchReviewFields(primaryMismatchSummary.details);
 
   if (
     rater.role !== "admin" &&
@@ -558,7 +602,7 @@ export async function POST(request: Request) {
       rater.assignmentCohort,
       Number(episode.studyOrder),
       episode.judgeBaseAssignment,
-      hasSeriousMismatch,
+      primaryMismatchSummary.seriousMismatch,
     )
   ) {
     return Response.json(
@@ -567,7 +611,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const reviewLayer = reviewLayerForAccount(rater.role, rater.assignmentCohort);
+  if (status === "complete") {
+    const error = completionError(
+      annotation,
+      isAdditionalMismatchReview ? primaryMismatchSummary.details : null,
+    );
+    if (error) return Response.json({ error }, { status: 400 });
+  }
+
   const requiredRatings = await requiredRatingsForAssignment(
     db,
     rater.assignmentCohort,
