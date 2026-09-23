@@ -23,7 +23,31 @@ export type PrimaryMismatchSummary = {
   ratingCount: number;
   mismatch: boolean;
   seriousMismatch: boolean;
+  details: PrimaryMismatchDetails;
 };
+
+export type PrimaryMismatchDetails = {
+  scoreKeys: (typeof DIMENSION_KEYS)[number][];
+  taskStatus: boolean;
+  participantBehaviour: boolean;
+  participantReaction: boolean;
+  episodeEnding: boolean;
+  genderContext: boolean;
+  criticalFailure: boolean;
+};
+
+/** Empty field-level summary used before two completed primary ratings exist. */
+function emptyMismatchDetails(): PrimaryMismatchDetails {
+  return {
+    scoreKeys: [],
+    taskStatus: false,
+    participantBehaviour: false,
+    participantReaction: false,
+    episodeEnding: false,
+    genderContext: false,
+    criticalFailure: false,
+  };
+}
 
 /** Parse a stored keyed JSON value without allowing malformed legacy data to fail a queue. */
 function parseObject(value: string): Record<string, unknown> {
@@ -61,7 +85,12 @@ export function summarizePrimaryMismatch(
   ratings: ComparablePrimaryRating[],
 ): PrimaryMismatchSummary {
   if (ratings.length < 2) {
-    return { ratingCount: ratings.length, mismatch: false, seriousMismatch: false };
+    return {
+      ratingCount: ratings.length,
+      mismatch: false,
+      seriousMismatch: false,
+      details: emptyMismatchDetails(),
+    };
   }
 
   const normalized = ratings.slice(0, 2).map((rating) => {
@@ -96,18 +125,19 @@ export function summarizePrimaryMismatch(
   });
   const [left, right] = normalized;
 
-  const taskMismatch =
+  const taskStatusMismatch =
     left.taskStatus !== right.taskStatus ||
-    left.taskIncompleteReason !== right.taskIncompleteReason ||
-    left.episodeEnding !== right.episodeEnding ||
-    left.genderContextHandling !== right.genderContextHandling;
-  const participantResponseMismatch =
-    JSON.stringify(left.participantBehaviours) !== JSON.stringify(right.participantBehaviours) ||
+    left.taskIncompleteReason !== right.taskIncompleteReason;
+  const participantBehaviourMismatch =
+    JSON.stringify(left.participantBehaviours) !== JSON.stringify(right.participantBehaviours);
+  const participantReactionMismatch =
     JSON.stringify(left.participantReactions) !== JSON.stringify(right.participantReactions);
+  const episodeEndingMismatch = left.episodeEnding !== right.episodeEnding;
+  const genderContextMismatch = left.genderContextHandling !== right.genderContextHandling;
   const criticalMismatch =
     left.criticalFailureObserved !== right.criticalFailureObserved ||
     CRITICAL_FLAG_KEYS.some((key) => left.flags[key] !== right.flags[key]);
-  const scoreMismatch = DIMENSION_KEYS.some(
+  const scoreMismatchKeys = DIMENSION_KEYS.filter(
     (key) => left.scores[key] !== right.scores[key],
   );
   const seriousScoreMismatch = DIMENSION_KEYS.some((key) => {
@@ -120,7 +150,28 @@ export function summarizePrimaryMismatch(
 
   return {
     ratingCount: ratings.length,
-    mismatch: scoreMismatch || taskMismatch || participantResponseMismatch || criticalMismatch,
-    seriousMismatch: seriousScoreMismatch || taskMismatch || criticalMismatch,
+    mismatch:
+      scoreMismatchKeys.length > 0 ||
+      taskStatusMismatch ||
+      participantBehaviourMismatch ||
+      participantReactionMismatch ||
+      episodeEndingMismatch ||
+      genderContextMismatch ||
+      criticalMismatch,
+    seriousMismatch:
+      seriousScoreMismatch ||
+      taskStatusMismatch ||
+      episodeEndingMismatch ||
+      genderContextMismatch ||
+      criticalMismatch,
+    details: {
+      scoreKeys: scoreMismatchKeys,
+      taskStatus: taskStatusMismatch,
+      participantBehaviour: participantBehaviourMismatch,
+      participantReaction: participantReactionMismatch,
+      episodeEnding: episodeEndingMismatch,
+      genderContext: genderContextMismatch,
+      criticalFailure: criticalMismatch,
+    },
   };
 }
