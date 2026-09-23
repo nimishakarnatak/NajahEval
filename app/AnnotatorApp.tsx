@@ -218,8 +218,14 @@ function emptyDraft(): AnnotationDraft {
  * feedback before a request is sent. The target ID lets the long, independently
  * scrolling rating panel reveal the exact field that needs attention.
  */
-function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | null {
-  for (const dimension of RUBRIC_DIMENSIONS) {
+function firstSubmissionProblem(
+  draft: AnnotationDraft,
+  requiredMismatchDetails: Episode["primaryMismatchDetails"] | null = null,
+): SubmissionProblem | null {
+  const requiredScoreKeys = requiredMismatchDetails?.scoreKeys ?? DIMENSION_KEYS;
+  for (const dimension of RUBRIC_DIMENSIONS.filter((candidate) =>
+    requiredScoreKeys.includes(candidate.key)
+  )) {
     const score = draft.scores[dimension.key];
     if (score === null) {
       return {
@@ -229,48 +235,68 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
     }
   }
 
-  if (!draft.taskStatus) {
+  if ((!requiredMismatchDetails || requiredMismatchDetails.taskStatus) && !draft.taskStatus) {
     return {
       message: "Select the task status.",
       targetId: "task-status",
     };
   }
 
-  if (!PARTICIPANT_BEHAVIOUR_KEYS.some((key) => draft.participantBehaviours[key])) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.participantBehaviour) &&
+    !PARTICIPANT_BEHAVIOUR_KEYS.some((key) => draft.participantBehaviours[key])
+  ) {
     return {
       message: "Select at least one observable participant behaviour.",
       targetId: "participant-behaviour",
     };
   }
-  if (draft.participantBehaviours.otherObservableBehaviour && !draft.participantBehaviourOther.trim()) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.participantBehaviour) &&
+    draft.participantBehaviours.otherObservableBehaviour &&
+    !draft.participantBehaviourOther.trim()
+  ) {
     return {
       message: "Describe the other observable participant behaviour.",
       targetId: "participant-behaviour-other",
     };
   }
-  if (!PARTICIPANT_REACTION_KEYS.some((key) => draft.participantReactions[key])) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.participantReaction) &&
+    !PARTICIPANT_REACTION_KEYS.some((key) => draft.participantReactions[key])
+  ) {
     return {
       message: "Select at least one explicitly expressed participant reaction.",
       targetId: "participant-reaction",
     };
   }
-  if (draft.participantReactions.otherExpressedReaction && !draft.participantReactionOther.trim()) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.participantReaction) &&
+    draft.participantReactions.otherExpressedReaction &&
+    !draft.participantReactionOther.trim()
+  ) {
     return {
       message: "Describe the other expressed participant reaction.",
       targetId: "participant-reaction-other",
     };
   }
-  if (!draft.episodeEnding) {
+  if ((!requiredMismatchDetails || requiredMismatchDetails.episodeEnding) && !draft.episodeEnding) {
     return { message: "Select how the available module episode ended.", targetId: "episode-ending" };
   }
-  if (!draft.criticalFailureObserved) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.criticalFailure) &&
+    !draft.criticalFailureObserved
+  ) {
     return {
       message: "Select whether any critical failure was observed.",
       targetId: "critical-failure-observed",
     };
   }
 
-  if (draft.criticalFailureObserved === "yes") {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.criticalFailure) &&
+    draft.criticalFailureObserved === "yes"
+  ) {
     const selectedFlags = CRITICAL_FLAGS.filter(
       (flag) => draft.criticalFlags[flag.key] === "yes",
     );
@@ -296,7 +322,10 @@ function firstSubmissionProblem(draft: AnnotationDraft): SubmissionProblem | nul
     }
   }
 
-  if (!draft.genderContextHandling) {
+  if (
+    (!requiredMismatchDetails || requiredMismatchDetails.genderContext) &&
+    !draft.genderContextHandling
+  ) {
     return { message: "Select how gender-related context was handled.", targetId: "gender-context" };
   }
 
@@ -1562,7 +1591,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   }
 
   async function submitAndAdvance() {
-    const problem = firstSubmissionProblem(draft);
+    const problem = firstSubmissionProblem(
+      draft,
+      isAdditionalMismatchReview ? highlightedMismatch : null,
+    );
     if (problem) {
       setNotice("");
       setError(problem.message);
@@ -2190,6 +2222,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       mismatchReviewItems.push({ targetId: "rating-episode-ending", label: "Episode ending" });
     }
   }
+  const isAdditionalMismatchReview =
+    reviewLayer === "judge" &&
+    Boolean(current?.primaryMismatch) &&
+    current?.judgeBaseAssignment !== rater.assignmentCohort &&
+    mismatchReviewItems.length > 0;
   const direction = current?.language === "ar" ? "rtl" : "ltr";
   const turns = transcriptTurns(current?.transcript || "");
   const priorContext = priorContextOrExplanation(current?.priorContext);
@@ -2835,7 +2872,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <span>1 · Material failure</span><span>2 · Partial / minor issue</span><span>3 · Meets anchor</span>
                 </div>
                 <p className="rubric-instruction">
-                  A score of 1, 2, 3, or N/A is required for every dimension. Evidence turn numbers are optional for routine scores. Evidence and a short explanation are required for selected critical failures; a reason is required when skipping. Use N/A only when the dimension genuinely cannot be assessed.
+                  {isAdditionalMismatchReview
+                    ? "Complete only the orange-highlighted questions where the primary raters disagreed. Other questions may remain blank. Evidence and a short explanation are required for a selected critical failure; a reason is required when skipping."
+                    : "A score of 1, 2, 3, or N/A is required for every dimension. Evidence turn numbers are optional for routine scores. Evidence and a short explanation are required for selected critical failures; a reason is required when skipping. Use N/A only when the dimension genuinely cannot be assessed."}
                 </p>
 
                 {mismatchReviewItems.length > 0 && (
@@ -2844,7 +2883,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                       <strong>
                         {mismatchReviewItems.length} {mismatchReviewItems.length === 1 ? "question has" : "questions have"} primary-rater disagreement
                       </strong>
-                      <span>Select a question to jump to it. The primary answers remain hidden.</span>
+                      <span>
+                        {isAdditionalMismatchReview
+                          ? "Complete only these highlighted questions, then submit. The primary answers remain hidden."
+                          : "Select a question to jump to it. This episode is also in your random sample, so complete the full rubric. The primary answers remain hidden."}
+                      </span>
                     </div>
                     <div className="mismatch-review-links">
                       {mismatchReviewItems.map((item) => (
@@ -3068,7 +3111,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                     disabled={saveState === "saving" || skipping}
                     aria-busy={activeSaveAction === "complete"}
                   >
-                    {activeSaveAction === "complete" ? "Submitting…" : <>Submit &amp; next <span>→</span></>}
+                    {activeSaveAction === "complete"
+                      ? "Submitting…"
+                      : isAdditionalMismatchReview
+                        ? <>Submit reviewed questions &amp; next <span>→</span></>
+                        : <>Submit &amp; next <span>→</span></>}
                   </button>
                 </div>
               </aside>
