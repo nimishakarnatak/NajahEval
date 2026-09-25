@@ -77,9 +77,9 @@ function flagValue(value: unknown): CriticalFlagValue {
  * An ordinary mismatch means any selected score or categorical judgment
  * differs. A serious mismatch is deliberately narrower: a 1-versus-3 score,
  * N/A-versus-substantive score, different task-status/end-reason judgment, or
- * different critical-failure screening/category judgment. Serious mismatches
- * can add an episode to a judge's workload; ordinary mismatches are alerts only
- * when the episode is already in that judge's base sample.
+ * different critical-failure screening/category judgment. The fixed judge plan
+ * determines workload; this comparison identifies the exact questions that a
+ * selected judge episode requires.
  */
 export function summarizePrimaryMismatch(
   ratings: ComparablePrimaryRating[],

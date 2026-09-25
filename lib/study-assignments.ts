@@ -1,4 +1,5 @@
 import type { UserRole } from "@/lib/user-roles";
+import { judgeEpisodeIds } from "@/lib/judge-review-plan";
 
 /** Stable assignment identifiers stored with users and rating records. */
 export const ASSIGNMENT_COHORTS = [
@@ -46,16 +47,16 @@ export const ASSIGNMENT_OPTIONS: readonly {
   {
     value: "judge_1",
     label: "Judge 1",
-    description: "A seeded random sample of 50 episodes plus assigned serious mismatches.",
-    episodeCount: 50,
-    capacity: 2,
+    description: "30 priority episodes followed by 30 optional episodes.",
+    episodeCount: 60,
+    capacity: 1,
   },
   {
     value: "judge_2",
     label: "Judge 2",
-    description: "A separate seeded random sample of 50 episodes plus assigned serious mismatches.",
-    episodeCount: 50,
-    capacity: 2,
+    description: "30 priority episodes followed by 30 optional episodes.",
+    episodeCount: 60,
+    capacity: 1,
   },
 ];
 
@@ -127,40 +128,17 @@ export function assignmentIncludesOrder(
   return false;
 }
 
-/**
- * Resolve the one judge responsible for an episode.
- *
- * The fixed base sample always takes precedence. A serious disagreement that
- * falls outside both base samples is assigned by study-order parity. This rule
- * is deterministic, keeps the two additional queues approximately balanced,
- * and never exposes the same episode to both judges.
- */
-export function judgeAssignmentForEpisode(
-  baseAssignment: JudgeAssignment,
-  order: number,
-  hasSeriousMismatch: boolean,
-): JudgeAssignment {
-  if (baseAssignment) return baseAssignment;
-  if (!hasSeriousMismatch || order < 1 || order > 300) return "";
-  return order % 2 === 1 ? "judge_1" : "judge_2";
-}
-
 /** Confirm that a rater may access an episode under the current study design. */
 export function assignmentIncludesEpisode(
   assignment: AssignmentCohort,
+  episodeId: string,
   order: number,
-  judgeBaseAssignment: JudgeAssignment,
-  hasSeriousMismatch: boolean,
 ): boolean {
   if (isPrimaryCohort(assignment)) {
     return primaryCohortForOrder(order) === assignment;
   }
   if (isJudgeCohort(assignment)) {
-    return judgeAssignmentForEpisode(
-      judgeBaseAssignment,
-      order,
-      hasSeriousMismatch,
-    ) === assignment;
+    return judgeEpisodeIds(assignment).includes(episodeId);
   }
   return false;
 }
