@@ -13,12 +13,12 @@ import {
   assignmentEpisodeCount,
   isAssignmentCohort,
   isJudgeCohort,
-  judgeAssignmentForEpisode,
   primaryCohortForOrder,
   type AssignedCohort,
   type AssignmentCohort,
   type JudgeAssignment,
 } from "@/lib/study-assignments";
+import { judgeAssignmentForPlannedEpisode } from "@/lib/judge-review-plan";
 import {
   summarizePrimaryMismatch,
   type ComparablePrimaryRating,
@@ -88,7 +88,6 @@ type RawEvaluatorProgress = {
 type RawEpisodeAssignment = {
   episodeId: string;
   studyOrder: number | string;
-  judgeBaseAssignment: JudgeAssignment;
 };
 
 type RawStudyRating = ComparablePrimaryRating & {
@@ -123,8 +122,7 @@ export async function getAdminProgress(): Promise<AdminProgress> {
       .prepare(`
         SELECT
           episode_id AS "episodeId",
-          study_order AS "studyOrder",
-          judge_base_assignment AS "judgeBaseAssignment"
+          study_order AS "studyOrder"
         FROM episodes
         WHERE import_batch = ?
         ORDER BY study_order
@@ -247,11 +245,7 @@ export async function getAdminProgress(): Promise<AdminProgress> {
   );
   const requiredJudgeByEpisode = new Map<string, JudgeAssignment>();
   for (const episode of episodes) {
-    const requiredJudge = judgeAssignmentForEpisode(
-      episode.judgeBaseAssignment,
-      Number(episode.studyOrder),
-      mismatchByEpisode.get(episode.episodeId)?.seriousMismatch ?? false,
-    );
+    const requiredJudge = judgeAssignmentForPlannedEpisode(episode.episodeId);
     if (requiredJudge) requiredJudgeByEpisode.set(episode.episodeId, requiredJudge);
   }
   const assignedEpisodeCountByJudge = {

@@ -129,9 +129,9 @@ export default async function AdminDashboardPage() {
               <h2 id="assignment-progress-title">Progress by assigned team</h2>
               <p>
                 Groups A–C can contain any number of primary raters sharing the same 100 episodes.
-                Each judge queue has two places and a separate reproducible random sample of 50 episodes.
-                Serious primary-rating mismatches outside those samples are added to one
-                judge&apos;s queue.
+                Each judge has 30 priority episodes (the top 10 percent of the 300-episode
+                sample) and 30 optional episodes (the next 10 percent). The two judge
+                allocations are distinct.
               </p>
             </div>
             <span>{progress.assignments.reduce((total, assignment) => total + assignment.activeMembers, 0)} active evaluators</span>
@@ -161,8 +161,8 @@ export default async function AdminDashboardPage() {
             <h2>Coverage across the dataset</h2>
             <p>
               Completed ratings only. Minimum two-rater primary coverage and the separate judge
-              samples plus serious-mismatch reviews are reported independently; drafts
-              and admin demos are excluded.
+              priority and optional queues are reported independently; drafts and admin
+              demos are excluded.
             </p>
           </div>
           <div className="admin-coverage-stats">
@@ -175,10 +175,10 @@ export default async function AdminDashboardPage() {
               <strong>{progress.coverage.primaryComplete}</strong>
               <span>At least two primary ratings</span>
             </div>
-            <div><strong>{progress.coverage.judgePending}</strong><span>Two-judge review incomplete</span></div>
+            <div><strong>{progress.coverage.judgePending}</strong><span>Judge review incomplete</span></div>
             <div className="coverage-complete">
               <strong>{progress.coverage.judgeComplete}</strong>
-              <span>Both judge reviews complete</span>
+              <span>Assigned judge review complete</span>
             </div>
           </div>
         </section>
@@ -254,7 +254,7 @@ export default async function AdminDashboardPage() {
           “Not started” is calculated against each evaluator’s assigned queue. Legacy
           ratings and administrator demo ratings remain exportable but are excluded from
           the {progress.expectedRatings} currently required study reviews. This total can
-          increase when serious mismatch cases are added. Times are shown in UTC.
+          reflect each judge&apos;s fixed 30-priority and 30-optional allocation. Times are shown in UTC.
         </p>
       </main>
     </div>

@@ -32,14 +32,14 @@ test("calculates flexible primary-group and judge progress without counting admi
   assert.match(progress, /notStartedCount/);
   assert.match(progress, /completionPercentage/);
   assert.match(policy, /REQUIRED_PRIMARY_RATINGS_PER_EPISODE = 2/);
-  assert.match(policy, /REQUIRED_JUDGE_RATINGS_PER_EPISODE = 2/);
+  assert.match(policy, /REQUIRED_JUDGE_RATINGS_PER_EPISODE = 1/);
   assert.match(progress, /onePrimaryRating/);
   assert.match(progress, /primaryComplete/);
   assert.match(progress, /judgePending/);
   assert.match(progress, /judgeComplete/);
   assert.match(progress, /expectedRatings: assignments\.reduce/);
   assert.match(progress, /option\.capacity \?\? Math\.max/);
-  assert.match(progress, /judgeAssignmentForEpisode/);
+  assert.match(progress, /judgeAssignmentForPlannedEpisode/);
   assert.match(progress, /summarizePrimaryMismatch/);
   assert.match(progress, /ASSIGNMENT_OPTIONS\.map/);
 });
@@ -61,7 +61,8 @@ test("shows the dashboard link only to administrators and renders evaluator deta
   assert.match(page, /Progress by assigned team/);
   assert.match(page, /expectedPrimaryRatings/);
   assert.match(page, /expectedJudgeReviews/);
-  assert.match(page, /random sample of 50 episodes/);
+  assert.match(page, /30 priority episodes/);
+  assert.match(page, /30 optional episodes/);
 });
 
 test("lets administrators manage raters and read-only viewers without deleting ratings", async () => {

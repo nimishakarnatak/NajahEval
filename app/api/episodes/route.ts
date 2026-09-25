@@ -19,6 +19,11 @@ import {
 import { getRaterIdentity } from "@/lib/server-auth";
 import { requiredRatingsForAssignment } from "@/lib/server-assignment-requirements";
 import {
+  judgeEpisodeSqlList,
+  judgeQueueOrderForEpisode,
+  judgeQueueTierForEpisode,
+} from "@/lib/judge-review-plan";
+import {
   isJudgeCohort,
   isPrimaryCohort,
   reviewLayerForAccount,
@@ -31,25 +36,8 @@ function queuePredicate(role: string, assignment: AssignmentCohort): string {
   if (assignment === "group_a") return "e.study_order BETWEEN 1 AND 100";
   if (assignment === "group_b") return "e.study_order BETWEEN 101 AND 200";
   if (assignment === "group_c") return "e.study_order BETWEEN 201 AND 300";
-  if (assignment === "judge_1") {
-    return `(
-      e.judge_base_assignment = 'judge_1'
-      OR (
-        e.judge_base_assignment = ''
-        AND COALESCE(primary_summary.primary_serious_mismatch, FALSE)
-        AND MOD(e.study_order, 2) = 1
-      )
-    )`;
-  }
-  if (assignment === "judge_2") {
-    return `(
-      e.judge_base_assignment = 'judge_2'
-      OR (
-        e.judge_base_assignment = ''
-        AND COALESCE(primary_summary.primary_serious_mismatch, FALSE)
-        AND MOD(e.study_order, 2) = 0
-      )
-    )`;
+  if (isJudgeCohort(assignment)) {
+    return `e.episode_id IN (${judgeEpisodeSqlList(assignment)})`;
   }
   return "FALSE";
 }
@@ -405,6 +393,12 @@ export async function GET(request: Request) {
     }
     return {
       ...episode,
+      judgeQueueTier: isJudgeCohort(assignment)
+        ? judgeQueueTierForEpisode(assignment, String(episode.episodeId ?? ""))
+        : "",
+      judgeQueueOrder: isJudgeCohort(assignment)
+        ? judgeQueueOrderForEpisode(assignment, String(episode.episodeId ?? ""))
+        : 0,
       // Mismatch alerts support judge adjudication without disclosing either
       // primary rater's score. Primary raters never receive this signal.
       primaryRatingCount:
@@ -467,6 +461,14 @@ export async function GET(request: Request) {
       ),
     };
   });
+
+  if (isJudgeCohort(assignment)) {
+    episodes.sort(
+      (left, right) =>
+        Number(left.judgeQueueOrder ?? Number.MAX_SAFE_INTEGER) -
+        Number(right.judgeQueueOrder ?? Number.MAX_SAFE_INTEGER),
+    );
+  }
 
   return Response.json({
     rater,

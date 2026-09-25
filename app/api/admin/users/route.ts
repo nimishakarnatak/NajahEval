@@ -91,7 +91,7 @@ async function assignmentAvailabilityError(
     .bind(assignment, excludedUserId)
     .first<{ count: number | string }>();
   if (Number(row?.count ?? 0) < capacity) return null;
-  return "This judge assignment already has its two active judges.";
+  return "This judge assignment already has its assigned judge.";
 }
 
 /**

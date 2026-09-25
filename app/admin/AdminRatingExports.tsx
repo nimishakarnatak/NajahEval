@@ -58,8 +58,8 @@ export function AdminRatingExports({ evaluators }: { evaluators: EvaluatorProgre
           <span>Judge layer</span>
           <strong>Two judge queues</strong>
           <small>
-            Only Judge 1 and Judge 2 review rows: 50 random episodes each, plus
-            assigned serious-mismatch cases.
+            Only Judge 1 and Judge 2 review rows: 30 priority and 30 optional
+            episodes assigned to each judge.
           </small>
           <a href="/api/admin/exports?scope=judge">Download judge CSV</a>
         </article>
