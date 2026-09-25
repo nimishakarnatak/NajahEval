@@ -84,6 +84,8 @@ type Episode = AnnotationDraft & {
   episodeId: string;
   studyOrder: number;
   judgeBaseAssignment: "" | "judge_1" | "judge_2";
+  judgeQueueTier: "" | "priority" | "optional";
+  judgeQueueOrder: number;
   studentStatus: string;
   language: string;
   module: string;
@@ -119,8 +121,8 @@ type Rater = {
   assignmentCohort: AssignmentCohort;
 };
 type SaveState = "saved" | "saving" | "unsaved" | "error";
-type ViewFilter = "queue" | "drafts" | "completed" | "mismatches" | "all";
-type ProgressView = "queue" | "random" | "not_started" | "draft" | "complete" | "mismatches" | "all";
+type ViewFilter = "queue" | "optional" | "drafts" | "completed" | "all";
+type ProgressView = "queue" | "priority" | "optional" | "not_started" | "draft" | "complete" | "all";
 type TranslationStatus = "idle" | "preparing" | "translating" | "ready" | "error";
 type TranscriptTurn = {
   speaker: "USER" | "NAJAH";
@@ -1162,6 +1164,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         Number(payload.requiredRatingsPerEpisode) || REQUIRED_PRIMARY_RATINGS_PER_EPISODE,
       );
       if (!loadedRater.canRate) setViewFilter("all");
+      else if (payload.reviewLayer === "judge") setViewFilter("queue");
       setSelectedId((current) => {
         const candidate = preferredId || current;
         return loaded.some((episode) => episode.episodeId === candidate)
@@ -1230,16 +1233,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
         (viewFilter === "queue" &&
           episode.annotationStatus !== "complete" &&
           episode.completedRaterCount < requiredRatingsPerEpisode &&
-          (reviewLayer !== "judge" || episode.judgeBaseAssignment === rater.assignmentCohort)) ||
+          (reviewLayer !== "judge" || episode.judgeQueueTier === "priority")) ||
+        (viewFilter === "optional" && episode.judgeQueueTier === "optional") ||
         (viewFilter === "drafts" && episode.annotationStatus === "draft") ||
-        (viewFilter === "completed" && episode.annotationStatus === "complete") ||
-        (viewFilter === "mismatches" && episode.primaryMismatch);
+        (viewFilter === "completed" && episode.annotationStatus === "complete");
       return matchesModule && matchesTreatment && matchesView;
     });
-  }, [episodes, moduleFilter, rater.assignmentCohort, readOnly, requiredRatingsPerEpisode, reviewLayer, treatmentFilter, viewFilter]);
+  }, [episodes, moduleFilter, readOnly, requiredRatingsPerEpisode, reviewLayer, treatmentFilter, viewFilter]);
 
   useEffect(() => {
-    if (reviewLayer !== "judge" && viewFilter === "mismatches") {
+    if (reviewLayer !== "judge" && viewFilter === "optional") {
       // Assignment changes may turn a judge account back into a primary rater.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setViewFilter("queue");
@@ -1593,7 +1596,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   async function submitAndAdvance() {
     const problem = firstSubmissionProblem(
       draft,
-      isAdditionalMismatchReview ? highlightedMismatch : null,
+      isFocusedJudgeReview ? highlightedMismatch : null,
     );
     if (problem) {
       setNotice("");
@@ -1680,14 +1683,14 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setViewFilter(
       progressView === "queue"
         ? "queue"
-        : progressView === "random"
+        : progressView === "priority"
           ? episode.annotationStatus === "complete"
             ? "completed"
             : episode.annotationStatus === "draft"
               ? "drafts"
               : "queue"
-        : progressView === "mismatches"
-          ? "mismatches"
+        : progressView === "optional"
+          ? "optional"
         : progressView === "all"
           ? "all"
           : episode.annotationStatus === "complete"
@@ -1706,13 +1709,13 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     setViewFilter(view);
     setProgressView(
       view === "queue"
-        ? reviewLayer === "judge" ? "random" : "queue"
+        ? reviewLayer === "judge" ? "priority" : "queue"
         : view === "drafts"
           ? "draft"
           : view === "completed"
             ? "complete"
-            : view === "mismatches"
-              ? "mismatches"
+            : view === "optional"
+              ? "optional"
             : "all",
     );
     setProgressOpen(true);
@@ -2111,30 +2114,32 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
   const completedByMe = episodes.filter((episode) => episode.annotationStatus === "complete").length;
   const draftsByMe = episodes.filter((episode) => episode.annotationStatus === "draft").length;
   const notStartedByMe = episodes.length - completedByMe - draftsByMe;
-  const judgeRandomEpisodes = reviewLayer === "judge"
-    ? episodes.filter((episode) => episode.judgeBaseAssignment === rater.assignmentCohort)
+  const judgePriorityEpisodes = reviewLayer === "judge"
+    ? episodes.filter((episode) => episode.judgeQueueTier === "priority")
     : [];
-  const judgeRandomNotStarted = judgeRandomEpisodes.filter(
+  const judgePriorityNotStarted = judgePriorityEpisodes.filter(
     (episode) => episode.annotationStatus === null,
   ).length;
-  const judgeRandomDrafts = judgeRandomEpisodes.filter(
+  const judgePriorityDrafts = judgePriorityEpisodes.filter(
     (episode) => episode.annotationStatus === "draft",
   ).length;
-  const judgeRandomCompleted = judgeRandomEpisodes.filter(
+  const judgePriorityCompleted = judgePriorityEpisodes.filter(
     (episode) => episode.annotationStatus === "complete",
   ).length;
-  const judgeRandomRemaining = judgeRandomNotStarted + judgeRandomDrafts;
-  const mismatchEpisodes = episodes.filter((episode) => episode.primaryMismatch);
-  const mismatchNotStarted = mismatchEpisodes.filter(
+  const judgePriorityRemaining = judgePriorityNotStarted + judgePriorityDrafts;
+  const judgeOptionalEpisodes = reviewLayer === "judge"
+    ? episodes.filter((episode) => episode.judgeQueueTier === "optional")
+    : [];
+  const judgeOptionalNotStarted = judgeOptionalEpisodes.filter(
     (episode) => episode.annotationStatus === null,
   ).length;
-  const mismatchDrafts = mismatchEpisodes.filter(
+  const judgeOptionalDrafts = judgeOptionalEpisodes.filter(
     (episode) => episode.annotationStatus === "draft",
   ).length;
-  const mismatchCompleted = mismatchEpisodes.filter(
+  const judgeOptionalCompleted = judgeOptionalEpisodes.filter(
     (episode) => episode.annotationStatus === "complete",
   ).length;
-  const mismatchRemaining = mismatchNotStarted + mismatchDrafts;
+  const judgeOptionalRemaining = judgeOptionalNotStarted + judgeOptionalDrafts;
   const fullyRated = episodes.filter(
     (episode) => episode.completedRaterCount >= requiredRatingsPerEpisode,
   ).length;
@@ -2142,25 +2147,22 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     (episode) =>
       episode.annotationStatus !== "complete" &&
       episode.completedRaterCount < requiredRatingsPerEpisode &&
-      (reviewLayer !== "judge" || episode.judgeBaseAssignment === rater.assignmentCohort),
+      (reviewLayer !== "judge" || episode.judgeQueueTier === "priority"),
   ).length;
-  const mismatchCount = mismatchEpisodes.length;
   const viewCounts: Record<ViewFilter, number> = {
     queue: queueCount,
+    optional: judgeOptionalEpisodes.length,
     drafts: draftsByMe,
     completed: completedByMe,
-    mismatches: mismatchCount,
     all: episodes.length,
   };
   const availableViews: ViewFilter[] = reviewLayer === "judge"
-    ? ["queue", "mismatches", "drafts", "completed", "all"]
+    ? ["queue", "optional", "drafts", "completed", "all"]
     : ["queue", "drafts", "completed", "all"];
   const progressEpisodes = episodes.filter((episode) => {
     if (progressView === "all") return true;
-    if (progressView === "mismatches") return episode.primaryMismatch;
-    if (progressView === "random") {
-      return episode.judgeBaseAssignment === rater.assignmentCohort;
-    }
+    if (progressView === "priority") return episode.judgeQueueTier === "priority";
+    if (progressView === "optional") return episode.judgeQueueTier === "optional";
     if (progressView === "queue") {
       return (
         episode.annotationStatus !== "complete" &&
@@ -2182,11 +2184,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
     progressView === "all"
       ? "All episodes"
       : progressView === "queue"
-        ? reviewLayer === "judge" ? "Random assignments remaining" : "My queue"
-        : progressView === "random"
-          ? "Random assignments"
-        : progressView === "mismatches"
-          ? "Mismatch reviews"
+        ? reviewLayer === "judge" ? "Top 10 percent remaining" : "My queue"
+        : progressView === "priority"
+          ? "Top 10 percent"
+        : progressView === "optional"
+          ? "Next 10 percent"
         : progressView === "complete"
           ? "Completed by you"
           : progressView === "draft"
@@ -2222,10 +2224,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
       mismatchReviewItems.push({ targetId: "rating-episode-ending", label: "Episode ending" });
     }
   }
-  const isAdditionalMismatchReview =
+  const isFocusedJudgeReview =
     reviewLayer === "judge" &&
     Boolean(current?.primaryMismatch) &&
-    current?.judgeBaseAssignment !== rater.assignmentCohort &&
     mismatchReviewItems.length > 0;
   const direction = current?.language === "ar" ? "rtl" : "ltr";
   const turns = transcriptTurns(current?.transcript || "");
@@ -2335,41 +2336,43 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   aria-haspopup="dialog"
                 >
                   <span className="judge-progress-group-heading">
-                    <strong>Random assignments</strong>
-                    <small>Total {judgeRandomEpisodes.length}</small>
+                    <strong>Top 10 percent</strong>
+                    <small>Total {judgePriorityEpisodes.length}</small>
                   </span>
                   <span className="judge-progress-statuses">
-                    <span><strong>{judgeRandomNotStarted}</strong>Not started</span>
-                    <span><strong>{judgeRandomDrafts}</strong>Draft</span>
-                    <span><strong>{judgeRandomCompleted}</strong>Done</span>
+                    <span><strong>{judgePriorityNotStarted}</strong>Not started</span>
+                    <span><strong>{judgePriorityDrafts}</strong>Draft</span>
+                    <span><strong>{judgePriorityCompleted}</strong>Done</span>
                   </span>
                   <span className="judge-progress-remaining">
-                    <strong>{judgeRandomRemaining}</strong> remaining
+                    <strong>{judgePriorityRemaining}</strong> remaining
                   </span>
                 </button>
 
                 <button
                   type="button"
                   className="judge-progress-group"
-                  onClick={() => openViewList("mismatches")}
+                  onClick={() => openViewList("optional")}
                   aria-haspopup="dialog"
                 >
                   <span className="judge-progress-group-heading">
-                    <strong>Mismatch reviews</strong>
-                    <small>Total {mismatchCount}</small>
+                    <strong>Next 10 percent</strong>
+                    <small>Total {judgeOptionalEpisodes.length}</small>
                   </span>
                   <span className="judge-progress-statuses">
-                    <span><strong>{mismatchNotStarted}</strong>Not started</span>
-                    <span><strong>{mismatchDrafts}</strong>Draft</span>
-                    <span><strong>{mismatchCompleted}</strong>Done</span>
+                    <span><strong>{judgeOptionalNotStarted}</strong>Not started</span>
+                    <span><strong>{judgeOptionalDrafts}</strong>Draft</span>
+                    <span><strong>{judgeOptionalCompleted}</strong>Done</span>
                   </span>
                   <span className="judge-progress-remaining">
-                    <strong>{mismatchRemaining}</strong> remaining
+                    <strong>{judgeOptionalRemaining}</strong> remaining
                   </span>
                 </button>
 
                 <p className="judge-progress-note">
-                  One review can appear in both sections when a random assignment also has a mismatch.
+                  Complete the Top 10 percent first. Continue to the Next 10 percent
+                  if time permits. Each section contains 30 distinct episodes selected
+                  from the verified judge-review plan.
                 </p>
               </section>
             ) : (
@@ -2398,9 +2401,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                 <button key={view} className={viewFilter === view ? "active" : ""} onClick={() => openViewList(view)}>
                   <span>
                     {view === "queue"
-                      ? reviewLayer === "judge" ? "Random assignments" : "My queue"
-                      : view === "mismatches"
-                        ? "Mismatch reviews"
+                      ? reviewLayer === "judge" ? "Top 10 percent" : "My queue"
+                      : view === "optional"
+                        ? "Next 10 percent"
                         : view[0].toUpperCase() + view.slice(1)}
                   </span>
                   <strong>{viewCounts[view]}</strong>
@@ -2653,10 +2656,10 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   ? "No drafts yet"
                   : viewFilter === "completed" && !filteredEpisodes.length
                     ? "No completed episodes yet"
-                : viewFilter === "mismatches" && !filteredEpisodes.length
-                      ? "No mismatch reviews"
+                : viewFilter === "optional" && !filteredEpisodes.length
+                      ? "No episodes in the next 10 percent"
                     : viewFilter === "queue" && !filteredEpisodes.length
-                      ? reviewLayer === "judge" ? "Your random assignments are complete" : "Your queue is complete"
+                      ? reviewLayer === "judge" ? "Your top 10 percent is complete" : "Your queue is complete"
                       : "No episodes match these filters"}
             </h1>
             <p>
@@ -2668,11 +2671,11 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   ? "Ratings saved before submission will appear in Drafts."
                   : viewFilter === "completed" && !filteredEpisodes.length
                     ? "Ratings you submit will appear in Completed."
-                : viewFilter === "mismatches" && !filteredEpisodes.length
-                      ? "A review will appear here after both primary raters submit different scores, task-status judgments, or critical-failure judgments."
+                : viewFilter === "optional" && !filteredEpisodes.length
+                      ? "There are no episodes in your optional next-10-percent allocation."
                     : viewFilter === "queue" && !filteredEpisodes.length
                       ? reviewLayer === "judge"
-                        ? "There are no random assignments currently waiting for your review."
+                        ? "There are no priority episodes currently waiting for your review."
                         : "There are no episodes currently waiting for your rating."
                       : "Change a filter or choose another list."}
             </p>
@@ -2720,14 +2723,16 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <h1>{current.moduleObjective || `Evaluate the ${MODULE_LABELS[current.module] || current.module} guidance.`}</h1>
                   <div className="independence-note">
                     <span>◎</span> {current.completedRaterCount}/{requiredRatingsPerEpisode}{" "}
-                    {reviewLayer === "judge" ? "independent judge reviews complete" : "independent primary ratings complete"}
+                    {reviewLayer === "judge"
+                      ? `judge review${requiredRatingsPerEpisode === 1 ? "" : "s"} complete`
+                      : "independent primary ratings complete"}
                   </div>
                   {reviewLayer === "judge" && current.primaryMismatch && (
                     <div className="judge-mismatch-alert" role="status">
                       <strong>
                         {current.primarySeriousMismatch
                           ? "Serious primary-rating mismatch—judge review required"
-                          : "Primary-rating mismatch in the random review sample"}
+                          : "Primary-rating mismatch—judge review selected"}
                       </strong>
                       {current.primarySeriousMismatch ? (
                         <span>
@@ -2872,7 +2877,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   <span>1 · Material failure</span><span>2 · Partial / minor issue</span><span>3 · Meets anchor</span>
                 </div>
                 <p className="rubric-instruction">
-                  {isAdditionalMismatchReview
+                  {isFocusedJudgeReview
                     ? "Complete only the orange-highlighted questions where the primary raters disagreed. Other questions may remain blank. Evidence and a short explanation are required for a selected critical failure; a reason is required when skipping."
                     : "A score of 1, 2, 3, or N/A is required for every dimension. Evidence turn numbers are optional for routine scores. Evidence and a short explanation are required for selected critical failures; a reason is required when skipping. Use N/A only when the dimension genuinely cannot be assessed."}
                 </p>
@@ -2884,9 +2889,9 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                         {mismatchReviewItems.length} {mismatchReviewItems.length === 1 ? "question has" : "questions have"} primary-rater disagreement
                       </strong>
                       <span>
-                        {isAdditionalMismatchReview
+                        {isFocusedJudgeReview
                           ? "Complete only these highlighted questions, then submit. The primary answers remain hidden."
-                          : "Select a question to jump to it. This episode is also in your random sample, so complete the full rubric. The primary answers remain hidden."}
+                          : "Select a question to jump to it. The primary answers remain hidden."}
                       </span>
                     </div>
                     <div className="mismatch-review-links">
@@ -3113,7 +3118,7 @@ export function AnnotatorApp({ initialRater }: { initialRater: Rater }) {
                   >
                     {activeSaveAction === "complete"
                       ? "Submitting…"
-                      : isAdditionalMismatchReview
+                      : isFocusedJudgeReview
                         ? <>Submit reviewed questions &amp; next <span>→</span></>
                         : <>Submit &amp; next <span>→</span></>}
                   </button>
