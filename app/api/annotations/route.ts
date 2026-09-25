@@ -38,7 +38,6 @@ import {
   isJudgeCohort,
   primaryCohortForOrder,
   reviewLayerForAccount,
-  type JudgeAssignment,
 } from "@/lib/study-assignments";
 import {
   summarizePrimaryMismatch,
@@ -546,8 +545,7 @@ export async function POST(request: Request) {
     .prepare(`
       SELECT
         episode_id AS "episodeId",
-        study_order AS "studyOrder",
-        judge_base_assignment AS "judgeBaseAssignment"
+        study_order AS "studyOrder"
       FROM episodes
       WHERE episode_id = ? AND import_batch = ?
     `)
@@ -555,7 +553,6 @@ export async function POST(request: Request) {
     .first<{
       episodeId: string;
       studyOrder: number;
-      judgeBaseAssignment: JudgeAssignment;
     }>();
   if (!episode) {
     return Response.json({ error: "Episode not found." }, { status: 404 });
@@ -590,19 +587,17 @@ export async function POST(request: Request) {
   }
 
   const reviewLayer = reviewLayerForAccount(rater.role, rater.assignmentCohort);
-  const isAdditionalMismatchReview =
+  const isFocusedJudgeReview =
     reviewLayer === "judge" &&
     primaryMismatchSummary.mismatch &&
-    episode.judgeBaseAssignment !== rater.assignmentCohort &&
     hasMismatchReviewFields(primaryMismatchSummary.details);
 
   if (
     rater.role !== "admin" &&
     !assignmentIncludesEpisode(
       rater.assignmentCohort,
+      episode.episodeId,
       Number(episode.studyOrder),
-      episode.judgeBaseAssignment,
-      primaryMismatchSummary.seriousMismatch,
     )
   ) {
     return Response.json(
@@ -614,7 +609,7 @@ export async function POST(request: Request) {
   if (status === "complete") {
     const error = completionError(
       annotation,
-      isAdditionalMismatchReview ? primaryMismatchSummary.details : null,
+      isFocusedJudgeReview ? primaryMismatchSummary.details : null,
     );
     if (error) return Response.json({ error }, { status: 400 });
   }
@@ -642,7 +637,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error: reviewLayer === "judge"
-            ? "Both assigned judges have already completed this episode."
+            ? "The assigned judge has already completed this episode."
             : "Every active rater in this primary group has already completed this episode.",
         },
         { status: 409 },
