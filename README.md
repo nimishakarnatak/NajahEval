@@ -84,29 +84,24 @@ The 300 episodes are fielded through two distinct review layers:
 - **Group A:** every assigned blinded primary rater independently rates study orders 1–100.
 - **Group B:** every assigned blinded primary rater independently rates study orders 101–200.
 - **Group C:** every assigned blinded primary rater independently rates study orders 201–300.
-- **Judge 1:** two judges independently review a fixed random sample of 50 episodes plus assigned serious mismatches.
-- **Judge 2:** two judges independently review a separate fixed random sample of 50 episodes plus assigned serious mismatches.
+- **Judge 1 (Rita):** reviews 30 priority episodes (Top 10 percent), followed by 30 optional episodes (Next 10 percent).
+- **Judge 2 (Fatine):** reviews a distinct set of 30 priority episodes, followed by 30 optional episodes.
 
-The 100 base judge episodes are selected reproducibly from episode IDs and do
-not overlap. They are balanced across Groups A-C: Judge 1 receives 17/17/16 and
-Judge 2 receives 16/17/17 episodes from those groups. Once both primary ratings
-have been submitted, a serious mismatch outside the base sample is added to one
-judge's queue using a deterministic, non-overlapping allocation rule. A serious
-mismatch is a 1-versus-3 score, N/A-versus-substantive score, different task
-status or incomplete-task reason, or different critical-failure judgment.
+The verified judge plan contains 120 unique episodes: 60 assigned to each
+judge, with no overlap. Each judge should complete the 30 priority episodes
+first and continue to the 30 optional episodes if time permits. The rubric
+highlights the exact questions on which primary raters disagreed, while keeping
+their identities and answers hidden. Judges may submit only those highlighted
+questions.
 
 The design requires at least 600 primary ratings, increasing when more primary
-raters are assigned, plus 200 base judge reviews and two judge reviews for each
-serious mismatch outside the base samples.
-Ordinary primary-rating differences are shown as alerts only when the episode
-is already in the judge's base sample. Judges never see either primary rater's
-identity or actual answers.
+raters are assigned, plus one judge review for each selected judge episode.
 Administrator demo ratings and pre-assignment legacy ratings are stored and
 exportable, but do not count toward required study coverage.
 
 The administrator assigns accounts to groups from the dashboard. Group A, B,
 and C have no fixed membership limit; each judge assignment has capacity for
-two active judges. An unassigned rater sees no study episodes until
+one active judge. An unassigned rater sees no study episodes until
 the administrator selects a queue.
 
 ## Publish from GitHub to Netlify
@@ -181,8 +176,8 @@ other devices while preserving its ratings, role, and assigned queue.
    both Admin and Rater access.
 3. Assign the six primary raters and two judges in the administration dashboard.
 4. Confirm Group A, B, and C accounts each show 100 episodes, and Judge 1 and
-   Judge 2 accounts each show their 50-episode random base sample. Their totals
-   can increase when serious mismatch cases are detected.
+   Judge 2 accounts each show 30 Top-10-percent episodes and 30 Next-10-percent
+   episodes.
 5. Save one draft, sign out and back in, and confirm it is still present.
 6. Submit one rating and export **My work**.
 7. Create a separate test-rater account and confirm it cannot see the first
@@ -232,10 +227,10 @@ do not expose the production `DATABASE_URL` to untrusted preview deployments.
   failure. Two optional qualitative reflections support process evaluation but
   are excluded from numerical quality scores.
 - Evaluators never see another evaluator's scores; they see only the completed
-  count for their own review layer. The judge workspace separates fixed random
-  assignments from mismatch reviews and shows Not started, Draft, Done,
-  Remaining, and Total counts for each. Judges receive mismatch signals without
-  the primary raters' identities or score values.
+  count for their own review layer. The judge workspace separates Top 10 percent
+  from Next 10 percent and shows Not started, Draft, Done, Remaining, and Total
+  counts for each. Judges receive field-level mismatch signals without the
+  primary raters' identities or score values.
 - Privacy and language-review fields are retained as metadata but currently do
   not gate import. Revisit that temporary decision before external data release.
 - The evidence rubric is stored in `rubric_annotations`, separately from the
